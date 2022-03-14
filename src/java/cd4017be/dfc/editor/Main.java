@@ -59,6 +59,7 @@ public class Main {
 	public static final ArrayList<IGuiSection> GUI = new ArrayList<>();
 	private static IGuiSection inFocus;
 	private static boolean redraw = true;
+	public static int WIDTH, HEIGHT;
 
 	static void init(long window) {
 		glfwSetInputMode(window, GLFW_LOCK_KEY_MODS, GLFW_TRUE);
@@ -96,6 +97,7 @@ public class Main {
 	private static void onResize(long window, int w, int h) {
 		GL11C.glViewport(0, 0, w, h);
 		for (IGuiSection gs : GUI) gs.onResize(w, h);
+		WIDTH = w; HEIGHT = h;
 		refresh(window);
 	}
 
@@ -118,7 +120,8 @@ public class Main {
 	private static void onMouseMove(long window, double x, double y) {
 		int[] w = {0}, h = {0};
 		glfwGetWindowSize(window, w, h);
-		x /= w[0]; y /= h[0];
+		x = x / w[0] * 2.0 - 1.0;
+		y = y / h[0] * 2.0 - 1.0;
 		for (IGuiSection gs : GUI)
 			if (gs.onMouseMove(x, y)) inFocus = gs;
 	}

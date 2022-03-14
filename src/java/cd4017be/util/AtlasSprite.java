@@ -11,7 +11,7 @@ public class AtlasSprite {
 	private AtlasSprite a, b;
 	private int mw, mh;
 	/**texture coordinates */
-	public int x, y, w, h;
+	public int x, y, w, h, id;
 
 	/**Create a new atlas texture of given size
 	 * @param w width

@@ -1,7 +1,12 @@
 package cd4017be.dfc.editor;
 
+import static cd4017be.dfc.editor.Main.checkGLErrors;
 import static cd4017be.util.GLUtils.*;
+import static org.lwjgl.opengl.GL11C.GL_POINTS;
+import static org.lwjgl.opengl.GL11C.glDrawArrays;
+import static org.lwjgl.opengl.GL15C.glGenBuffers;
 import static org.lwjgl.opengl.GL32C.*;
+import org.lwjgl.system.MemoryStack;
 
 /**Loads and configures all OpenGL shaders used by the program.
  * @author CD4017BE */
@@ -13,13 +18,12 @@ public class Shaders {
 	/** text rendering shader */
 	public static final int textP = program(textV, textG, textF, "outColor");
 	private static final int text_charCode = glGetAttribLocation(textP, "charCode");
-	private static final int text_index = glGetAttribLocation(textP, "index");
 	private static final int text_tileSize = glGetUniformLocation(textP, "tileSize");
 	private static final int text_tileStride = glGetUniformLocation(textP, "tileStride");
 	/** mat3x4: transformation from character grid to screen coordinates */
 	public static final int text_transform = glGetUniformLocation(textP, "transform");
-	/** vec2: scale from text segment grid to character grid */
-	public static final int text_gridSize = glGetUniformLocation(textP, "gridSize");
+	/** uint: number of characters per line */
+	public static final int text_wrap = glGetUniformLocation(textP, "lineWrap");
 	/** vec4: text foreground color RGBA */
 	public static final int text_fgColor = glGetUniformLocation(textP, "fgColor");
 	/** vec4: text background color RGBA */
@@ -31,8 +35,8 @@ public class Shaders {
 	/** block rendering shader */
 	public static final int blockP = program(blockV, blockG, blockF, "outColor");
 	private static final int block_pos = glGetAttribLocation(blockP, "pos");
-	private static final int block_size = glGetAttribLocation(blockP, "size");
-	/** vec2: block grid to texture coordinate scale */
+	private static final int block_id = glGetAttribLocation(blockP, "id");
+	/** vec2: texture coordinate to block grid scale */
 	public static final int block_gridScale = glGetUniformLocation(blockP, "gridScale");
 	/** mat3x4: transformation from block grid to screen coordinates */
 	public static final int block_transform = glGetUniformLocation(blockP, "transform");
@@ -61,12 +65,16 @@ public class Shaders {
 	/** mat3x4: transformation from selection grid to screen coordinates */
 	public static final int sel_transform = glGetUniformLocation(selP, "transform");
 
-	/** default font texture for text rendering */
-	public static final int font_tex = texture2D(GL_LINEAR, GL_REPEAT, GL_R8, "font");
 	/**Vertex format sizes */
 	public static final int TEXT_POS_STRIDE = 8, FONT_STRIDE = 16,
-	SEL_STRIDE = 12, TRACE_STRIDE = 4, BLOCK_STRIDE = 5;
+	SEL_STRIDE = 12, TRACE_STRIDE = 4, BLOCK_STRIDE = 4;
 	public static final float FONT_CW = 1F/16F, FONT_CH = 1.5F/16F;
+
+	/** default font texture for text rendering */
+	public static final int font_tex = texture2D(GL_LINEAR, GL_REPEAT, GL_R8, "font");
+	public static final int char_buf = glGenBuffers();
+	public static final int text_vao = genTextVAO(char_buf);
+	static {initFont(font_tex, FONT_CW, FONT_CH, FONT_STRIDE);}
 
 	static void deleteAll() {
 		glDeleteProgram(textP);
@@ -87,26 +95,16 @@ public class Shaders {
 		glDeleteTextures(font_tex);
 	}
 
-	/**Text is rendered using two vertex buffers and a texture buffer:<br>
-	 * The first vertex buffer holds the ASCII codes of all characters to render.
-	 * The second vertex buffer holds an 8-bit index for each character to specify
-	 * which of the text segments defined in the texture buffer it belongs to.
-	 * The RGBA components in the texture buffer define originX, originY, lineWrapWidth
-	 * and firstCharIndex of each text segment.
-	 * @param charBuf buffer id for storing ASCII data.
-	 * @param indexBuf buffer id for storing text segment indices
+	/**@param charBuf buffer id for storing ASCII data.
 	 * @return new vertex array id */
-	public static int genTextVAO(int charBuf, int indexBuf) {
+	public static int genTextVAO(int charBuf) {
 		int vao = glGenVertexArrays();
 		glBindVertexArray(vao);
 		glEnableVertexAttribArray(text_charCode);
-		glEnableVertexAttribArray(text_index);
 		glBindBuffer(GL_ARRAY_BUFFER, charBuf);
 		glVertexAttribIPointer(text_charCode, 1, GL_UNSIGNED_BYTE, 0, 0);
-		glBindBuffer(GL_ARRAY_BUFFER, indexBuf);
-		glVertexAttribIPointer(text_index, 1, GL_UNSIGNED_BYTE, 0, 0);
 		glBindVertexArray(0);
-		Main.checkGLErrors();
+		checkGLErrors();
 		return vao;
 	}
 
@@ -117,12 +115,12 @@ public class Shaders {
 		int vao = glGenVertexArrays();
 		glBindVertexArray(vao);
 		glEnableVertexAttribArray(block_pos);
-		glEnableVertexAttribArray(block_size);
+		glEnableVertexAttribArray(block_id);
 		glBindBuffer(GL_ARRAY_BUFFER, buf);
-		glVertexAttribIPointer(block_pos, 4, GL_UNSIGNED_BYTE, BLOCK_STRIDE, 0);
-		glVertexAttribIPointer(block_size, 1, GL_UNSIGNED_BYTE, BLOCK_STRIDE, 4);
+		glVertexAttribIPointer(block_pos, 3, GL_BYTE, BLOCK_STRIDE, 0);
+		glVertexAttribIPointer(block_id, 1, GL_UNSIGNED_BYTE, BLOCK_STRIDE, 3);
 		glBindVertexArray(0);
-		Main.checkGLErrors();
+		checkGLErrors();
 		return vao;
 	}
 
@@ -135,10 +133,10 @@ public class Shaders {
 		glEnableVertexAttribArray(trace_pos);
 		glEnableVertexAttribArray(trace_types);
 		glBindBuffer(GL_ARRAY_BUFFER, buf);
-		glVertexAttribIPointer(trace_pos, 2, GL_UNSIGNED_BYTE, TRACE_STRIDE, 0);
+		glVertexAttribIPointer(trace_pos, 2, GL_BYTE, TRACE_STRIDE, 0);
 		glVertexAttribIPointer(trace_types, 1, GL_UNSIGNED_SHORT, TRACE_STRIDE, 2);
 		glBindVertexArray(0);
-		Main.checkGLErrors();
+		checkGLErrors();
 		return vao;
 	}
 
@@ -151,10 +149,10 @@ public class Shaders {
 		glEnableVertexAttribArray(sel_pos);
 		glEnableVertexAttribArray(sel_colorIn);
 		glBindBuffer(GL_ARRAY_BUFFER, buf);
-		glVertexAttribIPointer(sel_pos, 4, GL_UNSIGNED_SHORT, SEL_STRIDE, 0);
+		glVertexAttribIPointer(sel_pos, 4, GL_SHORT, SEL_STRIDE, 0);
 		glVertexAttribPointer(sel_colorIn, GL_BGRA, GL_UNSIGNED_BYTE, true, SEL_STRIDE, 8);
 		glBindVertexArray(0);
-		Main.checkGLErrors();
+		checkGLErrors();
 		return vao;
 	}
 
@@ -172,6 +170,35 @@ public class Shaders {
 			glUniform4f(text_tileSize, cw, ch, -0.5F / (float)w, -0.5F / (float)h);
 		} else glUniform4f(text_tileSize, cw, ch, 0, 0);
 		glUniform1ui(text_tileStride, stride);
+	}
+
+	public static void startText() {
+		glBindBuffer(GL_ARRAY_BUFFER, char_buf);
+		glBindTexture(GL_TEXTURE_2D, font_tex);
+		glBindVertexArray(text_vao);
+		glUseProgram(textP);
+	}
+
+	public static void print(
+		CharSequence s, int wrap, int fg, int bg,
+		float x, float y, float sx, float sy
+	) {
+		int l = s.length(), bl = glGetBufferParameteri(GL_ARRAY_BUFFER, GL_BUFFER_SIZE);
+		if (l > bl) glBufferData(GL_ARRAY_BUFFER, Math.max(l, bl<<1), GL_STREAM_DRAW);
+		try (MemoryStack ms = MemoryStack.stackPush()) {
+			glBufferSubData(GL_ARRAY_BUFFER, 0, ms.ASCII(s, false));
+		}
+		checkGLErrors();
+		glUniform1ui(text_wrap, wrap);
+		setColor(text_bgColor, bg);
+		setColor(text_fgColor, fg);
+		glUniformMatrix3x4fv(text_transform, false, new float[] {
+			sx,  0, 0, 0,
+			 0, sy, 0, 0,
+			 x,  y, 0, 1
+		});
+		glDrawArrays(GL_POINTS, 0, l);
+		checkGLErrors();
 	}
 
 }

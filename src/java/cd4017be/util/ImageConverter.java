@@ -2,11 +2,11 @@ package cd4017be.util;
 
 import static java.lang.Integer.numberOfLeadingZeros;
 import static java.lang.Integer.parseInt;
+import static java.nio.ByteOrder.LITTLE_ENDIAN;
 
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.nio.BufferOverflowException;
-import java.nio.ByteBuffer;
+import java.nio.*;
 import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,7 +26,7 @@ public class ImageConverter {
 		BufferedImage bi = ImageIO.read(src);
 		int w = bi.getWidth(), h = bi.getHeight(), l = w * h;
 		//convert to BGRA_5_5_5_1 format
-		ByteBuffer pixels = ByteBuffer.allocate(l * 2);
+		ByteBuffer pixels = ByteBuffer.allocate(l * 2).order(LITTLE_ENDIAN);
 		for (int y = 0; y < h; y++)
 			for (int x = 0; x < w; x++) {
 				int c = bi.getRGB(x, y);
@@ -37,7 +37,7 @@ public class ImageConverter {
 		pixels.flip();
 		try {
 			//create color palette
-			ByteBuffer palette = ByteBuffer.allocate(Math.min(512, l * 2));
+			ByteBuffer palette = ByteBuffer.allocate(Math.min(512, l * 2)).order(LITTLE_ENDIAN);
 			byte[] indices = new byte[l];
 			for (int i = 0, j; i < l; i++) {
 				short c = pixels.getShort();
@@ -134,10 +134,13 @@ public class ImageConverter {
 		}
 	}
 
+	/**@param src file or directory to convert
+	 * @param dst output parent directory */
 	private static void convert(File src, File dst) {
 		String name = src.getName();
 		if (src.isDirectory()) {
-			if (processDefs(src, dst = new File(dst, name))) return;
+			(dst = new File(dst, name)).mkdir();
+			if (processDefs(src, dst)) return;
 			for (File f : src.listFiles()) convert(f, dst);
 		} else {
 			int i = name.lastIndexOf('.');
@@ -147,10 +150,9 @@ public class ImageConverter {
 	}
 
 	public static void main(String[] args) {
-		File root = new File("E:\\git\\DataFlowCircuits");
 		convert(
-			new File(root, "src\\rawimg\\textures"),
-			new File(root, "bin\\resources")
+			new File("./src/resources/textures"),
+			new File("./bin")
 		);
 	}
 

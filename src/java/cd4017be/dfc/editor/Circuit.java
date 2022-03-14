@@ -7,16 +7,14 @@ import java.util.HashMap;
 import java.util.zip.DataFormatException;
 
 import org.lwjgl.system.MemoryStack;
-import org.lwjgl.system.MemoryUtil;
-
 import cd4017be.dfc.compiler.Instruction;
 import cd4017be.dfc.lang.*;
 import cd4017be.util.*;
 
-import static cd4017be.dfc.editor.Main.checkGLErrors;
+import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
 import static cd4017be.dfc.lang.IntrinsicEvaluators.INTRINSICS;
-import static cd4017be.util.GLUtils.*;
+import static java.lang.Math.*;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL32C.*;
@@ -32,15 +30,16 @@ public class Circuit implements IGuiSection {
 	public final HashMap<Integer, Trace> traces;
 	final BlockIcons icons;
 	/** GL vertex arrays */
-	final int blockVAO, traceVAO, selVAO, textVAO;
+	final int blockVAO, traceVAO, selVAO;
 	/** GL buffers */
-	final int blockBuf, traceBuf, selBuf, charBuf, indexBuf;
+	final int blockBuf, traceBuf, selBuf;
 	/** GL textures */
 	final int textPos;
 	/** draw counters */
-	int blockCount, traceCount, selCount, charCount;
-	/** editor grid size */
-	int width, height;
+	int blockCount, traceCount, selCount;
+	/** mouse grid offset and zoom */
+	int ofsX, ofsY, zoom = 16;
+	boolean panning = false;
 	/** 0: nothing, 1: frame, 2: texts, -1: everything */
 	byte redraw;
 	/** current editing mode */
@@ -50,10 +49,10 @@ public class Circuit implements IGuiSection {
 	int mx = -1, my = -1, rx, ry;
 	Trace selTr;
 	Block selBlock;
-	final ByteBuffer info;
+	int cur;
+	String info = "";
 
 	public Circuit() {
-		this.textVAO = genTextVAO(charBuf = glGenBuffers(), indexBuf = glGenBuffers());
 		this.blockVAO = genBlockVAO(blockBuf = glGenBuffers());
 		this.traceVAO = genTraceVAO(traceBuf = glGenBuffers());
 		this.selVAO = genSelVAO(selBuf = glGenBuffers());
@@ -62,7 +61,6 @@ public class Circuit implements IGuiSection {
 		checkGLErrors();
 		this.blocks = new IndexedSet<>(new Block[16]);
 		this.traces = new HashMap<>();
-		this.info = MemoryUtil.memAlloc(64);
 		
 		fullRedraw();
 		checkGLErrors();
@@ -72,30 +70,24 @@ public class Circuit implements IGuiSection {
 		glUseProgram(selP);
 		glUniform2f(sel_edgeRange, 0F, 2F);
 		checkGLErrors();
-		initFont(font_tex, FONT_CW, FONT_CH, FONT_STRIDE);
-		glUniform2f(text_gridSize, 0.25F, 1F/6F);
-		glBindBuffer(GL_TEXTURE_BUFFER, textPos);
-		glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA16I, textPos);
-		checkGLErrors();
 	}
 
 	@Override
 	public void onResize(int w, int h) {
-		width = w >> 4;
-		height = h >> 4;
+		ofsX = ofsY = 0;
 		if (paletteSize == 0) {
-			setupPalette();
-			new Block(BlockDef.OUT_ID, this).pos(width >> 1, 1).place();
+			setupPalette(h);
+			new Block(BlockDef.OUT_ID, this).pos(w >> 5, 1).place();
 		}
 	}
 
-	private void setupPalette() {
-		int y = 0, x = 0, w = 0;
+	private void setupPalette(int h) {
+		int y = 0, x = 0, w = 0, y1 = h / zoom - 4;
 		for (String s : INTRINSICS.keySet()) {
 			Block block = new Block(s, this).pos(x, y);
 			w = Math.max(w, block.w());
 			y += block.h();
-			if (y < height - 4) continue;
+			if (y < y1) continue;
 			x += w; w = 0; y = 0;
 		}
 		paletteSize = blocks.size();
@@ -104,16 +96,19 @@ public class Circuit implements IGuiSection {
 	@Override
 	public void redraw() {
 		if (icons.update() || redraw < 0) redrawBlocks();
-		if ((redraw & 2) != 0) redrawText();
-		if (redraw != 0) redrawSel();
+		redrawSel();
 		redraw = 0;
 		//draw frame
-		icons.bind();
+		float scaleX = (float)(zoom * 2) / (float)WIDTH;
+		float scaleY = (float)(zoom * 2) / (float)HEIGHT;
+		float ofsX = (float)this.ofsX * scaleX * 0.5F;
+		float ofsY = (float)this.ofsY * scaleY * 0.5F;
 		float[] mat = new float[] {
-			2F/width,   0, 0, 0,
-			0, -2F/height, 0, 0,
-			-1F,       1F, 0, 1F
+			scaleX,   0, 0, 0,
+			0, -scaleY, 0, 0,
+			ofsX,-ofsY, 0, 1F
 		};
+		icons.bind();
 		glUseProgram(traceP);
 		glUniformMatrix3x4fv(trace_transform, false, mat);
 		glBindVertexArray(traceVAO);
@@ -127,67 +122,31 @@ public class Circuit implements IGuiSection {
 		checkGLErrors();
 		
 		glUseProgram(selP);
-		mat[0] = 0.5F/width; mat[5] = -0.5F/height;
+		mat[0] = 0.25F * scaleX; mat[5] = -0.25F * scaleY;
 		glUniformMatrix3x4fv(sel_transform, false, mat);
 		glBindVertexArray(selVAO);
 		glDrawArrays(GL_POINTS, 0, selCount);
 		checkGLErrors();
 		
-		glUseProgram(textP);
-		glBindTexture(GL_TEXTURE_2D, font_tex);
-		mat[0] = 2F/width; mat[5] = -3F/height;
-		mat[9] -= 0.5F/height;
-		glUniformMatrix3x4fv(text_transform, false, mat);
-		setColor(text_bgColor, 0x00000000);
-		setColor(text_fgColor, 0xffffff80);
-		glBindVertexArray(textVAO);
-		glDrawArrays(GL_POINTS, 0, charCount);
-		checkGLErrors();
-	}
-
-	private static byte print(
-		ByteBuffer pbuf, int p0, ByteBuffer cbuf,
-		ByteBuffer ibuf, int xy, int w
-	) {
-		byte i = (byte)(pbuf.position() >> 3);
-		pbuf.putInt(xy).putShort((short)w).putShort((short)p0);
-		ibuf.limit(cbuf.position());
-		while(ibuf.hasRemaining()) ibuf.put(i);
-		return i;
-	}
-
-	private void redrawText() {
-		int n = 1;
-		charCount = info.capacity();
+		startText();
+		float sx = scaleX, sy = -1.5F * scaleY;
+		if (typing()) {
+			float x = (selBlock.textX() + cur * 4 - 2) / 4F * sx, y = (selBlock.textY() + 1) / 6F * sy;
+			print("|", 256, 0xffff8080, 0x00000000, x + ofsX, y - ofsY, sx, sy);
+		}
 		for (Block block : blocks) {
-			int l = block.data.length();
-			if (l == 0) continue;
-			n++;
-			charCount += l;
+			if (block.data.isBlank()) continue;
+			float x = block.textX() / 4F * sx, y = (block.textY() + 1) / 6F * sy;
+			print(block.data, 256, 0xffffff80, 0x00000000, x + ofsX, y - ofsY, sx, sy);
 		}
-		try (MemoryStack ms = MemoryStack.stackPush()) {
-			ByteBuffer pbuf = ms.malloc(TEXT_POS_STRIDE * n);
-			ByteBuffer cbuf = ms.malloc(charCount), ibuf = ms.malloc(charCount);
-			print(pbuf, 0, cbuf.put(info.clear()), ibuf, height - 2 << 18, width);
-			for (Block block : blocks) {
-				block.textOfs = cbuf.position();
-				if (block.data.isEmpty()) continue;
-				block.textIdx = print(
-					pbuf, block.textOfs, cbuf.put(block.data.getBytes(US_ASCII)),
-					ibuf, block.textPos(), block.w() * 2
-				);
-			}
-			glBufferData(GL_TEXTURE_BUFFER, pbuf.flip(), GL_STATIC_DRAW);
-			glBindBuffer(GL_ARRAY_BUFFER, charBuf);
-			glBufferData(GL_ARRAY_BUFFER, cbuf.flip(), GL_STATIC_DRAW);
-			glBindBuffer(GL_ARRAY_BUFFER, indexBuf);
-			glBufferData(GL_ARRAY_BUFFER, ibuf.flip(), GL_STATIC_DRAW);
-		}
+		print(info, 64, 0xffffff80, 0x00000000, -1F, -1F - sy, sx, sy);
 	}
 
 	private void redrawSel() {
 		try (MemoryStack ms = MemoryStack.stackPush()) {
-			ByteBuffer buf = ms.malloc(SEL_STRIDE * 2);
+			ByteBuffer buf = ms.malloc(SEL_STRIDE * 3);
+			buf.putShort((short)(-514)).putShort((short)(-514));
+			buf.putInt(256 << 2 | 256 << 18).putInt(0xffffffff);
 			if (selBlock != null) {
 				buf.putShort((short)(selBlock.x * 4)).putShort((short)(selBlock.y * 4));
 				buf.putInt(selBlock.w() << 2 | selBlock.h() << 18).putInt(0xff8080ff);
@@ -200,18 +159,13 @@ public class Circuit implements IGuiSection {
 			glBufferData(GL_ARRAY_BUFFER, buf.flip(), GL_STREAM_DRAW);
 			selCount = buf.limit() / SEL_STRIDE;
 		}
-		
 	}
 
 	private void redrawBlocks() {
 		try(MemoryStack ms = MemoryStack.stackPush()) {
 			blockCount = blocks.size();
-			for (Block block : blocks) blockCount += block.def.textSize >> 15 & 1;
 			ByteBuffer buf = ms.malloc(blockCount * BLOCK_STRIDE);
-			for (Block block : blocks) {
-				block.posOfs = buf.position();
-				block.draw(buf);
-			}
+			for (Block block : blocks) block.draw(buf);
 			glBindBuffer(GL_ARRAY_BUFFER, blockBuf);
 			glBufferData(GL_ARRAY_BUFFER, buf.flip(), GL_DYNAMIC_DRAW);
 		}
@@ -235,16 +189,37 @@ public class Circuit implements IGuiSection {
 		Main.checkGLErrors();
 	}
 
+	
+
+	@Override
+	public void onScroll(double dx, double dy) {
+		if (dy == 0) return;
+		int zoom1 = max(4, zoom + (dy > 0 ? 4 : -4));
+		if (zoom1 == zoom) return;
+		float scale = (float)zoom / (float)zoom1;
+		float dox = ofsX + mx, doy = ofsY + my;
+		ofsX = round(dox * scale) - mx;
+		ofsY = round(doy * scale) - my;
+		zoom = zoom1;
+		refresh(0);
+	}
+
 	@Override
 	public boolean onMouseMove(double x, double y) {
-		int gx = (int)Math.floor(x * width * 2);
-		int gy = (int)Math.floor(y * height * 2);
+		int gx = (int)floor(x * (double)WIDTH / (double)zoom) - ofsX;
+		int gy = (int)floor(y * (double)HEIGHT / (double)zoom) - ofsY;
 		if (gx != mx || gy != my)
 			moveSel(gx, gy);
 		return true;
 	}
 
 	private void moveSel(int x, int y) {
+		if (panning) {
+			ofsX += x - mx;
+			ofsY += y - my;
+			refresh(0);
+			return;
+		}
 		mx = x; my = y;
 		if (mode == M_IDLE) {
 			selTrace(traces.get(Trace.key(x + 1 >> 1, y + 1 >> 1)));
@@ -262,31 +237,29 @@ public class Circuit implements IGuiSection {
 	public void onMouseButton(int button, int action, int mods) {
 		int x = mx >> 1, y = my >> 1;
 		switch(action | button << 1) {
-		case GLFW_PRESS | GLFW_MOUSE_BUTTON_LEFT<<1:
-			if (mode != M_IDLE) break;
-			selBlock = null;
-			for (int i = paletteSize; i < blocks.size(); i++) {
-				Block block = blocks.get(i);
-				if (block.isInside(x, y)) {
-					selBlock = block;
-					rx = (block.x << 1) - mx;
-					ry = (block.y << 1) - my;
-					break;
-				}
-			}
-			mode = M_BLOCK_SEL;
-			Main.refresh(0);
-			redraw |= 1;
-			break;
-		case GLFW_RELEASE | GLFW_MOUSE_BUTTON_LEFT<<1:
-			if (mode == M_BLOCK_SEL) {
-				if (selBlock != null) selBlock.place();
-				mode = M_IDLE;
-			}
-			break;
 		case GLFW_PRESS | GLFW_MOUSE_BUTTON_RIGHT<<1:
-			if (selTr == null) break;
-			if (mode == M_TRACE_DRAW) {
+			panning = true;
+			break;
+		case GLFW_RELEASE | GLFW_MOUSE_BUTTON_RIGHT<<1:
+			panning = false;
+			break;
+		case GLFW_PRESS | GLFW_MOUSE_BUTTON_LEFT<<1:
+			if (selTr == null) {
+				if (mode != M_IDLE) break;
+				selBlock = null;
+				for (int i = paletteSize; i < blocks.size(); i++) {
+					Block block = blocks.get(i);
+					if (block.isInside(x, y)) {
+						selBlock = block;
+						rx = (block.x << 1) - mx;
+						ry = (block.y << 1) - my;
+						cur = Math.max(0, 4 + mx * 2 - block.textX() >> 2);
+						break;
+					}
+				}
+				mode = M_BLOCK_SEL;
+				refresh(0);
+			} else if (mode == M_TRACE_DRAW) {
 				Trace t = selTr.place();
 				if (selTrace(t)) mode = M_IDLE;
 				else mode = M_TRACE_SEL;
@@ -300,8 +273,12 @@ public class Circuit implements IGuiSection {
 				} else mode = M_IDLE;
 			}
 			break;
-		case GLFW_RELEASE | GLFW_MOUSE_BUTTON_RIGHT<<1:
-			if (mode == M_TRACE_MV) {
+		case GLFW_RELEASE | GLFW_MOUSE_BUTTON_LEFT<<1:
+			if (mode == M_BLOCK_SEL) {
+				if (selBlock != null) selBlock.place();
+				mode = M_IDLE;
+				refresh(0);
+			} else if (mode == M_TRACE_MV) {
 				selTr.place();
 				mode = M_IDLE;
 			} else if (mode == M_TRACE_SEL) {
@@ -333,8 +310,11 @@ public class Circuit implements IGuiSection {
 		case GLFW_KEY_BACKSPACE:
 			if (selBlock == null) break;
 			String s = selBlock.data;
-			if (s.length() > 0)
-				changeText(selBlock, s.substring(0, s.length() - 1));
+			if ((cur = Math.min(cur, s.length())) > 0) {
+				selBlock.data = s.substring(0, cur - 1).concat(s.substring(cur));
+				cur--;
+				refresh(0);
+			}
 			break;
 		case GLFW_KEY_S:
 			if (ctrl) save(FILE);
@@ -351,6 +331,18 @@ public class Circuit implements IGuiSection {
 		case GLFW_KEY_M:
 			if (ctrl) compile(L_FILE, shift);
 			break;
+		case GLFW_KEY_LEFT:
+			if (typing()) {
+				cur = Math.max(0, cur - 1);
+				refresh(0);
+			}
+			break;
+		case GLFW_KEY_RIGHT:
+			if (typing()) {
+				cur = Math.min(cur + 1, selBlock.data.length());
+				refresh(0);
+			}
+			break;
 		}
 	}
 
@@ -358,22 +350,23 @@ public class Circuit implements IGuiSection {
 		if (t == selTr) return false;
 		selTr = t;
 		while(t != null && t.pin > 0) t = t.from;
-		changeInfo(t == null || t.block == null ? "" : "Type: " + Signal.name(t.block.outType));
+		info = t == null || t.block == null ? "" : "Type: " + Signal.name(t.block.outType);
+		refresh(0);
 		return true;
 	}
 
 	boolean typing() {
-		return selBlock != null && mode == M_IDLE && selBlock.def.textSize < 0;
+		return selBlock != null && mode == M_IDLE && selBlock.def.hasText;
 	}
 
 	@Override
 	public void onCharInput(int cp) {
 		if (!typing()) return;
-		int l = selBlock.def.textSize;
-		l = (selBlock.def.icon.w - (l & 15) - (l >> 4 & 15)) * 2 + (l >> 12 & 7);
 		String s = selBlock.data;
-		if (s.length() >= l) return;
-		changeText(selBlock, s + (char)cp);
+		if (s.length() >= 255) return;
+		cur = Math.min(cur, s.length());
+		selBlock.data = s.substring(0, cur) + (char)cp + s.substring(cur++);
+		refresh(0);
 	}
 
 	private void addBlock(String id) {
@@ -400,7 +393,7 @@ public class Circuit implements IGuiSection {
 		try(MemoryStack ms = MemoryStack.stackPush()) {
 			glBindBuffer(GL_ARRAY_BUFFER, traceBuf);
 			glBufferSubData(GL_ARRAY_BUFFER, ofs, ms.bytes((byte)x, (byte)y));
-			Main.checkGLErrors();
+			checkGLErrors();
 		}
 	}
 
@@ -410,10 +403,10 @@ public class Circuit implements IGuiSection {
 		redraw |= 1;
 		try(MemoryStack ms = MemoryStack.stackPush()) {
 			glBindBuffer(GL_ARRAY_BUFFER, blockBuf);
-			ByteBuffer buf = ms.malloc(Shaders.BLOCK_STRIDE * (1 + (block.def.textSize >> 15 & 1)));
+			ByteBuffer buf = ms.malloc(BLOCK_STRIDE);
 			block.draw(buf);
-			glBufferSubData(GL_ARRAY_BUFFER, block.posOfs, buf.flip());
-			Main.checkGLErrors();
+			glBufferSubData(GL_ARRAY_BUFFER, block.getIdx() * BLOCK_STRIDE, buf.flip());
+			checkGLErrors();
 		}
 	}
 
@@ -422,9 +415,10 @@ public class Circuit implements IGuiSection {
 	 * @param xy packed coordinates */
 	public void updateTextPos(byte idx, int xy) {
 		if ((redraw & 2) != 0) return;
-		Main.refresh(0);
+		refresh(0);
 		redraw |= 1;
 		try(MemoryStack ms = MemoryStack.stackPush()) {
+			glBindBuffer(GL_TEXTURE_BUFFER, textPos);
 			glBufferSubData(GL_TEXTURE_BUFFER,
 				(idx & 0xff) * Shaders.TEXT_POS_STRIDE,
 				ms.ints(xy)
@@ -432,63 +426,26 @@ public class Circuit implements IGuiSection {
 		}
 	}
 
-	/**Modify the text drawn on a block.
-	 * @param block
-	 * @param s new text */
-	public void changeText(Block block, String s) {
-		Main.refresh(0);
-		if (block.data.length() != (block.data = s).length()) {
-			redrawBlock(block);
-			redraw |= 2;
-		}
-		if ((redraw & 2) != 0 || s.length() == 0) return;
-		redraw |= 1;
-		try(MemoryStack ms = MemoryStack.stackPush()) {
-			glBindBuffer(GL_ARRAY_BUFFER, charBuf);
-			Main.checkGLErrors();
-			glBufferSubData(GL_ARRAY_BUFFER, block.textOfs, ms.ASCII(s, false));
-			Main.checkGLErrors();
-		}
-	}
-
-	public void changeInfo(String s) {
-		byte[] arr = s.getBytes(US_ASCII);
-		info.clear().put(arr, 0, Math.min(arr.length, info.capacity()));
-		while(info.hasRemaining()) info.put((byte)0);
-		if ((redraw & 2) != 0) return;
-		Main.refresh(0);
-		redraw |= 1;
-		glBindBuffer(GL_ARRAY_BUFFER, charBuf);
-		Main.checkGLErrors();
-		glBufferSubData(GL_ARRAY_BUFFER, 0, info.flip());
-		Main.checkGLErrors();
-	}
-
 	/**Schedule a complete re-render of all vertex buffers. */
 	public void fullRedraw() {
-		Main.refresh(0);
+		refresh(0);
 		redraw = -1;
 	}
 
 	@Override
 	public void close() {
-		MemoryUtil.memFree(info);
-		glDeleteVertexArrays(textVAO);
 		glDeleteVertexArrays(blockVAO);
 		glDeleteVertexArrays(traceVAO);
 		glDeleteVertexArrays(selVAO);
 		glDeleteBuffers(blockBuf);
 		glDeleteBuffers(traceBuf);
 		glDeleteBuffers(selBuf);
-		glDeleteBuffers(charBuf);
-		glDeleteBuffers(indexBuf);
-		glDeleteBuffers(textPos);
 	}
 
 	private void clear() {
 		blocks.clear();
 		traces.clear();
-		setupPalette();
+		setupPalette(HEIGHT);
 	}
 
 	private void cleanUpTraces() {
@@ -505,7 +462,8 @@ public class Circuit implements IGuiSection {
 			if (f != null && f.pin < 0 && f.to == null)
 				toRemove.add(f);
 		}
-		changeInfo("removed " + n + " traces!");
+		info = "removed " + n + " traces!";
+		refresh(0);
 	}
 
 	private void typeCheck() {
@@ -514,10 +472,10 @@ public class Circuit implements IGuiSection {
 		t.end("parsed");
 		try {
 			file.typeCheck();
-			changeInfo("Type checked!");
+			info = "Type checked!";
 			selBlock = blocks.get(file.out + paletteSize);
 		} catch(SignalError e) {
-			changeInfo("Error: " + e.getMessage());
+			info = "Error: " + e.getMessage();
 			if (e.block >= 0) {
 				selBlock = blocks.get(e.block + paletteSize);
 				selTr = selBlock.io[e.in + 1];
@@ -529,7 +487,7 @@ public class Circuit implements IGuiSection {
 			Node val = file.nodes[i - paletteSize];
 			block.outType = val == null || val.out == null ? Signal.DEAD_CODE : val.out;
 		}
-		Main.refresh(0);
+		refresh(0);
 		redraw = -1;
 	}
 
@@ -542,15 +500,16 @@ public class Circuit implements IGuiSection {
 		try (FileWriter fw = new FileWriter(file, US_ASCII)){
 			Instruction.print(fw, code, debug);
 			t.end("written");
-			changeInfo("compiled!");
+			info = "compiled!";
 		/*} catch(CompileError e) {
 			selBlock = e.idx >= 0 ? blocks.get(e.idx + paletteSize) : null;
 			changeInfo("Error: " + e.getMessage());
 			return;*/
 		} catch(IOException e) {
 			e.printStackTrace();
-			changeInfo(e.toString());
+			info = e.toString();
 		}
+		refresh(0);
 	}
 
 	static final File
@@ -562,11 +521,12 @@ public class Circuit implements IGuiSection {
 		try(ExtInputStream in = new ExtInputStream(new FileInputStream(file))) {
 			clear();
 			CircuitFile.load(this, in);
-			changeInfo("loaded!");
+			info = "loaded!";
 		} catch(IOException | DataFormatException e) {
 			e.printStackTrace();
-			changeInfo(e.toString());
+			info = e.toString();
 		}
+		refresh(0);
 	}
 
 	private void save(File file) {
@@ -576,11 +536,12 @@ public class Circuit implements IGuiSection {
 			try(ExtOutputStream out = new ExtOutputStream(new FileOutputStream(file))) {
 				CircuitFile.save(blocks, paletteSize, out);
 			}
-			changeInfo("saved!");
+			info = "saved!";
 		} catch (IOException e) {
 			e.printStackTrace();
-			changeInfo(e.toString());
+			info = e.toString();
 		}
+		refresh(0);
 	}
 
 }

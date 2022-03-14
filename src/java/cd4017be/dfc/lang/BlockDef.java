@@ -14,8 +14,8 @@ public class BlockDef {
 	private static final byte[] NO_PINS = {0, 0};
 	/** unique name */
 	public final String name;
-	/** has_text & 0x8000 | pos_ofs + 4 & 0x7000 | top_pad & 0xf00 | left_pad & 0x0f0 | right_pad & 0x00f */
-	public short textSize;
+	public boolean hasText;
+	public byte textL0, textX, textY;
 	/** relative I/O pin coordinates as (x, y) pairs. */
 	public byte[] ports = NO_PINS;
 	/** performs compile time type evaluation */
@@ -45,7 +45,10 @@ public class BlockDef {
 		in.readNBytes(ports = new byte[n], 0, n);
 		n = in.read() | in.read() << 8;
 		if (n < 0) throw new EOFException();
-		textSize = (short)n;
+		textX = (byte)(n & 15);
+		textY = (byte)(n >> 4 & 15);
+		textL0 = (byte)(n >> 8 & 15);
+		hasText = (n & 0x8000) != 0;
 	}
 
 	/**Data Format:<pre>
@@ -59,8 +62,8 @@ public class BlockDef {
 	public void writeLayout(OutputStream out) throws IOException {
 		out.write(ios() - 1);
 		out.write(ports);
-		out.write(textSize);
-		out.write(textSize >> 8);
+		out.write(textX | textY << 4);
+		out.write(textL0 | (hasText ? 0x80 : 0));
 	}
 
 	/**Name of the final program end block. */

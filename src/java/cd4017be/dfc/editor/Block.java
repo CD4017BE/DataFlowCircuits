@@ -1,13 +1,10 @@
 package cd4017be.dfc.editor;
 
 import static java.lang.Math.max;
-import static java.lang.Math.min;
-
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import cd4017be.dfc.lang.*;
-import cd4017be.util.AtlasSprite;
 import cd4017be.util.IndexedSet;
 
 /**Represents an operand block.
@@ -19,8 +16,6 @@ public class Block extends IndexedSet.Element {
 	public String data = "";
 	public Signal[] outType = Signal.DEAD_CODE;
 	public byte x, y;
-	public byte textIdx;
-	public int textOfs = -1, posOfs = -1;
 
 	public Block(String id, Circuit cc) {
 		this(cc.icons.get(id), cc);
@@ -36,9 +31,7 @@ public class Block extends IndexedSet.Element {
 	}
 
 	public int w() {
-		int t = def.textSize;
-		return t >= 0 ? def.icon.w :
-			(t & 15) + (t >> 4 & 15) + max(data.length() - (t >> 12 & 7), 0);
+		return def.icon.w + max(0, data.length() - def.textL0);
 	}
 
 	public int h() {
@@ -66,15 +59,15 @@ public class Block extends IndexedSet.Element {
 			int dx = ports[j++];
 			io[i].pos(x + (dx < 0 ? dx + w : dx), y + ports[j++]);
 		}
-		if (!data.isEmpty())
-			cc.updateTextPos(textIdx, textPos());
 		return this;
 	}
 
-	public int textPos() {
-		int t = def.textSize;
-		return (x + (t >> 4 & 15)) * 4 - min(t >> 12 & 7, data.length()) * 2 & 0xffff
-			| ((y + (t >> 8 & 15)) * 4 & 0xffff) << 16;
+	public int textX() {
+		return x * 4 + (def.textX + max(0, def.textL0 - data.length())) * 2;
+	}
+
+	public int textY() {
+		return y * 4 + def.textY * 2;
 	}
 
 	public Block place() {
@@ -83,18 +76,9 @@ public class Block extends IndexedSet.Element {
 	}
 
 	public void draw(ByteBuffer buf) {
-		int t = def.textSize;
-		AtlasSprite s = def.icon;
-		buf.put(x).put(y).put((byte)s.x).put((byte)s.y);
-		if (t >= 0) buf.put((byte)(s.w | s.h << 4));
-		else {
-			int n = max(data.length() - (t >> 12 & 7), 0);
-			int l = (t >> 4 & 15) + (n >> 1), r = (t & 15) + (n >> 1);
-			if (l < r) l += n & 1; else r += n & 1;
-			buf.put((byte)(l | s.h << 4));
-			buf.put((byte)(x + l)).put(y).put((byte)(s.x + s.w - r)).put((byte)s.y);
-			buf.put((byte)(r | s.h << 4));
-		}
+		buf.put(x).put(y)
+		.put((byte)max(0, data.length() - def.textL0))
+		.put((byte)def.icon.id);
 	}
 
 	@Override
@@ -103,6 +87,7 @@ public class Block extends IndexedSet.Element {
 			for (Trace tr : io) tr.remove();
 			io[0].cc.fullRedraw();
 		}
+		//TODO redraw here
 		super.setIdx(idx);
 	}
 

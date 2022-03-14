@@ -1,6 +1,6 @@
 #version 150 core
 uniform mat3x4 transform;
-in uvec4 pos;
+in ivec4 pos;
 in vec4 colorIn;
 out vec2 size;
 out vec4 color;

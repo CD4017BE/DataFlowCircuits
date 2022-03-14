@@ -33,8 +33,8 @@ public interface IGuiSection {
 	 * @param dy scroll delta Y (unknown scale)*/
 	default void onScroll(double dx, double dy) {}
 
-	/**@param mx mouse X in relative window coordinates: left = 0.0, right = 1.0
-	 * @param my mouse Y in relative window coordinates: top = 0.0, bottom = 1.0
+	/**@param mx mouse X in relative window coordinates: left = -1.0, right = +1.0
+	 * @param my mouse Y in relative window coordinates: top = -1.0, bottom = +1.0
 	 * @return whether this section is in focus */
 	boolean onMouseMove(double mx, double my);
 }

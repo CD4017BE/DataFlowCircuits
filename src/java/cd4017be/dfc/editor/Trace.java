@@ -142,7 +142,7 @@ public class Trace {
 	public static final short VOID_COLOR = 15, STOP_COLOR = 0;
 
 	public static Integer key(int x, int y) {
-		return Integer.valueOf(y << 8 | x & 0xff);
+		return Integer.valueOf((y & 0xff) << 8 | x & 0xff);
 	}
 
 }
