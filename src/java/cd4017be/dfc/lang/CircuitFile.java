@@ -60,13 +60,13 @@ public class CircuitFile {
 
 	/**Converts an editor's block graph into the node representation needed for compilation.
 	 * @param blocks block graph */
-	public CircuitFile(IndexedSet<Block> blocks, int start) {
-		int nb = blocks.size() - start, out = -1;
+	public CircuitFile(IndexedSet<Block> blocks) {
+		int nb = blocks.size(), out = -1;
 		this.blocks = new int[nb][];
 		this.defs = new BlockDef[nb];
 		this.args = new String[nb];
 		for (int i = 0; i < nb; i++) {
-			Block block = blocks.get(i + start);
+			Block block = blocks.get(i);
 			if (OUT_ID.equals(block.id())) out = i;
 			defs[i] = block.def;
 			args[i] = block.data;
@@ -75,7 +75,7 @@ public class CircuitFile {
 			for (int j = 0; j < ni; j++) {
 				Trace tr = block.io[j + 1];
 				while(tr != null && tr.pin > 0) tr = tr.from;
-				data[j] = tr != null && tr.block != null ? tr.block.getIdx() - start : -1;
+				data[j] = tr != null && tr.block != null ? tr.block.getIdx() : -1;
 			}
 		}
 		this.out = out;
@@ -123,7 +123,7 @@ public class CircuitFile {
 		});
 	}
 
-	private static int[] scanTraces(List<Block> blocks, int start) {
+	private static int[] scanTraces(List<Block> blocks) {
 		int iol = 0;
 		for (Block block : blocks) iol += block.io.length - 1;
 		int[] io = new int[iol * 2 + 4];
@@ -148,7 +148,7 @@ public class CircuitFile {
 							tracing = false;
 					}
 					if (t.pin == 0) {
-						src = t.block.getIdx() - start;
+						src = t.block.getIdx();
 						break;
 					}
 				}
@@ -174,25 +174,24 @@ public class CircuitFile {
 	 * @param blocks block graph
 	 * @param out source file
 	 * @throws IOException */
-	public static void save(IndexedSet<Block> blocks, int start, ExtOutputStream out)
+	public static void save(IndexedSet<Block> blocks, ExtOutputStream out)
 	throws IOException {
-		List<Block> blockList = blocks.subList(start, blocks.size());
-		int[] traces = scanTraces(blockList, start);
+		int[] traces = scanTraces(blocks);
 		int refX = traces[0], refY = traces[1], shift = traces[2];
 		int size = shift + traces[3] + 7 >> 3;
 		out.writeByte(size - 1 | shift << 4);
 		IDTable<Block, BlockDef> defs = out.new IDTable<>(
-			blockList, b -> b.def, (os, d) -> {
+			blocks, b -> b.def, (os, d) -> {
 				os.writeByte(d.ios() - 1);
 				os.writeSmallUTF(d.name);
 			}
 		);
 		IDTable<Block, String> args = out.new IDTable<>(
-			blockList, b -> b.data, ExtOutputStream::writeSmallUTF
+			blocks, b -> b.data, ExtOutputStream::writeSmallUTF
 		);
-		int l = blockList.size(), tri = 4;
+		int l = blocks.size(), tri = 4;
 		out.writeVarInt(l);
-		for (Block block : blockList) {
+		for (Block block : blocks) {
 			defs.writeId(block);
 			args.writeId(block);
 			writePos(out, block.x - refX, block.y - refY, shift, size);
@@ -225,7 +224,9 @@ public class CircuitFile {
 		size = (size & 3) + 1;
 		BlockDef[] ids = loadDefs(dis, c);
 		String[] args = dis.readArray(String[]::new, ExtInputStream::readSmallUTF);
-		for (int n = dis.readVarInt(), i = 0; i < n; i++) {
+		int n = dis.readVarInt();
+		c.reserveBlockBuf(n);
+		for (int i = 0; i < n; i++) {
 			Block block = new Block(dis.readElement(ids), c);
 			block.data = dis.readElement(args);
 			int[] p = readPos(dis, shift, size);

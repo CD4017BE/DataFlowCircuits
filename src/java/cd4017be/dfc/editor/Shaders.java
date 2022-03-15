@@ -59,6 +59,8 @@ public class Shaders {
 	public static final int selP = program(selV, selG, selF, "outColor");
 	private static final int sel_pos = glGetAttribLocation(selP, "pos");
 	private static final int sel_colorIn = glGetAttribLocation(selP, "colorIn");
+	/** vec4: selection background color RGBA */
+	public static final int sel_bgColor = glGetUniformLocation(selP, "bgColor");
 	/** vec2: edge fading range in grid coordinates */
 	public static final int sel_edgeRange = glGetUniformLocation(selP, "edgeRange");
 	/** mat3x4: transformation from selection grid to screen coordinates */

@@ -39,12 +39,12 @@ public class IntrinsicEvaluators {
 		def("pack", IntrinsicEvaluators::pack);
 		def("pick", IntrinsicEvaluators::pick);
 		def("count", (file, out, node) -> node.retConst(cst(INT, file.eval(out, 0).length)));
-		defVec("type", true, a -> new Signal(TYPE, a.type));
+		defVec("type", true, (a, o) -> new Signal(TYPE, a.type));
 		def("ptrt", IntrinsicEvaluators::ptrt);
 		def("funt", IntrinsicEvaluators::funt);
 		def("elt0", elt(t -> t.par));
 		def("elt1", elt(t -> t.ret));
-		defVec("zero", true, a -> new Signal(a.asType(), 0L));
+		defVec("zero", true, (a, o) -> new Signal(a.asType(), 0L));
 		def("void", IntrinsicEvaluators::_void);
 		defVec("add", constMap(IntrinsicEvaluators::add, UNKNOWN, NUMBER_TYPES));
 		defVec("sub", constMap(IntrinsicEvaluators::sub, UNKNOWN, NUMBER_TYPES));
@@ -53,9 +53,11 @@ public class IntrinsicEvaluators {
 		defVec("mod", constMap(IntrinsicEvaluators::mod, UNKNOWN, NUMBER_TYPES));
 		defVec("udiv", constMap((t, a, b) -> divideUnsigned(a, b), UNKNOWN, INTEGER_TYPES));
 		defVec("umod", constMap((t, a, b) -> remainderUnsigned(a, b), UNKNOWN, INTEGER_TYPES));
+		defVec("neg", false, constMap(IntrinsicEvaluators::neg, UNKNOWN, NUMBER_TYPES));
 		defVec("or", constMap((t, a, b) -> a | b, UNKNOWN, LOGIC_TYPES));
 		defVec("and", constMap((t, a, b) -> a & b, UNKNOWN, LOGIC_TYPES));
 		defVec("xor", constMap((t, a, b) -> a ^ b, UNKNOWN, LOGIC_TYPES));
+		defVec("not", false, constMap((t, a) -> ~a, UNKNOWN, LOGIC_TYPES));
 		defVec("eq", constMap(IntrinsicEvaluators::eq, BOOL, COMPARABLE_TYPES));
 		defVec("ne", constMap((t, a, b) -> eq(t, a, b) ^ 1, BOOL, COMPARABLE_TYPES));
 		defVec("lt", constMap((t, a, b) -> gt(t, b, a), BOOL, ORDERED_TYPES));
@@ -77,13 +79,17 @@ public class IntrinsicEvaluators {
 		IntrinsicCompilers.define(INTRINSICS);
 	}
 
-	private static void defVec(String name, boolean cst, UnaryOperator<Signal> op) {
+	@FunctionalInterface interface UnOp {
+		Signal apply(Signal a, int out) throws SignalError;
+	}
+
+	private static void defVec(String name, boolean cst, UnOp op) {
 		def(name, (file, out, node) -> {
 			Signal[] a = file.eval(out, 0);
 			int l = a.length;
 			Signal[] res = new Signal[l];
 			for (int i = 0; i < l; i++)
-				res[i] = op.apply(a[i]);
+				res[i] = op.apply(a[i], out);
 			if (cst) node.retConst(res);
 			else node.ret(res);
 		});
@@ -141,6 +147,25 @@ public class IntrinsicEvaluators {
 				return new Signal(to);
 			try {
 				return new Signal(to, op.apply(t, a.addr, b.addr));
+			} catch(RuntimeException e) {
+				throw new SignalError(out, -1, e.getMessage());
+			}
+		};
+	}
+
+	@FunctionalInterface interface UnOpConst {
+		long apply(int type, long a);
+	}
+
+	private static UnOp constMap(UnOpConst op, int outType, int... inTypes) {
+		return (a, out) -> {
+			check(out, 0, a.type, inTypes);
+			int t = a.type;
+			int to = outType == UNKNOWN ? t : outType;
+			if (t >= POINTER || !a.constant())
+				return new Signal(to);
+			try {
+				return new Signal(to, op.apply(t, a.addr));
 			} catch(RuntimeException e) {
 				throw new SignalError(out, -1, e.getMessage());
 			}
@@ -305,6 +330,14 @@ public class IntrinsicEvaluators {
 		case SHORT -> (short)a % (short)b;
 		case INT -> (int)a % (int)b;
 		default -> a % b;
+		};
+	}
+
+	static long neg(int type, long a) {
+		return switch(type) {
+		case FLOAT -> a ^ 0x80000000L;
+		case DOUBLE -> a ^ 0x80000000_00000000L;
+		default -> -a;
 		};
 	}
 

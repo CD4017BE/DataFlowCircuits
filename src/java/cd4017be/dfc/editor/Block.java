@@ -1,8 +1,11 @@
 package cd4017be.dfc.editor;
 
+import static cd4017be.dfc.editor.Shaders.BLOCK_STRIDE;
 import static java.lang.Math.max;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
+import org.lwjgl.system.MemoryStack;
+
+import static org.lwjgl.opengl.GL32C.*;
 
 import cd4017be.dfc.lang.*;
 import cd4017be.util.IndexedSet;
@@ -16,10 +19,6 @@ public class Block extends IndexedSet.Element {
 	public String data = "";
 	public Signal[] outType = Signal.DEAD_CODE;
 	public short x, y;
-
-	public Block(String id, Circuit cc) {
-		this(cc.icons.get(id), cc);
-	}
 
 	public Block(BlockDef def, Circuit cc) {
 		this.def = def;
@@ -51,8 +50,7 @@ public class Block extends IndexedSet.Element {
 	public Block pos(int x, int y) {
 		this.x = (short)x;
 		this.y = (short)y;
-		Circuit cc = io[0].cc;
-		cc.redrawBlock(this);
+		redraw();
 		byte[] ports = def.ports;
 		int w = w() + 1;
 		for (int i = 0, j = 0; i < io.length; i++) {
@@ -75,26 +73,30 @@ public class Block extends IndexedSet.Element {
 		return this;
 	}
 
-	public void draw(ByteBuffer buf) {
-		buf.putShort(x).putShort(y)
-		.put((byte)max(0, data.length() - def.textL0))
-		.put((byte)0).putShort((short)def.icon.id);
+	public void redraw() {
+		try(MemoryStack ms = MemoryStack.stackPush()) {
+			ByteBuffer buf = ms.malloc(BLOCK_STRIDE);
+			buf.putShort(x).putShort(y)
+			.put((byte)max(0, data.length() - def.textL0))
+			.put((byte)0).putShort((short)def.icon.id);
+			glBindBuffer(GL_ARRAY_BUFFER, io[0].cc.blockBuf);
+			glBufferSubData(GL_ARRAY_BUFFER, getIdx() * BLOCK_STRIDE, buf.flip());
+		}
+		Main.refresh(0);
 	}
 
 	@Override
 	public void setIdx(int idx) {
+		super.setIdx(idx);
 		if (idx < 0) { // disconnect all Wires on removal
 			for (Trace tr : io) tr.remove();
 			io[0].cc.fullRedraw();
-		}
-		//TODO redraw here
-		super.setIdx(idx);
+		} else redraw();
 	}
 
 	@Override
 	public String toString() {
-		String s = Arrays.toString(io);
-		return String.format("#%d = %s(%s)", getIdx(), def, s.substring(1, s.length() - 1));
+		return String.format("#%d = %s", getIdx(), def);
 	}
 
 	public String id() {

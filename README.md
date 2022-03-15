@@ -33,10 +33,10 @@ The compiler is currently outputting LLVM-IR that can be executed or further pro
 - [x] primitive data flow graph editor
 - [x] load / save source graph files (currently single hard-coded file path)
 - [x] type-checking in editor
-- [ ] panning and zooming
+- [x] panning and zooming
 - [ ] multi-selection for movement, deletion and copy-paste
 - [ ] menu for multiple source files
-- [ ] improved block palette with hot-keys
+- [?] improved block palette with hot-keys
 - [ ] improved signal type inspection (as tree)
 - [ ] routing assistance
 

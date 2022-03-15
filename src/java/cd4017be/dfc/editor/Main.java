@@ -58,7 +58,7 @@ public class Main {
 
 	public static final ArrayList<IGuiSection> GUI = new ArrayList<>();
 	private static IGuiSection inFocus;
-	private static boolean redraw = true;
+	private static boolean redraw = true, lock;
 	public static int WIDTH, HEIGHT;
 
 	static void init(long window) {
@@ -66,8 +66,9 @@ public class Main {
 		glClearColor(0, 0, 0, 1);
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		
-		GUI.add(new Circuit());
+		Palette pal = new Palette();
+		GUI.add(new Circuit(pal));
+		GUI.add(pal);
 	}
 
 	private static void run(long window) {
@@ -86,6 +87,10 @@ public class Main {
 	static void close(long window) {
 		for (IGuiSection gs : GUI) gs.close();
 		Shaders.deleteAll();
+	}
+
+	public static void lock(boolean doLock) {
+		lock = doLock;
 	}
 
 	/**Cause a redraw and frame buffer swap
@@ -122,7 +127,9 @@ public class Main {
 		glfwGetWindowSize(window, w, h);
 		x = x / w[0] * 2.0 - 1.0;
 		y = y / h[0] * 2.0 - 1.0;
-		for (IGuiSection gs : GUI)
+		if (lock && inFocus != null)
+			inFocus.onMouseMove(x, y);
+		else for (IGuiSection gs : GUI)
 			if (gs.onMouseMove(x, y)) inFocus = gs;
 	}
 
