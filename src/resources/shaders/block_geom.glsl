@@ -1,27 +1,31 @@
 #version 150 core
 layout(points) in;
 layout(triangle_strip, max_vertices = 4) out;
-in vec4[] dx, dy;
-in vec4[] icon;
-in float[] du;
-out vec4 uv; //(u0, u1, v, sel)
-flat out float mid;
+in vec4[] icon, dx, dy;
+in vec2[] duv;
+out vec4 uv; //(u0, v0, u1, v1)
+out vec2 sel;
+flat out vec2 mid;
 
 void main() {
+	mid = (icon[0].st + icon[0].pq) * 0.5;
+	vec4 iuv = icon[0] - mid.stst;
+	vec4 euv = iuv + vec4(-duv[0], duv[0]);
+	uv.st = euv.st;
+	uv.pq = iuv.st;
 	gl_Position = gl_in[0].gl_Position;
-	float u0 = icon[0].s - du[0];
-	float u1 = icon[0].p + du[0];
-	mid = (u0 + u1) * 0.5;
-	uv.yzxw = vec4(icon[0].st, u0, 1.0);
 	EmitVertex();
+	uv.pt = euv.pt;
+	uv.sq = iuv.pt;
 	gl_Position += dx[0];
-	uv.xzyw = vec4(icon[0].pt, u1, 0.0);
 	EmitVertex();
+	uv.sq = euv.sq;
+	uv.pt = iuv.sq;
 	gl_Position = gl_in[0].gl_Position + dy[0];
-	uv.yzxw = vec4(icon[0].sq, u0, 1.0);
 	EmitVertex();
+	uv.pq = euv.pq;
+	uv.st = iuv.pq;
 	gl_Position += dx[0];
-	uv.xzyw	= vec4(icon[0].pq, u1, 0.0);
 	EmitVertex();
 	EndPrimitive();
 }

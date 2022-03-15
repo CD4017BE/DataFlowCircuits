@@ -43,14 +43,13 @@ public class ExtInputStream extends DataInputStream {
 	 * @throws DataFormatException if the data would encode a number > max */
 	public int readInt(int max) throws IOException, DataFormatException {
 		int v =
-		max <= 0 ? 0 : (
-			max <= 0xff ? 0 : (
-				max <= 0xffff ? 0 : (
-					max <= 0xffffff ? 0 :
-					in.read() << 24
-				) | in.read() << 16
-			) | in.read() << 8
-		) | in.read();
+		max <= 0 ? 0 : in.read() | (
+			max <= 0xff ? 0 : in.read() << 8 | (
+				max <= 0xffff ? 0 : in.read() << 16 | (
+					max <= 0xffffff ? 0 : in.read() << 24
+				)
+			)
+		);
 		if (v < 0) throw new EOFException();
 		if (v > max) throw new DataFormatException();
 		return v;

@@ -15,7 +15,7 @@ public class Block extends IndexedSet.Element {
 	public final Trace[] io;
 	public String data = "";
 	public Signal[] outType = Signal.DEAD_CODE;
-	public byte x, y;
+	public short x, y;
 
 	public Block(String id, Circuit cc) {
 		this(cc.icons.get(id), cc);
@@ -49,8 +49,8 @@ public class Block extends IndexedSet.Element {
 	}
 
 	public Block pos(int x, int y) {
-		this.x = (byte)x;
-		this.y = (byte)y;
+		this.x = (short)x;
+		this.y = (short)y;
 		Circuit cc = io[0].cc;
 		cc.redrawBlock(this);
 		byte[] ports = def.ports;
@@ -76,9 +76,9 @@ public class Block extends IndexedSet.Element {
 	}
 
 	public void draw(ByteBuffer buf) {
-		buf.put(x).put(y)
+		buf.putShort(x).putShort(y)
 		.put((byte)max(0, data.length() - def.textL0))
-		.put((byte)def.icon.id);
+		.put((byte)0).putShort((short)def.icon.id);
 	}
 
 	@Override

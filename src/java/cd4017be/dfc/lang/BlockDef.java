@@ -52,11 +52,17 @@ public class BlockDef {
 	}
 
 	/**Data Format:<pre>
-	 * B io_count - 1
+	 * 8 bit = io_count - 1
 	 * io_count * {
-	 *   B dx, B dy
+	 *   8 bit = dx
+	 *   8 bit = dy
 	 * }
-	 * 4b left_pad, 4b right_pad, 4b top_pad, 3b 0, 1b has_text </pre>
+	 * 4 bit = left_pad
+	 * 4 bit = right_pad
+	 * 4 bit = top_pad
+	 * 3 bit = 0
+	 * 1 bit = has_text
+	 * </pre>
 	 * @param out
 	 * @throws IOException */
 	public void writeLayout(OutputStream out) throws IOException {

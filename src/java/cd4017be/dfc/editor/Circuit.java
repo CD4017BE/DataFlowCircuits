@@ -4,6 +4,7 @@ import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.function.Function;
 import java.util.zip.DataFormatException;
 
 import org.lwjgl.system.MemoryStack;
@@ -21,7 +22,7 @@ import static org.lwjgl.opengl.GL32C.*;
 
 /**Implements the circuit editor user interface.
  * @author CD4017BE */
-public class Circuit implements IGuiSection {
+public class Circuit implements IGuiSection, Function<String, BlockDef> {
 
 	/**Editing modes */
 	private static final byte M_IDLE = 0, M_BLOCK_SEL = 1, M_TRACE_SEL = 2, M_TRACE_MV = 3, M_TRACE_DRAW = 4;
@@ -392,7 +393,7 @@ public class Circuit implements IGuiSection {
 		redraw |= 1;
 		try(MemoryStack ms = MemoryStack.stackPush()) {
 			glBindBuffer(GL_ARRAY_BUFFER, traceBuf);
-			glBufferSubData(GL_ARRAY_BUFFER, ofs, ms.bytes((byte)x, (byte)y));
+			glBufferSubData(GL_ARRAY_BUFFER, ofs, ms.shorts((short)x, (short)y));
 			checkGLErrors();
 		}
 	}
@@ -407,22 +408,6 @@ public class Circuit implements IGuiSection {
 			block.draw(buf);
 			glBufferSubData(GL_ARRAY_BUFFER, block.getIdx() * BLOCK_STRIDE, buf.flip());
 			checkGLErrors();
-		}
-	}
-
-	/**Modify coordinates of a text segment in its vertex buffer.
-	 * @param idx text segment index
-	 * @param xy packed coordinates */
-	public void updateTextPos(byte idx, int xy) {
-		if ((redraw & 2) != 0) return;
-		refresh(0);
-		redraw |= 1;
-		try(MemoryStack ms = MemoryStack.stackPush()) {
-			glBindBuffer(GL_TEXTURE_BUFFER, textPos);
-			glBufferSubData(GL_TEXTURE_BUFFER,
-				(idx & 0xff) * Shaders.TEXT_POS_STRIDE,
-				ms.ints(xy)
-			);
 		}
 	}
 
@@ -542,6 +527,11 @@ public class Circuit implements IGuiSection {
 			info = e.toString();
 		}
 		refresh(0);
+	}
+
+	@Override
+	public BlockDef apply(String t) {
+		return icons.get(t);
 	}
 
 }

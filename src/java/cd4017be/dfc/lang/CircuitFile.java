@@ -1,6 +1,10 @@
 package cd4017be.dfc.lang;
 
 import static cd4017be.dfc.lang.BlockDef.OUT_ID;
+import static java.lang.Integer.numberOfLeadingZeros;
+import static java.lang.Math.max;
+import static java.lang.Math.min;
+
 import java.io.*;
 import java.util.*;
 import java.util.function.Function;
@@ -10,28 +14,7 @@ import cd4017be.dfc.editor.*;
 import cd4017be.util.*;
 import cd4017be.util.ExtOutputStream.IDTable;
 
-/**File format: <pre>
- * VI defCount * {
- *   B nameLen * {
- *     B utf8byte
- *   }
- * }
- * VI (argCount-1) * {
- *   B argLen * {
- *     B utf8byte
- *   }
- * }
- * VI blockCount * {
- *   I(defCount) def
- *   I(argCount) arg
- *   B x, B y
- *   B ioCount * {
- *     I(blockCount) source
- *     B traceCount * {
- *       B x, B y
- *     }
- *   }
- * } </pre>
+/**
  * @author CD4017BE */
 public class CircuitFile {
 
@@ -53,7 +36,8 @@ public class CircuitFile {
 	 * @throws DataFormatException */
 	public CircuitFile(ExtInputStream dis, Function<String, BlockDef> reg)
 	throws IOException, DataFormatException {
-		BlockDef[] defIdx = dis.readArray(BlockDef[]::new, is -> reg.apply(is.readSmallUTF()));
+		int pb = (dis.read() & 3) + 1;
+		BlockDef[] defIdx = loadDefs(dis, reg);
 		String[] argIdx = dis.readArray(String[]::new, ExtInputStream::readSmallUTF);
 		int nb = dis.readVarInt(), out = -1;
 		this.blocks = new int[nb][];
@@ -63,12 +47,12 @@ public class CircuitFile {
 			BlockDef def = defs[i] = dis.readElement(defIdx);
 			if (OUT_ID.equals(def.name)) out = i;
 			args[i] = dis.readElement(argIdx);
-			dis.readShort(); //skip position
-			int ni = dis.readUnsignedByte();
+			dis.skipNBytes(pb); //skip position
+			int ni = def.ios() - 1;
 			int[] block = blocks[i] = new int[ni];
 			for (int j = 0; j < ni; j++) {
 				block[j] = dis.readInt(nb) - 1;
-				dis.skipNBytes(dis.readUnsignedByte() * 2); //skip traces
+				dis.skipNBytes(dis.readVarInt() * pb); //skip traces
 			}
 		}
 		this.out = out;
@@ -125,32 +109,40 @@ public class CircuitFile {
 		def.eval.eval(this, out, nodes[out] = new Node(def, blocks[out].length));
 	}
 
-	/**Writes an editor's block graph to a source file.
-	 * @param blocks block graph
-	 * @param out source file
-	 * @throws IOException */
-	public static void save(IndexedSet<Block> blocks, int start, ExtOutputStream out)
-	throws IOException {
-		List<Block> blockList = blocks.subList(start, blocks.size());
-		IDTable<Block, String> defs = out.new IDTable<>(
-			blockList, Block::id, ExtOutputStream::writeSmallUTF
-		);
-		IDTable<Block, String> args = out.new IDTable<>(
-			blockList, b -> b.data, ExtOutputStream::writeSmallUTF
-		);
-		int l = blockList.size();
-		out.writeVarInt(l);
-		for (Block block : blockList) {
-			defs.writeId(block);
-			args.writeId(block);
-			out.writeByte(block.x);
-			out.writeByte(block.y);
-			out.writeByte(block.io.length - 1);
+	private static BlockDef[] loadDefs(ExtInputStream dis, Function<String, BlockDef> reg)
+	throws IOException, DataFormatException {
+		return dis.readArray(BlockDef[]::new, is -> {
+			int n = is.read() + 1;
+			String name = is.readSmallUTF();
+			BlockDef def = reg.apply(name);
+			if (def == null)
+				throw new DataFormatException("type '" + name + "' is undefined");
+			if (def.ios() != n)
+				throw new DataFormatException("pin count" + n + " doesn't match type " + def);
+			return def;
+		});
+	}
+
+	private static int[] scanTraces(List<Block> blocks, int start) {
+		int iol = 0;
+		for (Block block : blocks) iol += block.io.length - 1;
+		int[] io = new int[iol * 2 + 4];
+		int minX = Short.MAX_VALUE, maxX = Short.MIN_VALUE, minY = minX, maxY = maxX;
+		iol = 4;
+		for (Block block : blocks) {
+			maxX = max(maxX, block.x);
+			minX = min(minX, block.x);
+			maxY = max(maxY, block.y);
+			minY = min(minY, block.y);
 			for (int i = 1; i < block.io.length; i++) {
 				int n = 0, src = -1;
 				boolean tracing = true;
 				for (Trace t0 = block.io[i], t = t0.from; t != null; t0 = t, t = t.from) {
 					if (tracing) {
+						maxX = max(maxX, t0.x());
+						minX = min(minX, t0.x());
+						maxY = max(maxY, t0.y());
+						minY = min(minY, t0.y());
 						n++;
 						if (t.pin >= 0 || t.to != t0)
 							tracing = false;
@@ -160,15 +152,66 @@ public class CircuitFile {
 						break;
 					}
 				}
-				out.writeInt(src + 1, l);
-				if (n > 255) n = 255;
-				out.writeByte(n);
-				for (Trace t = block.io[i].from; n > 0; t = t.from, n--) {
-					out.writeByte(t.x());
-					out.writeByte(t.y());
-				}
+				io[iol++] = src;
+				io[iol++] = n;
 			}
 		}
+		io[0] = minX + maxX + 1 >> 1;
+		io[1] = minY + maxY + 1 >> 1;
+		io[2] = max(1, 32 - numberOfLeadingZeros(maxX - minX));
+		io[3] = max(1, 32 - numberOfLeadingZeros(maxY - minY));
+		return io;
+	}
+
+	private static void writePos(
+		ExtOutputStream out, int x, int y, int shift, int n
+	) throws IOException {
+		for(int v = x & (1 << shift) - 1 | y << shift; n > 0; n--, v >>= 8)
+			out.write(v);
+	}
+
+	/**Writes an editor's block graph to a source file.
+	 * @param blocks block graph
+	 * @param out source file
+	 * @throws IOException */
+	public static void save(IndexedSet<Block> blocks, int start, ExtOutputStream out)
+	throws IOException {
+		List<Block> blockList = blocks.subList(start, blocks.size());
+		int[] traces = scanTraces(blockList, start);
+		int refX = traces[0], refY = traces[1], shift = traces[2];
+		int size = shift + traces[3] + 7 >> 3;
+		out.writeByte(size - 1 | shift << 4);
+		IDTable<Block, BlockDef> defs = out.new IDTable<>(
+			blockList, b -> b.def, (os, d) -> {
+				os.writeByte(d.ios() - 1);
+				os.writeSmallUTF(d.name);
+			}
+		);
+		IDTable<Block, String> args = out.new IDTable<>(
+			blockList, b -> b.data, ExtOutputStream::writeSmallUTF
+		);
+		int l = blockList.size(), tri = 4;
+		out.writeVarInt(l);
+		for (Block block : blockList) {
+			defs.writeId(block);
+			args.writeId(block);
+			writePos(out, block.x - refX, block.y - refY, shift, size);
+			for (int i = 1; i < block.io.length; i++) {
+				out.writeInt(traces[tri++] + 1, l);
+				int n = traces[tri++];
+				out.writeVarInt(n);
+				for (Trace t = block.io[i].from; n > 0; t = t.from, n--)
+					writePos(out, t.x() - refX, t.y() - refY, shift, size);
+			}
+		}
+	}
+
+	private static int[] readPos(ExtInputStream dis, int shift, int n) throws IOException {
+		int v = 0, s = n * 8;
+		for (int i = 0; i < s; i+=8)
+			v |= dis.read() << i;
+		int x = v << -shift >> -shift, y = v << -s >> shift - s;
+		return new int[] {x, y};
 	}
 
 	/**Loads a program from a source file into an editor's block graph.
@@ -178,25 +221,25 @@ public class CircuitFile {
 	 * @throws DataFormatException */
 	public static void load(Circuit c, ExtInputStream dis)
 	throws IOException, DataFormatException {
-		String[] ids = dis.readArray(String[]::new, ExtInputStream::readSmallUTF);
+		int size = dis.readByte() & 0xff, shift = size >> 4;
+		size = (size & 3) + 1;
+		BlockDef[] ids = loadDefs(dis, c);
 		String[] args = dis.readArray(String[]::new, ExtInputStream::readSmallUTF);
 		for (int n = dis.readVarInt(), i = 0; i < n; i++) {
 			Block block = new Block(dis.readElement(ids), c);
 			block.data = dis.readElement(args);
-			int x = dis.readByte(), y = dis.readByte();
-			int m = dis.readUnsignedByte();
-			if (m != block.io.length - 1)
-				throw new DataFormatException("pin count" + m + " doesn't match type " + block.def);
-			for (int j = 1; j <= m; j++) {
+			int[] p = readPos(dis, shift, size);
+			for (int j = 1; j < block.io.length; j++) {
 				Trace t0 = block.io[j];
 				dis.readInt(n);
-				for (int l = dis.readUnsignedByte(); l > 0; l--) {
-					Trace t = new Trace(c).pos(dis.readByte(), dis.readByte());
+				for (int l = dis.readVarInt(); l > 0; l--) {
+					int[] p1 = readPos(dis, shift, size);
+					Trace t = new Trace(c).pos(p1[0], p1[1]);
 					t0.connect(t);
 					t0 = t.place();
 				}
 			}
-			block.pos(x, y).place();
+			block.pos(p[0], p[1]).place();
 		}
 	}
 

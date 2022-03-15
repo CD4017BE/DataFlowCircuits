@@ -41,15 +41,14 @@ public class ExtOutputStream extends DataOutputStream {
 	 * @throws IOException on I/O error */
 	public void writeInt(int v, int max) throws IOException {
 		if (v < 0 || v > max) throw new IllegalArgumentException("number out of range");
-		if (max > 0xff) {
-			if (max > 0xffff) {
-				if (max > 0xffffff)
-					out.write(v >>> 24);
-				out.write(v >>> 16);
-			}
-			out.write(v >>> 8);
-		}
+		if (max == 0) return;
 		out.write(v);
+		if (max <= 0xff) return;
+		out.write(v >>> 8);
+		if (max <= 0xffff) return;
+		out.write(v >>> 16);
+		if (max > 0xffffff) return;
+		out.write(v >>> 24);
 	}
 
 	/**@param <T> element type

@@ -34,8 +34,7 @@ public class Shaders {
 	private static final int blockF = loadShader(GL_FRAGMENT_SHADER, "/shaders/block_frag.glsl");
 	/** block rendering shader */
 	public static final int blockP = program(blockV, blockG, blockF, "outColor");
-	private static final int block_pos = glGetAttribLocation(blockP, "pos");
-	private static final int block_id = glGetAttribLocation(blockP, "id");
+	private static final int block_data = glGetAttribLocation(blockP, "data");
 	/** vec2: texture coordinate to block grid scale */
 	public static final int block_gridScale = glGetUniformLocation(blockP, "gridScale");
 	/** mat3x4: transformation from block grid to screen coordinates */
@@ -66,15 +65,15 @@ public class Shaders {
 	public static final int sel_transform = glGetUniformLocation(selP, "transform");
 
 	/**Vertex format sizes */
-	public static final int TEXT_POS_STRIDE = 8, FONT_STRIDE = 16,
-	SEL_STRIDE = 12, TRACE_STRIDE = 4, BLOCK_STRIDE = 4;
+	public static final int FONT_TEX_STRIDE = 16,
+	SEL_STRIDE = 12, TRACE_STRIDE = 6, BLOCK_STRIDE = 8;
 	public static final float FONT_CW = 1F/16F, FONT_CH = 1.5F/16F;
 
 	/** default font texture for text rendering */
 	public static final int font_tex = texture2D(GL_LINEAR, GL_REPEAT, GL_R8, "font");
 	public static final int char_buf = glGenBuffers();
 	public static final int text_vao = genTextVAO(char_buf);
-	static {initFont(font_tex, FONT_CW, FONT_CH, FONT_STRIDE);}
+	static {initFont(font_tex, FONT_CW, FONT_CH, FONT_TEX_STRIDE);}
 
 	static void deleteAll() {
 		glDeleteProgram(textP);
@@ -114,11 +113,9 @@ public class Shaders {
 	public static int genBlockVAO(int buf) {
 		int vao = glGenVertexArrays();
 		glBindVertexArray(vao);
-		glEnableVertexAttribArray(block_pos);
-		glEnableVertexAttribArray(block_id);
+		glEnableVertexAttribArray(block_data);
 		glBindBuffer(GL_ARRAY_BUFFER, buf);
-		glVertexAttribIPointer(block_pos, 3, GL_BYTE, BLOCK_STRIDE, 0);
-		glVertexAttribIPointer(block_id, 1, GL_UNSIGNED_BYTE, BLOCK_STRIDE, 3);
+		glVertexAttribIPointer(block_data, 4, GL_SHORT, BLOCK_STRIDE, 0);
 		glBindVertexArray(0);
 		checkGLErrors();
 		return vao;
@@ -133,8 +130,8 @@ public class Shaders {
 		glEnableVertexAttribArray(trace_pos);
 		glEnableVertexAttribArray(trace_types);
 		glBindBuffer(GL_ARRAY_BUFFER, buf);
-		glVertexAttribIPointer(trace_pos, 2, GL_BYTE, TRACE_STRIDE, 0);
-		glVertexAttribIPointer(trace_types, 1, GL_UNSIGNED_SHORT, TRACE_STRIDE, 2);
+		glVertexAttribIPointer(trace_pos, 2, GL_SHORT, TRACE_STRIDE, 0);
+		glVertexAttribIPointer(trace_types, 1, GL_UNSIGNED_SHORT, TRACE_STRIDE, 4);
 		glBindVertexArray(0);
 		checkGLErrors();
 		return vao;

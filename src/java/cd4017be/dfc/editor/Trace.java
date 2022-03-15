@@ -29,12 +29,12 @@ public class Trace {
 		this.pin = pin;
 	}
 
-	public byte x() {
-		return (byte)pos;
+	public short x() {
+		return (short)pos;
 	}
 
-	public byte y() {
-		return (byte)(pos >> 8);
+	public short y() {
+		return (short)(pos >> 16);
 	}
 
 	public Trace pos(int x, int y) {
@@ -120,7 +120,7 @@ public class Trace {
 			}
 		if (pin < 0) this.block = block;
 		bufOfs = buf.position();
-		buf.putShort((short)pos).putShort(
+		buf.putInt(pos).putShort(
 			start ? STOP_COLOR :
 			block == null ? VOID_COLOR :
 			color(block.outType)
@@ -141,8 +141,8 @@ public class Trace {
 
 	public static final short VOID_COLOR = 15, STOP_COLOR = 0;
 
-	public static Integer key(int x, int y) {
-		return Integer.valueOf((y & 0xff) << 8 | x & 0xff);
+	public static int key(int x, int y) {
+		return y << 16 | x & 0xffff;
 	}
 
 }
