@@ -100,6 +100,7 @@ public class Instruction {
 			for(int q; (q = fmt.indexOf('$', p)) >= 0; p = q + 1) {
 				out.append(fmt, p, q);
 				char c = fmt.charAt(++q);
+				boolean expl = false;
 				int n = i;
 				if (c == '<') {
 					c = fmt.charAt(++q);
@@ -108,19 +109,30 @@ public class Instruction {
 					n = c - '0';
 					while((c = fmt.charAt(++q)) >= '0' && c <= '9')
 						n = n * 10 + c - '0';
+					expl = true;
 				}
 				int et = 0;
 				switch(c) {
 				default: out.append(c); continue;
-				case '(': na = 0; pa = q; continue;
-				case '[': nb = 0; pb = q; continue;
+				case '(':
+					if (i < l) {
+						na = expl ? n : l - n;
+						pa = q;
+					} else q = fmt.indexOf("$)", q + 1) + 1;
+					continue;
+				case '[':
+					if (i < l) {
+						nb = expl ? n : l - n;
+						pb = q;
+					} else q = fmt.indexOf("$]", q + 1) + 1;
+					continue;
 				case ')':
-					if (++na < n && i < l) {
+					if (--na > 0 && i < l) {
 						out.append(", ");
 						q = pa;
 					} continue;
 				case ']':
-					if (++nb < n && i < l) {
+					if (--nb > 0 && i < l) {
 						out.append(", ");
 						q = pb;
 					} continue;
@@ -128,13 +140,13 @@ public class Instruction {
 				case 'v': out.append(ins.var(n)); break;
 				case 'f': appendFlags(out.append(ins.var(n)), ins.arg(n).type); break;
 				case 'r': out.append(putArrayType(new StringBuilder(), type(ins.arg(n).type).ret)); break;
-				case 'p': out.append(putSeq(new StringBuilder(), type(ins.arg(n).type).par)); break; //TODO flags
+				case 'p': parameters(out, ins.arg(n)); break;
 				case 'e': et = 1;
 				case 't':
 					int t = (s = ins.arg(n)).type;
-					String type = n != 0 || t < POINTER || !s.constant()
+					String type = n != 0 || t < POINTER || !s.constant() || s.addr <= 0
 						? typeName(t)
-						: typeName(GLOBALS.get((int)s.addr), t);
+						: typeName(GLOBALS.get((int)s.addr - 1), t);
 					out.append(type, 0, type.length() - et);
 				}
 				i = n + 1;
@@ -163,7 +175,8 @@ public class Instruction {
 
 	private static String global(Signal s, boolean set) {
 		if (s.addr < 0) return "undef";
-		GlobalVar var = GLOBALS.get((int)s.addr);
+		if (s.addr == 0) return "null";
+		GlobalVar var = GLOBALS.get((int)s.addr - 1);
 		if (set || var.len == 0) return var.name;
 		return new StringBuilder("bitcast(")
 		.append(typeName(var, s.type)).append(' ')
@@ -187,11 +200,20 @@ public class Instruction {
 		return var.type = sb.append('*').toString();
 	}
 
-	static void appendFlags(Writer out, int type) throws IOException {
+	private static void appendFlags(Writer out, int type) throws IOException {
 		Type t = type(type);
 		if (t == null) return;
 		if (t.stackAlloc()) out.append(" nocapture");
 		if (t.readOnly()) out.append(" readonly");
+	}
+
+	private static void parameters(Writer out, Signal f) throws IOException {
+		int i = 0;
+		for (int type : type(f.type).par) {
+			if (i++ > 0) out.append(", ");
+			out.append(typeName(type));
+			appendFlags(out, type);
+		}
 	}
 
 	private static final String[] TYPE_NAMES = {
@@ -228,6 +250,7 @@ public class Instruction {
 	}
 
 	private static StringBuilder putSeq(StringBuilder sb, int[] arr) {
+		if (arr.length == 0) return sb;
 		for (int t : arr) sb.append(typeName(t)).append(", ");
 		return sb.delete(sb.length() - 2, sb.length());
 	}

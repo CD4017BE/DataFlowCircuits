@@ -30,6 +30,7 @@ public class IntrinsicCompilers {
 	EXTRACTVALUE = "  extractvalue $1e $<v, $v\n",
 	INSERTVALUE = "  insertvalue $e $v, $t $<v, $v\n",
 	GETELEMENTPTR = "  getelementptr $1e, $<.$($t $<v$)\n",
+	BITCAST = "  bitcast $1t $<v to $0t\n",
 	ALLOCA = "  alloca $e\n",
 	CALL = "  call $1r $<v($($t $<v$))\n",
 	BR = "  br $1.$($t $<v$)\n",
@@ -39,7 +40,7 @@ public class IntrinsicCompilers {
 
 	static Instruction main(Node node, Instruction ins) throws Throwable {
 		Signal[] par = node.out, ret = node.in(0);
-		Signal f = new Signal(new Type(FUNCTION, types(par), types(ret)).define(0), 0L);
+		Signal f = new Signal(new Type(FUNCTION, types(par), types(ret)).define(0), 1L);
 		ins = ins.add(DEFINE, f, par).add(new Signal(LABEL));
 		ins = node.compIn(ins, 0);
 		return ins.add(ret.length == 0 ? RET_VOID : RET, null, ret);
@@ -64,17 +65,33 @@ public class IntrinsicCompilers {
 		else c.put("ret i32 0");
 	}*/
 
+	static Instruction pick(Node node, Instruction ins) throws Throwable {
+		Signal[] in = node.in(0);
+		out: for (Signal s : node.out) {
+			if (s.type < POINTER || s.constant()) continue;
+			for (Signal s1 : in)
+				if (s1 == s) continue out;
+			int[] par = type(s.type).par;
+			Signal o = par.length <= 1 ? s : new Signal(par[0]);
+			ins = ins.add(GETELEMENTPTR, o,
+				in[(int)s.addr], new Signal(INT, 0),
+				new Signal(INT, s.addr >> 32)
+			);
+			if (o != s) ins = ins.add(BITCAST, s, o);
+		}
+		return ins;
+	}
+
 	public static StringBuilder structVar(StringBuilder sb, Type p, Signal[] val) {
 		int l0 = p.par.length, l1 = p.ret.length, l = l0 + min(l1, 1);
 		if (l == 1 && l1 == 0) return sb.append("$v");
 		if (l > 1) sb.append('{');
-		if (l0 > 0) sb.append("$($t $<v$").append(l0).append(')');
+		if (l0 > 0) sb.append('$').append(l0).append("($t $<v$)");
 		if (l1 > 0) {
 			int n = (val.length - l0) / l1;
-			sb.append(l0 > 0 ? ", [$(" : "[$(");
-			if (l1 > 1) sb.append("{$[$t $<v$").append(l1).append("]}");
-			else sb.append("$t $<v");
-			sb.append(n).append(")]");
+			sb.append(l0 > 0 ? ", [$" : "[$").append(n);
+			if (l1 > 1) sb.append("({$").append(l1).append("[$t $<v$]}$)]");
+			else sb.append("($t $<v$)]");
 		}
 		if (l > 1) sb.append('}');
 		return sb;

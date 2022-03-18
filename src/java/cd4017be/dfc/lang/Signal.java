@@ -70,7 +70,7 @@ public class Signal {
 			case FLOAT -> sb.append(intBitsToFloat((int)addr));
 			case DOUBLE -> sb.append(longBitsToDouble(addr));
 			case VOID, BOOL, BYTE, SHORT, INT, LONG -> sb.append(addr);
-			default -> sb.append(GLOBALS.get((int)addr));
+			default -> sb.append(addr == 0L ? "null" : GLOBALS.get((int)(addr - 1)));
 			}
 		} else if (defined()) sb.append(addr);
 		return sb.toString();
@@ -84,35 +84,6 @@ public class Signal {
 
 	public int asType() {
 		return type == TYPE ? (int)addr : type;
-	}
-
-	public static String select(String s, int n) {
-		int l = s.length();
-		byte[] idxs = new byte[l--];
-		for (int i = 0; i <= l; i++) {
-			char c = s.charAt(i);
-			int v = Character.digit(c, Character.MAX_RADIX);
-			if (v < 0 && (c != '-' || i == 0 || idxs[i-1] < 0))
-				throw new NumberFormatException("invalid character " + c);
-			idxs[i] = (byte)(v < 32 ? v : v - 33 & 3);
-		}
-		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i <= l; i++) {
-			int idx = idxs[i];
-			if (idx < 0) {
-				sb.deleteCharAt(sb.length() - 1);
-				int i0 = idxs[i-1];
-				int i1 = i == l ? 0 : idxs[++i] + 1;
-				if (i0 < n) {
-					int n1 = i0 < i1 && i1 < n ? i1 : n;
-					for (int k = i0; k < n1; k++) sb.append((char)k);
-				}
-				if (i0 >= i1)
-					for (int k = 0; k < i1; k++)
-						sb.append((char)k);
-			} else if (idx < n) sb.append((char)idx);
-		}
-		return sb.toString();
 	}
 
 	public static Signal[] union(Signal[] a, Signal[] b, int node) throws SignalError {

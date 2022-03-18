@@ -12,7 +12,7 @@ import static java.lang.Float.intBitsToFloat;
 import static java.lang.Long.*;
 import static java.lang.String.format;
 
-import java.util.HashMap;
+import java.util.*;
 import java.util.function.*;
 
 import cd4017be.dfc.compiler.IntrinsicCompilers;
@@ -207,8 +207,8 @@ public class IntrinsicEvaluators {
 		for (int i = 0; i < a.length; i++) {
 			int t = a[i].asType();
 			check(out, 0, t, POINTER, -1);
-			res[i] = new Signal(t, GLOBALS.size());
 			new GlobalVar(node, name);
+			res[i] = new Signal(t, GLOBALS.size());
 		}
 		node.retConst(res);
 	}
@@ -226,14 +226,76 @@ public class IntrinsicEvaluators {
 		node.ret(res);
 	}
 
+	private static void pick(
+		int out, ArrayList<Signal> list, Signal[] in,
+		int i0, int i1, int i2, int i3
+	) throws SignalError {
+		if (i0 < 0) {
+			i0 = Math.max(i3, 0);
+			i1 = i3;
+			i2 = 0;
+			i3 = -1;
+		} else if (i1 < 0) {
+			i1 = i3 < 0 ? in.length - 1 : i3;
+			i2 = 0;
+			i3 = -1;
+		} else if (i2 < 0) i2 = Math.max(i3, 0);
+		boolean idx = i2 > 0 || i3 >= 0;
+		for (int i = i0; i <= i1; i++) {
+			Signal s = in[i];
+			if (idx && s.type >= POINTER) {
+				Type t = type(s.type);
+				int l = t.par.length, j = i3 < 0 ? l : i3 + 1;
+				if (i2 != 0 || j != l) {
+					if (i2 >= l || j > l)
+						throw new SignalError(out, 0,
+							format("[%d-%d] out of range %d", i2, i3-1, l)
+						);
+					s = new Signal(new Type(t.flags,
+						Arrays.copyOfRange(t.par, i2, j), Type.EMPTY
+					).define(0));
+					s.addr = i | i2 << 32;
+				}
+			}
+			list.add(s);
+		}
+	}
+
 	static void pick(CircuitFile file, int out, Node node) throws SignalError {
-		//TODO pointer pick
 		Signal[] a = file.eval(out, 0);
-		String s = select(file.args[out], a.length);
-		Signal[] b = new Signal[s.length()];
-		for (int i = 0; i < b.length; i++)
-			b[i] = a[s.charAt(i)];
-		node.ret(b);
+		ArrayList<Signal> list = new ArrayList<>();
+		String arg = file.args[out];
+		int j0 = -1, j1 = -1, j2 = -1, n = -1;
+		for (int i = 0; i < arg.length(); i++) {
+			char c = arg.charAt(i);
+			switch(c) {
+			case '-':
+				n = Math.max(n, 0);
+				if (j0 < 0) j0 = n;
+				else if (j1 >= 0 && j2 < 0) j2 = n;
+				else throw new SignalError(out, -1, "duplicate '-'");
+				n = -1;
+				break;
+			case '[':
+				if (j1 >= 0) throw new SignalError(out, -1, "duplicate '['");
+				if (j0 < 0) j0 = Math.max(n, 0);
+				j1 = n < 0 ? a.length + n : n;
+				n = -1;
+				break;
+			case ']':
+				if (j1 < 0) throw new SignalError(out, -1, "']' without '['");
+			case ',':
+				pick(out, list, a, j0, j1, j2, n);
+				j0 = j1 = j2 = n = -1;
+				break;
+			default:
+				if (c < '0' || c > '9')
+					throw new SignalError(out, -1, "illegal character '" + c + "'");
+				n = Math.max(n, 0) * 10 + (c - '0');
+			}
+		}
+		if (j0 >= 0) pick(out, list, a, j0, j1, j2, n);
+		node.ret(list.toArray(Signal[]::new));
 	}
 
 	static void ptrt(CircuitFile file, int out, Node node) throws SignalError {
@@ -405,8 +467,8 @@ public class IntrinsicEvaluators {
 				node.ret(var(t));
 				return;
 			}
-		node.ret(cst(t, GLOBALS.size()));
 		new GlobalVar(node, null).len = n;
+		node.ret(cst(t, GLOBALS.size()));
 	}
 
 	static Signal idx(Signal p, Signal i, int out) throws SignalError {
@@ -491,8 +553,8 @@ public class IntrinsicEvaluators {
 		Type p = type(t);
 		int[] sig = p.par;
 		Signal[] res = new Signal[sig.length + 1];
-		res[0] = new Signal(t, GLOBALS.size());
 		new GlobalVar(node, null);
+		res[0] = new Signal(t, GLOBALS.size());
 		for (int i = 1; i < res.length; i++)
 			res[i] = new Signal(sig[i-1]);
 		node.retConst(res);
