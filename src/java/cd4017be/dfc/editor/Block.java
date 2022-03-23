@@ -65,7 +65,7 @@ public class Block extends IndexedSet.Element {
 	}
 
 	public int textY() {
-		return y * 4 + def.textY * 2;
+		return y * 4 + def.textY * 2 + 1;
 	}
 
 	public Block place() {

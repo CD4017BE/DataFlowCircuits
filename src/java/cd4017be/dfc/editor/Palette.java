@@ -32,7 +32,7 @@ public class Palette implements IGuiSection {
 	public BlockDef[] palette;
 	public int idx;
 	int bw, bh, nw, scroll;
-	int blockBuf, blockVAO, selBuf, selVAO;
+	int blockBuf, blockVAO;
 	Circuit circuit;
 
 	public Palette() {
@@ -47,8 +47,7 @@ public class Palette implements IGuiSection {
 		this.bw = w;
 		this.bh = h;
 		
-		selVAO = genSelVAO(selBuf = glGenBuffers());
-		glBufferData(GL_ARRAY_BUFFER, 2 * SEL_STRIDE, GL_STATIC_DRAW);
+		allocSelBuf(2);
 		blockVAO = genBlockVAO(blockBuf = glGenBuffers());
 		try(MemoryStack ms = MemoryStack.stackPush()) {
 			int x = 0, y = 0, l = palette.length;
@@ -60,12 +59,6 @@ public class Palette implements IGuiSection {
 				x += bw;
 			}
 			glBufferData(GL_ARRAY_BUFFER, buf.flip(), GL_STATIC_DRAW);
-			buf = ms.malloc(SEL_STRIDE);
-			buf.putShort((short)0).putShort((short)0)
-			.putShort((short)(l * bw * 4)).putShort((short)(bh * 4))
-			.putInt(0x80ffffff);
-			glBindBuffer(GL_ARRAY_BUFFER, selBuf);
-			glBufferSubData(GL_ARRAY_BUFFER, 0, buf.flip());
 		}
 		idx = -1;
 	}
@@ -81,22 +74,17 @@ public class Palette implements IGuiSection {
 		float scaleX = SCALE / (float)WIDTH;
 		float scaleY = SCALE / (float)HEIGHT;
 		float ofsX = scaleX * bw * scroll;
-		float[] mat = new float[] {
-			0.25F * scaleX, 0, 0, 0,
-			0, -0.25F * scaleY, 0, 0,
-			-ofsX, 1F, 0, 1F
-		};
-		glUseProgram(selP);
-		glUniformMatrix3x4fv(sel_transform, false, mat);
-		glUniform4f(sel_bgColor, 0, 0, 0, 0.5F);
-		glBindVertexArray(selVAO);
-		glDrawArrays(GL_POINTS, 0, idx < 0 ? 1 : 2);
-		glUniform4f(sel_bgColor, 0, 0, 0, 0);
-		checkGLErrors();
+		
+		addSel(0, 0, palette.length * bw, bh, 0x80ffffff);
+		if (idx >= 0) addSel(idx * bw, 0, bw, bh, 0xff80ff80);
+		drawSel(-ofsX, 1F, scaleX, -scaleY, 0F, 0.5F, 0x80000000);
 		
 		glUseProgram(blockP);
-		mat[0] = scaleX; mat[5] = -scaleY;
-		glUniformMatrix3x4fv(block_transform, false, mat);
+		glUniformMatrix3x4fv(block_transform, false, new float[] {
+			scaleX, 0, 0, 0,
+			0, -scaleY, 0, 0,
+			-ofsX, 1F, 0, 1F
+		});
 		icons.bind();
 		glBindVertexArray(blockVAO);
 		glDrawArrays(GL_POINTS, 0, palette.length);
@@ -113,13 +101,6 @@ public class Palette implements IGuiSection {
 		}
 		int i = (int)floor(mx * (double)WIDTH / (double)(bw * SCALE)) + scroll;
 		if (i < 0 || i >= palette.length) i = -1;
-		else try (MemoryStack ms = MemoryStack.stackPush()) {
-			ByteBuffer buf = ms.malloc(SEL_STRIDE);
-			buf.putShort((short)(i * bw * 4)).putShort((short)0)
-			.putShort((short)(bw * 4)).putShort((short)(bh * 4)).putInt(0xff80ff80);
-			glBindBuffer(GL_ARRAY_BUFFER, selBuf);
-			glBufferSubData(GL_ARRAY_BUFFER, SEL_STRIDE, buf.flip());
-		}
 		if (idx != (idx = i)) refresh(0);
 		return true;
 	}

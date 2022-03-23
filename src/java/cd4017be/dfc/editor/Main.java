@@ -14,6 +14,8 @@ import org.lwjgl.system.MemoryUtil;
  * @author CD4017BE */
 public class Main {
 
+	private static final String TITLE = "Data flow circuit IDE";
+
 	public static void main(String[] args) {
 		glfwSetErrorCallback((err, desc)-> System.out.format("GLFW Error %d: %s\n", err, MemoryUtil.memASCII(desc)));
 		if(!glfwInit()) throw new RuntimeException("can't init GLFW");
@@ -26,7 +28,7 @@ public class Main {
 		glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
 		//create window and GL context
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-		long window = glfwCreateWindow(1536, 1024, "Data flow circuit IDE", NULL, NULL);
+		long window = glfwCreateWindow(1536, 1024, TITLE, NULL, NULL);
 		try {
 			if(window == NULL) throw new RuntimeException("can't create window");
 			glfwMakeContextCurrent(window);
@@ -60,8 +62,10 @@ public class Main {
 	private static IGuiSection inFocus;
 	private static boolean redraw = true, lock;
 	public static int WIDTH, HEIGHT;
+	public static long WINDOW;
 
 	static void init(long window) {
+		WINDOW = window;
 		glfwSetInputMode(window, GLFW_LOCK_KEY_MODS, GLFW_TRUE);
 		glClearColor(0, 0, 0, 1);
 		glEnable(GL_BLEND);
@@ -87,6 +91,11 @@ public class Main {
 	static void close(long window) {
 		for (IGuiSection gs : GUI) gs.close();
 		Shaders.deleteAll();
+	}
+
+	public static void lockFocus(IGuiSection gui) {
+		inFocus = gui;
+		lock = gui != null;
 	}
 
 	public static void lock(boolean doLock) {
@@ -148,6 +157,10 @@ public class Main {
 				err, msg, Thread.currentThread().getStackTrace()[2]
 			);
 		}
+	}
+
+	public static void setTitle(String file) {
+		glfwSetWindowTitle(WINDOW, file == null ? TITLE : TITLE + " - " + file);
 	}
 
 }

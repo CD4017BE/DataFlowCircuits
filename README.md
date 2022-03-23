@@ -35,29 +35,47 @@ The compiler is currently outputting LLVM-IR that can be executed or further pro
 - [x] type-checking in editor
 - [x] panning and zooming
 - [ ] multi-selection for movement, deletion and copy-paste
-- [ ] menu for multiple source files
-- [?] improved block palette with hot-keys
+- [x] menu for multiple source files
+- [x] improved block palette
 - [ ] improved signal type inspection (as tree)
 - [ ] routing assistance
 
 ## Editor Controls
 The editor is started by running the class `cd4017be/dfc/editor/Main.java`:
 
-Right-click on pin or trace node to draw a trace, right click again to place trace node or connect trace to clicked node/pin. Right-click-drag a trace node to move it (pushing a node on top of another will connect them).
+Scroll on the board to zoom the view.  
+Right-click-drag on the board to move it around.  
+Scroll on the block palette to slide it sideways.  
+Middle-click to clone a selected circuit block.  
 
-Left-click a circuit block to select it. Left-click-drag a circuit block to move it (overlapping pins will auto-connect).
-
-Middle-click a circuit block to clone it.
-
-Typing while a constant is selected will edit the value of that constant.
+Left-click ...
+- in the block palette to spawn a new block of the selected type. Click again on the board to place it.
+- a pin or trace node to draw a trace, click again to place a new trace node or connect the trace to a selected node / pin.
+- drag a trace node to move it (pushing a node on top of another will connect them).
+- a text containing block to edit it (click somewhere else to end text edit mode).
+- drag a block to move it (overlapping pins will auto-connect).
 
 Key-bindings:
-- `CTRL`+`S`: save the circuit schematic to `./test/test.dfc`.
-- `CTRL`+`L`: load the circuit schematic from `./test/test.dfc`.
+- `CTRL`+`O`: open a circuit schematic file.
+- `CTRL`+`S`: save circuit schematic to current file.
+- `CTRL`+`SHIFT`+`S`: save circuit schematic to a different file.
 - `CTRL`+`T`: run the type checker to show traces colored depending on data type. If the type check fails, an error message is displayed at the bottom of the screen and the problematic circuit block is selected.
-- `CTRL`+`M`: run the compiler, creating a LLVM_IR assembly file at `./test/test.ll`.
+- `CTRL`+`M`: run the compiler, creating a LLVM_IR assembly file in same place as the circuit schematic with `.dfc` replaced by `.ll`.
+- `CTRL`+`SHIFT`+`M`: compile with explicit variable assignments and labels included.
 - `CTRL`+`D`: remove all orphaned traces.
-- `DEL`: delete a selected circuit block.
+- `DELETE`: delete the selected circuit block.
+
+In text editing:
+- `<-`, `->`: move cursor left / right
+- `HOME`, `END`: move cursor to start / end
+- `SHIFT` + (`<-`, `->`, `HOME`, `END`): select text
+- `CTRL`+`A`: select all
+- `CTRL`+`C`: copy selected text to clip-board
+- `CTRL`+`V`: insert clip-board at cursor
+- `CTRL`+`X`: cut selected text and store it in clip-board
+- `BACKSPACE`, `DELETE`: delete selected text or character left/right to cursor.
+
+Note: Editing a block's text may change its size but the I/O pins will stay at their old position unless you move the block afterwards.
 
 ## Compiled Programs
 The compiled program can be executed from command line using the LLVM interpreter like so `lli test.ll ...`, with optional arguments passed to the program.

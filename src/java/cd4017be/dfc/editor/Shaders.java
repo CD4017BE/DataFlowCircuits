@@ -5,7 +5,12 @@ import static cd4017be.util.GLUtils.*;
 import static org.lwjgl.opengl.GL11C.GL_POINTS;
 import static org.lwjgl.opengl.GL11C.glDrawArrays;
 import static org.lwjgl.opengl.GL15C.glGenBuffers;
+import static org.lwjgl.opengl.GL20C.glUniform2f;
+import static org.lwjgl.opengl.GL20C.glUseProgram;
+import static org.lwjgl.opengl.GL21C.glUniformMatrix3x4fv;
+import static org.lwjgl.opengl.GL30C.glBindVertexArray;
 import static org.lwjgl.opengl.GL32C.*;
+
 import org.lwjgl.system.MemoryStack;
 
 /**Loads and configures all OpenGL shaders used by the program.
@@ -75,6 +80,8 @@ public class Shaders {
 	public static final int font_tex = texture2D(GL_LINEAR, GL_REPEAT, GL_R8, "font");
 	public static final int char_buf = glGenBuffers();
 	public static final int text_vao = genTextVAO(char_buf);
+	public static final int sel_buf = glGenBuffers();
+	public static final int sel_vao = genSelVAO(sel_buf);
 	static {initFont(font_tex, FONT_CW, FONT_CH, FONT_TEX_STRIDE);}
 
 	static void deleteAll() {
@@ -197,6 +204,43 @@ public class Shaders {
 			 x,  y, 0, 1
 		});
 		glDrawArrays(GL_POINTS, 0, l);
+		checkGLErrors();
+	}
+
+	public static void allocSelBuf(int n) {
+		glBindBuffer(GL_ARRAY_BUFFER, sel_buf);
+		int l = glGetBufferParameteri(GL_ARRAY_BUFFER, GL_BUFFER_SIZE);
+		if ((n *= SEL_STRIDE) > l)
+			glBufferData(GL_ARRAY_BUFFER, n, GL_STREAM_DRAW);
+	}
+
+	static int sel_count;
+
+	public static void addSel(int x, int y, int w, int h, int c) {
+		glBindBuffer(GL_ARRAY_BUFFER, sel_buf);
+		try(MemoryStack ms = MemoryStack.stackPush()) {
+			glBufferSubData(GL_ARRAY_BUFFER, sel_count++ * SEL_STRIDE,
+				ms.malloc(SEL_STRIDE).putShort((short)x).putShort((short)y)
+				.putShort((short)w).putShort((short)h).putInt(c).flip()
+			);
+		}
+	}
+
+	public static void drawSel(
+		float x, float y, float sx, float sy,
+		float e0, float e1, int bg
+	) {
+		glUseProgram(selP);
+		glUniformMatrix3x4fv(sel_transform, false, new float[] {
+			sx,  0, 0, 0,
+			 0, sy, 0, 0,
+			 x,  y, 0, 1
+		});
+		glUniform2f(sel_edgeRange, e0, e1);
+		setColor(sel_bgColor, bg);
+		glBindVertexArray(sel_vao);
+		glDrawArrays(GL_POINTS, 0, sel_count);
+		sel_count = 0;
 		checkGLErrors();
 	}
 
