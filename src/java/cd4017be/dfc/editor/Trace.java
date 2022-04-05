@@ -1,11 +1,8 @@
 package cd4017be.dfc.editor;
 
-import static java.lang.Math.min;
-
 import java.nio.ByteBuffer;
 
 import cd4017be.dfc.lang.Signal;
-import cd4017be.dfc.lang.Type;
 
 /**Represents a data trace node.
  * @author CD4017BE */
@@ -122,24 +119,12 @@ public class Trace {
 		bufOfs = buf.position();
 		buf.putInt(pos).putShort(
 			start ? STOP_COLOR :
-			block == null ? VOID_COLOR :
-			color(block.outType)
+			block == null || block.outType == Signal.NULL ? VOID_COLOR :
+			(short)block.outType.type.color(block.outType)
 		);
 	}
 
-	public static short color(Signal[] s) {
-		if (s.length == 0) return VOID_COLOR;
-		int l = s.length, c = l > 4 ? 0x1000 : 0;
-		if (l > 4) l = 3;
-		for (int i = 0; i < l; i++) {
-			int t = min(s[i].type, Type.POINTER);
-			if (t < 0) t = Type.POINTER + 1;
-			c |= (t + 1 & 15) << i * 4;
-		}
-		return (short)c;
-	}
-
-	public static final short VOID_COLOR = 15, STOP_COLOR = 0;
+	public static final short VOID_COLOR = 47, STOP_COLOR = 0;
 
 	public static int key(int x, int y) {
 		return y << 16 | x & 0xffff;

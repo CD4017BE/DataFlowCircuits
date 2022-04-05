@@ -17,7 +17,7 @@ public class Block extends IndexedSet.Element {
 	public final BlockDef def;
 	public final Trace[] io;
 	public String data = "";
-	public Signal[] outType = Signal.DEAD_CODE;
+	public Signal outType = Signal.NULL;
 	public short x, y;
 
 	public Block(BlockDef def, Circuit cc) {

@@ -11,6 +11,7 @@ import java.util.function.Function;
 import java.util.zip.DataFormatException;
 
 import cd4017be.dfc.editor.*;
+import cd4017be.dfc.lang.type.Types;
 import cd4017be.util.*;
 import cd4017be.util.ExtOutputStream.IDTable;
 
@@ -81,15 +82,9 @@ public class CircuitFile {
 		this.out = out;
 	}
 
-	public Signal eval1(int from, int i) throws SignalError {
-		Signal[] s = eval(from, i);
-		if (s.length == 0) throw new SignalError(from, i, "missing input");
-		return s[0];
-	}
-
-	public Signal[] eval(int from, int i) throws SignalError {
+	public Signal eval(int from, int i) throws SignalError {
 		int j = blocks[from][i];
-		if (j < 0) return Signal.EMPTY;
+		if (j < 0) return Signal.NULL;
 		Node n = nodes[j];
 		if (n == null) {
 			BlockDef def = defs[j];
@@ -102,7 +97,7 @@ public class CircuitFile {
 
 	public void typeCheck() throws SignalError {
 		GlobalVar.clear();
-		Type.clearTypeIndex();
+		Types.clear();
 		if (out < 0) throw new SignalError(-1, -1, "missing root node");
 		nodes = new Node[blocks.length];
 		BlockDef def = defs[out];

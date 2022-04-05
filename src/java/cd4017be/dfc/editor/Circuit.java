@@ -324,7 +324,7 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		if (t == selTr) return false;
 		selTr = t;
 		while(t != null && t.pin > 0) t = t.from;
-		info = t == null || t.block == null ? "" : "Type: " + Signal.name(t.block.outType);
+		info = t == null || t.block == null ? "" : Signal.name(t.block.outType);
 		refresh(0);
 		return true;
 	}
@@ -418,7 +418,7 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		for (int i = 0; i < blocks.size(); i++) {
 			Block block = blocks.get(i);
 			Node val = file.nodes[i];
-			block.outType = val == null || val.out == null ? Signal.DEAD_CODE : val.out;
+			block.outType = val == null || val.out == null ? Signal.NULL : val.out;
 		}
 		refresh(0);
 		redraw = -1;

@@ -51,7 +51,7 @@ public class Shaders {
 	/** trace rendering shader */
 	public static final int traceP = program(traceV, traceG, traceF, "outColor");
 	private static final int trace_pos = glGetAttribLocation(traceP, "pos");
-	private static final int trace_types = glGetAttribLocation(traceP, "types");
+	private static final int trace_type = glGetAttribLocation(traceP, "type");
 	/** float: trace line thickness in grid coordinates */
 	public static final int trace_lineSize = glGetUniformLocation(traceP, "lineSize");
 	/** mat3x4: transformation from trace grid to screen coordinates */
@@ -137,10 +137,10 @@ public class Shaders {
 		int vao = glGenVertexArrays();
 		glBindVertexArray(vao);
 		glEnableVertexAttribArray(trace_pos);
-		glEnableVertexAttribArray(trace_types);
+		glEnableVertexAttribArray(trace_type);
 		glBindBuffer(GL_ARRAY_BUFFER, buf);
 		glVertexAttribIPointer(trace_pos, 2, GL_SHORT, TRACE_STRIDE, 0);
-		glVertexAttribIPointer(trace_types, 1, GL_UNSIGNED_SHORT, TRACE_STRIDE, 4);
+		glVertexAttribIPointer(trace_type, 1, GL_UNSIGNED_SHORT, TRACE_STRIDE, 4);
 		glBindVertexArray(0);
 		checkGLErrors();
 		return vao;

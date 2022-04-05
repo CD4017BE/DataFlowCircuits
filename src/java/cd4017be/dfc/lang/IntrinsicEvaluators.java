@@ -2,20 +2,19 @@ package cd4017be.dfc.lang;
 
 import static cd4017be.dfc.lang.GlobalVar.GLOBALS;
 import static cd4017be.dfc.lang.Signal.*;
-import static cd4017be.dfc.lang.Signal.union;
-import static cd4017be.dfc.lang.Type.*;
-import static cd4017be.dfc.lang.Type.TYPE;
-import static java.lang.Double.doubleToLongBits;
-import static java.lang.Double.longBitsToDouble;
-import static java.lang.Float.floatToRawIntBits;
-import static java.lang.Float.intBitsToFloat;
+import static cd4017be.dfc.lang.type.Primitive.*;
+import static cd4017be.dfc.lang.type.Types.*;
+import static java.lang.Double.*;
+import static java.lang.Float.*;
 import static java.lang.Long.*;
-import static java.lang.String.format;
-
 import java.util.*;
 import java.util.function.*;
 
 import cd4017be.dfc.compiler.IntrinsicCompilers;
+import cd4017be.dfc.lang.type.*;
+import cd4017be.dfc.lang.type.Function;
+import cd4017be.dfc.lang.type.Type;
+import cd4017be.dfc.lang.type.Vector;
 
 /**
  * @author CD4017BE */
@@ -30,326 +29,555 @@ public class IntrinsicEvaluators {
 	}
 
 	static {
-		def("main", IntrinsicEvaluators::main);
-		//def("in", (file, out, node) -> node.ret(var(parseTypes("I[:[:B]]"))));
-		//def("out", IntrinsicEvaluators::out);
-		def("#N", (file, out, node) -> node.retConst(parseConstants(file.args[out], out)));
-		def("#T", IntrinsicEvaluators::_T);
-		def("#X", IntrinsicEvaluators::_X);
+		def("#uw", constant(UWORD));
+		def("#us", constant(USHORT));
+		def("#ui", constant(UINT));
+		def("#ul", constant(ULONG));
+		def("#w", constant(WORD));
+		def("#s", constant(SHORT));
+		def("#i", constant(INT));
+		def("#l", constant(LONG));
+		def("#f", constant(FLOAT));
+		def("#d", constant(DOUBLE));
+		def("#b", constant(BOOL));
+		def("#t", IntrinsicEvaluators::constType);
+		def("#x", IntrinsicEvaluators::declare);
+		def("get", IntrinsicEvaluators::get);
+		def("set", IntrinsicEvaluators::set);
 		def("pack", IntrinsicEvaluators::pack);
-		def("pick", IntrinsicEvaluators::pick);
-		def("count", (file, out, node) -> node.retConst(cst(INT, file.eval(out, 0).length)));
-		defVec("type", true, (a, o) -> new Signal(TYPE, a.type));
-		def("ptrt", IntrinsicEvaluators::ptrt);
-		def("funt", IntrinsicEvaluators::funt);
-		def("elt0", elt(t -> t.par));
-		def("elt1", elt(t -> t.ret));
-		defVec("zero", true, (a, o) -> new Signal(a.asType(), 0L));
 		def("void", IntrinsicEvaluators::_void);
-		defVec("add", constMap(IntrinsicEvaluators::add, UNKNOWN, NUMBER_TYPES));
-		defVec("sub", constMap(IntrinsicEvaluators::sub, UNKNOWN, NUMBER_TYPES));
-		defVec("mul", constMap(IntrinsicEvaluators::mul, UNKNOWN, NUMBER_TYPES));
-		defVec("div", constMap(IntrinsicEvaluators::div, UNKNOWN, NUMBER_TYPES));
-		defVec("mod", constMap(IntrinsicEvaluators::mod, UNKNOWN, NUMBER_TYPES));
-		defVec("udiv", constMap((t, a, b) -> divideUnsigned(a, b), UNKNOWN, INTEGER_TYPES));
-		defVec("umod", constMap((t, a, b) -> remainderUnsigned(a, b), UNKNOWN, INTEGER_TYPES));
-		defVec("neg", false, constMap(IntrinsicEvaluators::neg, UNKNOWN, NUMBER_TYPES));
-		defVec("or", constMap((t, a, b) -> a | b, UNKNOWN, LOGIC_TYPES));
-		defVec("and", constMap((t, a, b) -> a & b, UNKNOWN, LOGIC_TYPES));
-		defVec("xor", constMap((t, a, b) -> a ^ b, UNKNOWN, LOGIC_TYPES));
-		defVec("not", false, constMap((t, a) -> ~a, UNKNOWN, LOGIC_TYPES));
-		defVec("eq", constMap(IntrinsicEvaluators::eq, BOOL, COMPARABLE_TYPES));
-		defVec("ne", constMap((t, a, b) -> eq(t, a, b) ^ 1, BOOL, COMPARABLE_TYPES));
-		defVec("lt", constMap((t, a, b) -> gt(t, b, a), BOOL, ORDERED_TYPES));
-		defVec("gt", constMap(IntrinsicEvaluators::gt, BOOL, ORDERED_TYPES));
-		defVec("le", constMap((t, a, b) -> ge(t, b, a), BOOL, ORDERED_TYPES));
-		defVec("ge", constMap(IntrinsicEvaluators::ge, BOOL, ORDERED_TYPES));
-		defVec("ult", constMap((t, a, b) -> compareUnsigned(a, b) >>> 31, BOOL, LOGIC_TYPES));
-		defVec("ugt", constMap((t, a, b) -> compareUnsigned(b, a) >>> 31, BOOL, LOGIC_TYPES));
-		defVec("ule", constMap((t, a, b) -> ~compareUnsigned(b, a) >>> 31, BOOL, LOGIC_TYPES));
-		defVec("uge", constMap((t, a, b) -> ~compareUnsigned(a, b) >>> 31, BOOL, LOGIC_TYPES));
+		def("struct", IntrinsicEvaluators::struct);
+		def("vector", IntrinsicEvaluators::vector);
+		def("array", IntrinsicEvaluators::array);
+		def("count", IntrinsicEvaluators::count);
+		def("zero", IntrinsicEvaluators::zero);
+		def("type", IntrinsicEvaluators::type);
+		def("funt", IntrinsicEvaluators::funt);
 		def("ref", IntrinsicEvaluators::ref);
-		defVec("idx", IntrinsicEvaluators::idx);
 		def("load", IntrinsicEvaluators::load);
 		def("store", IntrinsicEvaluators::store);
 		def("call", IntrinsicEvaluators::call);
+		def("main", IntrinsicEvaluators::main);
+		def("def", IntrinsicEvaluators::def);
 		def("swt", IntrinsicEvaluators::swt);
 		def("loop", IntrinsicEvaluators::loop);
-		def("def", IntrinsicEvaluators::def);
+		def("add", binaryOp(IntrinsicEvaluators::add, null, Type::canArithmetic));
+		def("sub", binaryOp(IntrinsicEvaluators::sub, null, Type::canArithmetic));
+		def("mul", binaryOp(IntrinsicEvaluators::mul, null, Type::canArithmetic));
+		def("div", binaryOp(IntrinsicEvaluators::div, null, Type::canArithmetic));
+		def("mod", binaryOp(IntrinsicEvaluators::mod, null, Type::canArithmetic));
+		def("neg", unaryOp(IntrinsicEvaluators::neg, null, t -> t instanceof Primitive && ((Primitive)t).signed));
+		def("or", binaryOp((t, a, b) -> a | b, null, Type::canLogic));
+		def("and", binaryOp((t, a, b) -> a & b, null, Type::canLogic));
+		def("xor", binaryOp((t, a, b) -> a ^ b, null, Type::canLogic));
+		def("not", unaryOp((t, a) -> ~a, null, Type::canLogic));
+		def("eq", binaryOp(IntrinsicEvaluators::eq, BOOL, Type::canCompare));
+		def("ne", binaryOp((t, a, b) -> ~eq(t, a, b), BOOL, Type::canCompare));
+		def("lt", binaryOp((t, a, b) -> gt(t, b, a), BOOL, Type::canCompare));
+		def("gt", binaryOp(IntrinsicEvaluators::gt, BOOL, Type::canCompare));
+		def("le", binaryOp((t, a, b) -> ge(t, b, a), BOOL, Type::canCompare));
+		def("ge", binaryOp(IntrinsicEvaluators::ge, BOOL, Type::canCompare));
+		
 		IntrinsicCompilers.define(INTRINSICS);
 	}
 
-	@FunctionalInterface interface UnOp {
-		Signal apply(Signal a, int out) throws SignalError;
-	}
-
-	private static void defVec(String name, boolean cst, UnOp op) {
-		def(name, (file, out, node) -> {
-			Signal[] a = file.eval(out, 0);
-			int l = a.length;
-			Signal[] res = new Signal[l];
-			for (int i = 0; i < l; i++)
-				res[i] = op.apply(a[i], out);
-			if (cst) node.retConst(res);
-			else node.ret(res);
-		});
-	}
-
-	@FunctionalInterface interface BiOp {
-		Signal apply(Signal a, Signal b, int out) throws SignalError;
-	}
-
-	private static void defVec(String name, BiOp op) {
-		def(name, (file, out, node) -> {
-			Signal[] a = file.eval(out, 0), b = file.eval(out, 1);
-			int la = a.length, lb = b.length, l;
-			if (la == 1) l = lb;
-			else if (lb == 1 || lb == la) l = la;
-			else throw new SignalError(out, -1, "inkompatible signal sizes");
-			Signal sa = la == 1 ? a[0] : null, sb = lb == 1 ? b[0] : null;
-			Signal[] res = new Signal[l];
-			for (int i = 0; i < l; i++)
-				res[i] = op.apply(sa != null ? sa : a[i], sb != null ? sb : b[i], out);
-			node.ret(res);
-		});
-	}
-
-	private static void check(int node, int in, int t, int... types) throws SignalError {
-		for (int t1 : types)
-			if (t < 0 ? t1 < 0 : t >= POINTER ? t1 >= POINTER : t1 == t)
+	private static ITypeEvaluator constant(Primitive type) {
+		return (file, out, node) -> {
+			String arg = file.args[out];
+			if (arg.isBlank()) {
+				node.ret(img(type));
 				return;
-		throw new SignalError(node, in,
-			format("expected %s but got %s", name(types), name(t))
-		);
-	}
-
-	private static void checkAssign(int node, int in, int src, int dst) throws SignalError {
-		if (!canAssign(src, dst))
-			throw new SignalError(node, in,
-				format("can't assign %s to %s", name(src), name(dst))
-			);
-	}
-
-	@FunctionalInterface interface BiOpConst {
-		long apply(int type, long a, long b);
-	}
-
-	private static BiOp constMap(BiOpConst op, int outType, int... inTypes) {
-		return (a, b, out) -> {
-			check(out, 0, a.type, inTypes);
-			check(out, 1, b.type, inTypes);
-			int t = union(a.type, b.type);
-			if (t == UNKNOWN) throw new SignalError(out, -1,
-				format("can't combine %s & %s", name(a.type), name(b.type))
-			);
-			int to = outType == UNKNOWN ? t : outType;
-			if (t >= POINTER || !(a.constant() && b.constant()))
-				return new Signal(to);
-			try {
-				return new Signal(to, op.apply(t, a.addr, b.addr));
-			} catch(RuntimeException e) {
-				throw new SignalError(out, -1, e.getMessage());
 			}
+			char c = arg.charAt(0);
+			if (c == '"') {
+				if (type.fp || type.bits < 8)
+					throw new SignalError(out, -1, "string literal not allowed for float or bool");
+				long[] val = new long[arg.length() - 1];
+				int n = 0;
+				for (int i = 1; i < arg.length(); i++) {
+					c = arg.charAt(i);
+					long v = 0;
+					if (c != '\\') v = c;
+					else if (++i < arg.length())
+						switch(c = arg.charAt(i)) {
+						case '\\': v = c; break;
+						case 'n': v = '\n'; break;
+						case 't': v = '\t'; break;
+						case 'r': v = '\r'; break;
+						default:
+							for (int e = --i + (type.bits >> 2); i < e; i++) {
+								c = arg.charAt(i);
+								v <<= 4;
+								if (c >= '0' && c <= '9') v += c - '0';
+								else if (c >= 'a' && c <= 'f') v += c - 'a' + 10;
+								else if (c >= 'A' && c <= 'F') v += c - 'A' + 10;
+								else throw new SignalError(out, -1, c + " is not a hexadecimal digit");
+							}
+						}
+					val[n++] = v;
+				}
+				if (n != val.length) val = Arrays.copyOf(val, n);
+				node.ret(cst(Types.VECTOR(type, n, false), val));
+				return;
+			}
+			int arr = c == '[' ? 1 : 0, n = 0;
+			for (int p = 0; p >= 0; p = arg.indexOf(',', p + 1)) n++;
+			long[] val = new long[n];
+			n = 0;
+			for (int i = arr, l = arg.length() - arr; i < l; i++) {
+				if ((c = arg.charAt(i)) == ' ') continue;
+				int q = arg.indexOf(',', i);
+				if (q < 0) q = l;
+				try {
+					if (type == FLOAT)
+						val[n++] = floatToRawIntBits(parseFloat(arg.substring(i, q)));
+					else if (type == DOUBLE)
+						val[n++] = doubleToRawLongBits(parseDouble(arg.substring(i, q)));
+					else {
+						int rad = 10;
+						if (c == 'x') {
+							rad = 16;
+							i++;
+						} else if (c == 'o') {
+							rad = 8;
+							i++;
+						} else if (c == 'b') {
+							rad = 1;
+							i++;
+						}
+						val[n++] = type.signed
+							? Long.parseLong(arg, i, q, rad)
+							: Long.parseUnsignedLong(arg, i, q, rad);
+						//TODO range check
+					}
+				} catch(NumberFormatException e) {
+					throw new SignalError(out, -1, e.getMessage());
+				}
+				i = q;
+			}
+			node.ret(arr == 0 && n == 1
+				? cst(type, val[0])
+				: cst(VECTOR(type, n, arr == 0), val)
+			);
 		};
 	}
 
-	@FunctionalInterface interface UnOpConst {
-		long apply(int type, long a);
-	}
-
-	private static UnOp constMap(UnOpConst op, int outType, int... inTypes) {
-		return (a, out) -> {
-			check(out, 0, a.type, inTypes);
-			int t = a.type;
-			int to = outType == UNKNOWN ? t : outType;
-			if (t >= POINTER || !a.constant())
-				return new Signal(to);
-			try {
-				return new Signal(to, op.apply(t, a.addr));
-			} catch(RuntimeException e) {
-				throw new SignalError(out, -1, e.getMessage());
-			}
-		};
-	}
-
-	static void main(CircuitFile file, int out, Node node) throws SignalError {
-		if (GLOBALS.size() != 0)
-			throw new SignalError(out, -1, "duplicate main");
-		node.direct = 0;
-		new GlobalVar(node, "main");
-		Type p = type(parseTypes("(I[:[:B]]:I)")[0]);
-		node.retConst(var(p.par));
-		Signal[] ret = file.eval(out, 0);
-		int [] sig = p.ret;
-		if (sig.length != ret.length)
-			throw new SignalError(out, 0, "wrong signal size");
-		for (int i = 0; i < ret.length; i++)
-			checkAssign(out, 0, ret[i].type, sig[i]);
-	}
-
-	static void out(CircuitFile file, int out, Node node) throws SignalError {
-		file.eval(out, 0);
-		node.ret(Signal.DEAD_CODE);
-	}
-
-	static void _T(CircuitFile file, int out, Node node) throws SignalError {
+	private static void constType(CircuitFile file, int out, Node node) throws SignalError {
 		try {
-			node.retConst(cstTypes(parseTypes(file.args[out])));
+			node.ret(img(Types.parseType(file.args[out])));
 		} catch (IllegalArgumentException e) {
 			throw new SignalError(out, -1, e.getMessage());
 		}
 	}
 
-	static void _X(CircuitFile file, int out, Node node) throws SignalError {
-		Signal[] a = file.eval(out, 0);
-		Signal[] res = new Signal[a.length];
-		String name = file.args[out];
-		for (int i = 0; i < a.length; i++) {
-			int t = a[i].asType();
-			check(out, 0, t, POINTER, -1);
-			new GlobalVar(node, name);
-			res[i] = new Signal(t, GLOBALS.size());
-		}
-		node.retConst(res);
+	private static void declare(CircuitFile file, int out, Node node) throws SignalError {
+		Type type = file.eval(out, 0).type;
+		if (!(type instanceof Pointer || type instanceof Function))
+			throw new SignalError(out, 0, "expected Function or Pointer");
+		node.ret(global(type, node, file.args[out]));
 	}
 
-	static void pack(CircuitFile file, int out, Node node) throws SignalError {
-		int l = 0;
-		for (int i = 0; i < 3; i++) l += file.eval(out, i).length;
-		Signal[] res = new Signal[l];
-		l = 0;
-		for (int i = 0; i < 3; i++) {
-			Signal[] s = node.in(i);
-			System.arraycopy(s, 0, res, l, s.length);
-			l += s.length;
-		}
-		node.ret(res);
+	private static Signal evalIdx(CircuitFile file, int out, int in) throws SignalError {
+		Signal s = file.eval(out, in);
+		if (s == NULL) return null;
+		if (s.hasValue() && s.type instanceof Primitive && !((Primitive)s.type).signed)
+			return s;
+		throw new SignalError(out, in, "expected unsigned integer value");
 	}
 
-	private static void pick(
-		int out, ArrayList<Signal> list, Signal[] in,
-		int i0, int i1, int i2, int i3
-	) throws SignalError {
-		if (i0 < 0) {
-			i0 = Math.max(i3, 0);
-			i1 = i3;
-			i2 = 0;
-			i3 = -1;
-		} else if (i1 < 0) {
-			i1 = i3 < 0 ? in.length - 1 : i3;
-			i2 = 0;
-			i3 = -1;
-		} else if (i2 < 0) i2 = Math.max(i3, 0);
-		boolean idx = i2 > 0 || i3 >= 0;
-		for (int i = i0; i <= i1; i++) {
-			Signal s = in[i];
-			if (idx && s.type >= POINTER) {
-				Type t = type(s.type);
-				int l = t.par.length, j = i3 < 0 ? l : i3 + 1;
-				if (i2 != 0 || j != l) {
-					if (i2 >= l || j > l)
-						throw new SignalError(out, 0,
-							format("[%d-%d] out of range %d", i2, i3-1, l)
-						);
-					s = new Signal(new Type(t.flags,
-						Arrays.copyOfRange(t.par, i2, j), Type.EMPTY
-					).define(0));
-					s.addr = i | i2 << 32;
-				}
+	private static long[] parseIndices(CircuitFile file, int out, int in, boolean val)
+	throws SignalError {
+		try {
+			String args = file.args[out];
+			String[] arg = args.split(",");
+			Signal idx = evalIdx(file, out, in);
+			long[] idxs = new long[arg.length];
+			for (int i = 0; i < arg.length; i++) {
+				String s = arg[i].trim();
+				long p;
+				if (!s.equals("#"))
+					p = Integer.parseUnsignedInt(s);
+				else if (idx == null)
+					throw new SignalError(out, in, "missing index value");
+				else if (idx.isConst())
+					p = idx.value;
+				else if (!val)
+					throw new SignalError(out, in, "can't dynamically index imaginary signal");
+				else p = -1;
+				idxs[i] = p;
 			}
-			list.add(s);
+			return idxs;
+		} catch(NumberFormatException e) {
+			throw new SignalError(out, -1, e.getMessage());
 		}
 	}
 
-	static void pick(CircuitFile file, int out, Node node) throws SignalError {
-		Signal[] a = file.eval(out, 0);
-		ArrayList<Signal> list = new ArrayList<>();
-		String arg = file.args[out];
-		int j0 = -1, j1 = -1, j2 = -1, n = -1;
-		for (int i = 0; i < arg.length(); i++) {
-			char c = arg.charAt(i);
-			switch(c) {
-			case '-':
-				n = Math.max(n, 0);
-				if (j0 < 0) j0 = n;
-				else if (j1 >= 0 && j2 < 0) j2 = n;
-				else throw new SignalError(out, -1, "duplicate '-'");
-				n = -1;
-				break;
-			case '[':
-				if (j1 >= 0) throw new SignalError(out, -1, "duplicate '['");
-				if (j0 < 0) j0 = Math.max(n, 0);
-				j1 = n < 0 ? a.length + n : n;
-				n = -1;
-				break;
-			case ']':
-				if (j1 < 0) throw new SignalError(out, -1, "']' without '['");
-			case ',':
-				pick(out, list, a, j0, j1, j2, n);
-				j0 = j1 = j2 = n = -1;
-				break;
-			default:
-				if (c < '0' || c > '9')
-					throw new SignalError(out, -1, "illegal character '" + c + "'");
-				n = Math.max(n, 0) * 10 + (c - '0');
+	private static void get(CircuitFile file, int out, Node node) throws SignalError {
+		Signal str = file.eval(out, 0);
+		long[] idxs = parseIndices(file, out, 1, str.hasValue());
+		node.data = idxs;
+		try {
+			for (long idx : idxs)
+				str = str.type.getElement(str, idx);
+		} catch(IllegalArgumentException e) {
+			throw new SignalError(out, -1, e.getMessage());
+		}
+		node.ret(str);
+	}
+
+	private static void set(CircuitFile file, int out, Node node) throws SignalError {
+		Signal str = file.eval(out, 0), val = file.eval(out, 1);
+		if (!val.hasValue()) throw new SignalError(out, 1, "expected value");
+		long[] idxs = parseIndices(file, out, 2, true);
+		if (!str.isVar()) str = var(str.type);
+		boolean struct = false;
+		for (long idx : idxs) {
+			Type type = str.type;
+			if (type instanceof Vector) {
+				if (!((Vector)type).simd) struct = true;
+				else if (struct)
+					throw new SignalError(out, 0, "can't set vector element in struct");
+			} else if (type instanceof Struct) struct = true;
+			else throw new SignalError(out, 0, "can only set struct, array or vector element");
+			str = type.getElement(str, idx);
+		}
+		if (val.type != str.type)
+			throw new SignalError(out, 1, "type mismatch");
+		node.ret(str);
+	}
+
+	private static void pack(CircuitFile file, int out, Node node) throws SignalError {
+		Signal a = file.eval(out, 0), b = file.eval(out, 1);
+		node.ret(a == NULL ? b : b == NULL ? a : bundle(a, b));
+	}
+
+	private static void _void(CircuitFile file, int out, Node node) throws SignalError {
+		if (!file.eval(out, 0).hasValue())
+			throw new SignalError(out, 0, "can't evaluate imaginary");
+		Signal val = file.eval(out, 1);
+		if (!val.hasValue())
+			throw new SignalError(out, 1, "can't evaluate imaginary");
+		node.retSideff(val);
+	}
+
+	private static void buildStruct(Node node, Type type, Signal[] elem) {
+		boolean cst = true, hasval = true;
+		for (int i = 0; i < elem.length; i++) {
+			Signal s = elem[i];
+			cst &= s.isConst();
+			hasval &= s.hasValue();
+		}
+		Signal r;
+		if (cst) {
+			long[] data = new long[elem.length];
+			for (int i = 0; i < elem.length; i++)
+				data[i] = elem[i].value;
+			r = cst(type, data);
+		} else r = hasval ? var(type) : img(type);
+		node.ret(r);
+	}
+
+	private static Type[] types(Signal[] elem) {
+		Type[] types = new Type[elem.length];
+		for (int i = 0; i < elem.length; i++)
+			types[i] = elem[i].type;
+		return types;
+	}
+
+	private static void struct(CircuitFile file, int out, Node node) throws SignalError {
+		Signal val = file.eval(out, 0);
+		Signal[] elem = val.asBundle();
+		buildStruct(node, STRUCT(types(elem)), elem);
+	}
+
+	private static void array(CircuitFile file, int out, Node node) throws SignalError {
+		Signal count = evalIdx(file, out, 1), val = file.eval(out, 0);
+		if (count == null) {
+			Signal[] elem = val.asBundle();
+			if (elem.length == 0)
+				throw new SignalError(out, 0, "expected at least 1 element");
+			Type t = elem[0].type;
+			for (int i = 1; i < elem.length; i++) {
+				Signal s = elem[i];
+				if (s.type != t)
+					throw new SignalError(out, 0, "type mismatch");
 			}
+			buildStruct(node, Types.VECTOR(t, elem.length, false), elem);
+		} else if (val.type instanceof Bundle)
+			throw new SignalError(out, 0, "expected only single type");
+		else if (!count.isConst())
+			throw new SignalError(out, 1, "expected constant");
+		else node.ret(img(Types.VECTOR(val.type, (int)count.value, false)));
+	}
+
+	private static void vector(CircuitFile file, int out, Node node) throws SignalError {
+		Signal count = evalIdx(file, out, 1), val = file.eval(out, 0);
+		if (count == null) {
+			Signal[] elem = val.asBundle();
+			if (elem.length == 0)
+				throw new SignalError(out, 0, "expected at least 1 element");
+			Type t = elem[0].type;
+			if (!t.canSimd())
+				throw new SignalError(out, 0, "expected primitive or pointer values");
+			for (int i = 1; i < elem.length; i++) {
+				Signal s = elem[i];
+				if (s.type != t)
+					throw new SignalError(out, 0, "type mismatch");
+			}
+			buildStruct(node, VECTOR(t, elem.length, true), elem);
+		} else if (val.type instanceof Bundle)
+			throw new SignalError(out, 0, "expected only single type");
+		else if (!val.type.canSimd())
+			throw new SignalError(out, 0, "expected primitive or pointer type");
+		else if (!count.isConst())
+			throw new SignalError(out, 1, "expected constant");
+		else {
+			Vector type = VECTOR(val.type, (int)count.value, true);
+			if (val.isConst()) {
+				long[] arr = new long[type.count];
+				Arrays.fill(arr, 0, arr.length, val.value);
+				node.ret(cst(type, arr));
+			} else node.ret(new Signal(type, val.state, 0L));
 		}
-		if (j0 >= 0) pick(out, list, a, j0, j1, j2, n);
-		node.ret(list.toArray(Signal[]::new));
 	}
 
-	static void ptrt(CircuitFile file, int out, Node node) throws SignalError {
-		int id = newId(false);
-		Signal[] res = cst(TYPE, id);
-		node.retConst(res);
-		int[] a = types(file.eval(out, 0));
-		for (int t : a)
-			if (t == TYPE || t == UNKNOWN)
-				throw new SignalError(out, 0, "illegal type " + name(t));
-		int[] b = types(file.eval(out, 1));
-		for (int t : b)
-			if (t == TYPE)
-				throw new SignalError(out, 1, "illegal type " + name(t));
-		byte flags = HEAP;
-		Signal[] f = file.eval(out, 2);
-		if (f.length > 0) {
-			Signal f0 = f[0];
-			check(out, 2, f0.type, BOOL);
-			if (!f0.constant()) throw new SignalError(out, 2, "expected constant");
-			if (f0.addr != 0) flags |= READONLY;
+	private static void count(CircuitFile file, int out, Node node) throws SignalError {
+		Signal in = file.eval(out, 0);
+		Type type = in.type;
+		int n;
+		if (type instanceof Vector) n = ((Vector)type).count;
+		else if (type instanceof Struct) n = ((Struct)type).elements.length;
+		else if (type instanceof Function) n = ((Function)type).parTypes.length;
+		else if (type instanceof Bundle) n = (int)in.value;
+		else n = 1;
+		node.ret(cst(UINT, n));
+	}
+
+	private static void zero(CircuitFile file, int out, Node node) throws SignalError {
+		Signal in = file.eval(out, 0);
+		if (in.type instanceof Bundle) {
+			Signal[] elem = in.asBundle();
+			Signal[] zero = new Signal[elem.length];
+			for (int i = 0; i < elem.length; i++)
+				zero[i] = new Signal(elem[i].type, CONST, 0L);
+			node.ret(bundle(zero));
+		} else node.ret(new Signal(in.type, CONST, 0L));
+	}
+
+	private static void type(CircuitFile file, int out, Node node) throws SignalError {
+		Signal in = file.eval(out, 0);
+		if (in.type instanceof Bundle) {
+			Signal[] elem = in.asBundle();
+			Signal[] img = new Signal[elem.length];
+			for (int i = 0; i < elem.length; i++)
+				img[i] = img(elem[i].type);
+			node.ret(bundle(img));
+		} else node.ret(img(in.type));
+	}
+
+	private static void funt(CircuitFile file, int out, Node node) throws SignalError {
+		Type ret = file.eval(out, 0).type;
+		Signal[] param = file.eval(out, 1).asBundle();
+		node.ret(img(FUNCTION(ret, types(param))));
+	}
+
+	private static void ref(CircuitFile file, int out, Node node) throws SignalError {
+		Signal val = file.eval(out, 0);
+		Pointer type = new Pointer(0).to(val.type);
+		node.ret(val.isConst() ? global(type, node, null) : val.hasValue() ? var(type) : img(type));
+	}
+
+	private static void load(CircuitFile file, int out, Node node) throws SignalError {
+		Signal ptr = file.eval(out, 0);
+		if (!(ptr.hasValue() && ptr.type instanceof Pointer))
+			throw new SignalError(out, 0, "pointer value expected");
+		node.ret(var(((Pointer)ptr.type).type));
+	}
+
+	private static void store(CircuitFile file, int out, Node node) throws SignalError {
+		Signal ptr = file.eval(out, 0), val = file.eval(out, 1);
+		if (!(ptr.hasValue() && ptr.type instanceof Pointer))
+			throw new SignalError(out, 0, "pointer value expected");
+		if (!val.hasValue())
+			throw new SignalError(out, 1, "can't store imaginary data");
+		Pointer type = (Pointer)ptr.type;
+		if (val.type != type.type)
+			throw new SignalError(out, 1, "type doesn't match pointer");
+		node.retSideff(ptr);
+	}
+
+	private static void call(CircuitFile file, int out, Node node) throws SignalError {
+		Signal f = file.eval(out, 0);
+		if (!(f.hasValue() && f.type instanceof Function))
+			throw new SignalError(out, 0, "expected function value");
+		Function type = (Function)f.type;
+		Signal[] par = file.eval(out, 1).asBundle();
+		if (par.length != type.parTypes.length)
+			throw new SignalError(out, 1, "types don't match function");
+		for (int i = 0; i < par.length; i++) {
+			Signal s = par[i];
+			if (!s.hasValue())
+				throw new SignalError(out, 1, "can't pass imaginary parameters");
+			if (s.type != type.parTypes[i])
+				throw new SignalError(out, 1, "types don't match function");
 		}
-		res[0].addr = new Type(flags, a, b).define(id);
+		node.retSideff(var(type.retType));
 	}
 
-	static void funt(CircuitFile file, int out, Node node) throws SignalError {
-		int id = newId(true);
-		Signal[] res = cst(TYPE, id);
-		node.retConst(res);
-		int[] a = types(file.eval(out, 0));
-		for (int t : a)
-			if (t == TYPE || t == UNKNOWN)
-				throw new SignalError(out, 0, "illegal type " + name(t));
-		int[] b = types(file.eval(out, 1));
-		for (int t : b)
-			if (t == TYPE || t == UNKNOWN)
-				throw new SignalError(out, 1, "illegal type " + name(t));
-		res[0].addr = new Type(FUNCTION, a, b).define(id) & 0xffffffffL;
+	private static void main(CircuitFile file, int out, Node node) throws SignalError {
+		if (GLOBALS.size() != 0)
+			throw new SignalError(out, -1, "duplicate main");
+		node.direct = 0;
+		Function type = FUNCTION(INT, UINT, parseType("[[W]*]*"));
+		node.ret(global(type, node, "main"));
+		Signal ret = file.eval(out, 0);
+		if (ret.type != type.retType)
+			throw new SignalError(out, 0, "signed int expected");
 	}
 
-	static ITypeEvaluator elt(Function<Type, int[]> section) {
+	private static void def(CircuitFile file, int out, Node node) throws SignalError {
+		node.direct = 1;
+		Type t = file.eval(out, 0).type;
+		if (!(t instanceof Function))
+			throw new SignalError(out, 0, "expected function type");
+		Function f = (Function)t;
+		node.ret(global(f, node, null));
+		Signal ret = file.eval(out, 1);
+		if (!ret.hasValue())
+			throw new SignalError(out, 1, "can't return imaginary");
+		if (ret.type != f.retType)
+			throw new SignalError(out, 1, "type doesn't match function");
+	}
+
+	private static void swt(CircuitFile file, int out, Node node) throws SignalError {
+		node.direct = 1;
+		Signal con = file.eval(out, 0);
+		if (!(con.hasValue() && con.type == BOOL))
+			throw new SignalError(out, 0, "expected boolean");
+		if (con.isConst()) {
+			node.ret(file.eval(out, con.asBool() ? 1 : 2));
+			return;
+		}
+		Signal[] as = file.eval(out, 1).asBundle(), bs = file.eval(out, 2).asBundle();
+		if (as.length != bs.length)
+			throw new SignalError(out, 2, "branch types don't match");
+		Signal[] rs = new Signal[as.length];
+		for (int i = 0; i < as.length; i++) {
+			Type type = as[i].type;
+			if (type != bs[i].type)
+				throw new SignalError(out, 2, "branch types don't match");
+			rs[i] = var(type);
+		}
+		node.ret(bundle(rs));
+	}
+
+	private static void loop(CircuitFile file, int out, Node node) throws SignalError {
+		node.direct = 1;
+		Signal[] init = file.eval(out, 0).asBundle();
+		Signal[] res = new Signal[init.length];
+		for (int i = 0; i < res.length; i++) {
+			Signal s = init[i];
+			if (!s.hasValue())
+				throw new SignalError(out, 0, "initial state can't be imaginary");
+			res[i] = var(s.type);
+		}
+		node.ret(bundle(res));
+		Signal cond = file.eval(out, 1);
+		if (!(cond.hasValue() && cond.type == BOOL))
+			throw new SignalError(out, 1, "expected boolean value");
+		Signal[] nxt = file.eval(out, 2).asBundle();
+		if (nxt.length != res.length)
+			throw new SignalError(out, 2, "types don't match loop state");
+		for (int i = 0; i < res.length; i++)
+			if (res[i].type != nxt[i].type)
+				throw new SignalError(out, 2, "types don't match loop state");
+	}
+
+	@FunctionalInterface
+	private interface BiOpConst {
+		long apply(Primitive type, long a, long b);
+	}
+
+	private static ITypeEvaluator binaryOp(BiOpConst op, Primitive res, Predicate<Type> in) {
 		return (file, out, node) -> {
-			int t = file.eval1(out, 0).asType();
-			check(out, 0, t, POINTER, -1);
-			node.retConst(cstTypes(section.apply(type(t))));
+			Signal a = file.eval(out, 0), b = file.eval(out, 1);
+			if (!a.hasValue())
+				throw new SignalError(out, 0, "invalid imaginary operand");
+			if (!b.hasValue())
+				throw new SignalError(out, 1, "invalid imaginary operand");
+			Type type = a.type, rtype = res == null ? type : res;
+			if (type != b.type)
+				throw new SignalError(out, 1, "types don't match");
+			int vec = 0;
+			if (type instanceof Vector) {
+				Vector v = (Vector)type;
+				if (!v.simd)
+					throw new SignalError(out, 0, "invalid operand type");
+				vec = v.count;
+				type = v.element;
+				if (res != null) rtype = Types.VECTOR(res, vec, true);
+			}
+			if (!in.test(type))
+				throw new SignalError(out, 0, "invalid operand type");
+			if (a.isVar() || b.isVar() || !(type instanceof Primitive))
+				node.ret(var(rtype));
+			else try {
+				Primitive at = (Primitive)type, rt = res == null ? at : res;
+				if (vec == 0) {
+					node.ret(cst(rt, op.apply(at, a.value, b.value)));
+					return;
+				}
+				long[] r = new long[vec];
+				for (int i = 0; i < vec; i++)
+					r[i] = castPrim(rt, op.apply(at, a.getIndex(i), b.getIndex(i)));
+				node.ret(cst(rtype, r));
+			} catch (RuntimeException e) {
+				throw new SignalError(out, 1, e.getMessage());
+			}
 		};
 	}
 
-	static void _void(CircuitFile file, int out, Node node) throws SignalError {
-		file.eval(out, 1);
-		node.ret(file.eval(out, 0));
+	@FunctionalInterface
+	private interface UnOpConst {
+		long apply(Primitive type, long a);
 	}
 
-	static long add(int type, long a, long b) {
+	private static ITypeEvaluator unaryOp(UnOpConst op, Primitive res, Predicate<Type> in) {
+		return (file, out, node) -> {
+			Signal a = file.eval(out, 0);
+			if (!a.hasValue())
+				throw new SignalError(out, 0, "invalid imaginary operand");
+			Type type = a.type, rtype = res == null ? type : res;
+			int vec = 0;
+			if (type instanceof Vector) {
+				Vector v = (Vector)type;
+				if (!v.simd)
+					throw new SignalError(out, 0, "invalid operand type");
+				vec = v.count;
+				type = v.element;
+				if (res != null) rtype = Types.VECTOR(res, vec, true);
+			}
+			if (!in.test(type))
+				throw new SignalError(out, 0, "invalid operand type");
+			if (a.isVar() || !(type instanceof Primitive))
+				node.ret(var(rtype));
+			else try {
+				Primitive at = (Primitive)type, rt = res == null ? at : res;
+				if (vec == 0) {
+					node.ret(cst(rt, op.apply(at, a.value)));
+					return;
+				}
+				long[] r = new long[vec];
+				for (int i = 0; i < vec; i++)
+					r[i] = castPrim(rt, op.apply(at, a.getIndex(i)));
+				node.ret(cst(rtype, r));
+			} catch (RuntimeException e) {
+				throw new SignalError(out, 1, e.getMessage());
+			}
+		};
+	}
+
+	private static long add(Primitive type, long a, long b) {
 		return switch(type) {
 		case FLOAT -> floatToRawIntBits(intBitsToFloat((int)a) + intBitsToFloat((int)b));
 		case DOUBLE -> doubleToLongBits(longBitsToDouble(a) + longBitsToDouble(b));
@@ -357,7 +585,7 @@ public class IntrinsicEvaluators {
 		};
 	}
 
-	static long sub(int type, long a, long b) {
+	private static long sub(Primitive type, long a, long b) {
 		return switch(type) {
 		case FLOAT -> floatToRawIntBits(intBitsToFloat((int)a) - intBitsToFloat((int)b));
 		case DOUBLE -> doubleToLongBits(longBitsToDouble(a) - longBitsToDouble(b));
@@ -365,7 +593,7 @@ public class IntrinsicEvaluators {
 		};
 	}
 
-	static long mul(int type, long a, long b) {
+	private static long mul(Primitive type, long a, long b) {
 		return switch(type) {
 		case FLOAT -> floatToRawIntBits(intBitsToFloat((int)a) * intBitsToFloat((int)b));
 		case DOUBLE -> doubleToLongBits(longBitsToDouble(a) * longBitsToDouble(b));
@@ -373,29 +601,23 @@ public class IntrinsicEvaluators {
 		};
 	}
 
-	static long div(int type, long a, long b) {
+	private static long div(Primitive type, long a, long b) {
 		return switch(type) {
 		case FLOAT -> floatToRawIntBits(intBitsToFloat((int)a) / intBitsToFloat((int)b));
 		case DOUBLE -> doubleToLongBits(longBitsToDouble(a) / longBitsToDouble(b));
-		case BYTE -> (byte)a / (byte)b;
-		case SHORT -> (short)a / (short)b;
-		case INT -> (int)a / (int)b;
-		default -> a / b;
+		default -> type.signed ? a / b : divideUnsigned(a, b);
 		};
 	}
 
-	static long mod(int type, long a, long b) {
+	private static long mod(Primitive type, long a, long b) {
 		return switch(type) {
 		case FLOAT -> floatToRawIntBits(intBitsToFloat((int)a) % intBitsToFloat((int)b));
 		case DOUBLE -> doubleToLongBits(longBitsToDouble(a) % longBitsToDouble(b));
-		case BYTE -> (byte)a % (byte)b;
-		case SHORT -> (short)a % (short)b;
-		case INT -> (int)a % (int)b;
-		default -> a % b;
+		default -> type.signed ? a % b : remainderUnsigned(a, b);
 		};
 	}
 
-	static long neg(int type, long a) {
+	static long neg(Primitive type, long a) {
 		return switch(type) {
 		case FLOAT -> a ^ 0x80000000L;
 		case DOUBLE -> a ^ 0x80000000_00000000L;
@@ -403,7 +625,7 @@ public class IntrinsicEvaluators {
 		};
 	}
 
-	static long eq(int type, long a, long b) {
+	private static long eq(Primitive type, long a, long b) {
 		return switch(type) {
 		case FLOAT -> intBitsToFloat((int)a) == intBitsToFloat((int)b);
 		case DOUBLE -> longBitsToDouble(a) == longBitsToDouble(b);
@@ -411,159 +633,20 @@ public class IntrinsicEvaluators {
 		} ? 1 : 0;
 	}
 
-	static long gt(int type, long a, long b) {
+	private static long gt(Primitive type, long a, long b) {
 		return switch(type) {
 		case FLOAT -> intBitsToFloat((int)a) > intBitsToFloat((int)b);
 		case DOUBLE -> longBitsToDouble(a) > longBitsToDouble(b);
-		case BOOL -> a < b;
-		case BYTE -> (byte)a > (byte)b;
-		case SHORT -> (short)a > (short)b;
-		case INT, TYPE -> (int)a > (int)b;
-		default -> a > b;
+		default -> type.signed ? a > b : compareUnsigned(a, b) > 0;
 		} ? 1 : 0;
 	}
 
-	static long ge(int type, long a, long b) {
+	private static long ge(Primitive type, long a, long b) {
 		return switch(type) {
 		case FLOAT -> intBitsToFloat((int)a) >= intBitsToFloat((int)b);
 		case DOUBLE -> longBitsToDouble(a) >= longBitsToDouble(b);
-		case BOOL -> a <= b;
-		case BYTE -> (byte)a >= (byte)b;
-		case SHORT -> (short)a >= (short)b;
-		case INT, TYPE -> (int)a >= (int)b;
-		default -> a >= b;
+		default -> type.signed ? a >= b : compareUnsigned(a, b) >= 0;
 		} ? 1 : 0;
-	}
-
-	static void ref(CircuitFile file, int out, Node node) throws SignalError {
-		Signal[] type = file.eval(out, 0);
-		Signal[] arg = file.eval(out, 1);
-		int t, n = 0;
-		if (type.length == 0)
-			t = new Type(HEAP, types(arg), Type.EMPTY).define(0);
-		else {
-			check(out, 0, t = type[0].asType(), POINTER);
-			Type p = type(t);
-			int l = arg.length - p.par.length, rl = p.ret.length;
-			if (l < 0 || (rl > 0 ? l % rl : l) != 0)
-				throw new SignalError(out, 1, "wrong signal size");
-			int j = 0;
-			for (int t1 : p.par)
-				checkAssign(out, 1, arg[j++].type, t1);
-			if (rl > 0) {
-				while(j + rl <= arg.length) {
-					for (int t1 : p.ret)
-						checkAssign(out, 1, arg[j++].type, t1);
-					n++;
-				}
-			}
-		}
-		if(type.length > 1) {
-			node.ret(var(t));
-			return;
-		}
-		for (Signal s : arg)
-			if (!s.constant()) {
-				node.ret(var(t));
-				return;
-			}
-		new GlobalVar(node, null).len = n;
-		node.ret(cst(t, GLOBALS.size()));
-	}
-
-	static Signal idx(Signal p, Signal i, int out) throws SignalError {
-		check(out, 0, p.type, POINTER);
-		check(out, 1, i.type, LOGIC_TYPES);
-		Type t = type(p.type);
-		return new Signal(new Type(t.flags, t.ret, Type.EMPTY).define(0));
-	}
-
-	static void load(CircuitFile file, int out, Node node) throws SignalError {
-		Signal[] ps = file.eval(out, 0);
-		int l = 0, i = 0;
-		for (Signal p : ps) {
-			check(out, 0, p.type, POINTER);
-			l += type(p.type).par.length;
-		}
-		Signal[] res = new Signal[l];
-		for (Signal p : ps)
-			for (int t : type(p.type).par)
-				res[i++] = new Signal(t);
-		node.ret(res);
-	}
-
-	static void store(CircuitFile file, int out, Node node) throws SignalError {
-		Signal[] r = file.eval(out, 0);
-		Signal[] v = file.eval(out, 1);
-		int i = 0;
-		for (Signal p : r) {
-			check(out, 0, p.type, POINTER);
-			Type t = type(p.type);
-			if (t.par.length > v.length - i)
-				throw new SignalError(out, 1, "wrong signal size");
-			for (int et : t.par)
-				checkAssign(out, 1, v[i++].type, et);
-		}
-		node.ret(r);
-	}
-
-	static void call(CircuitFile file, int out, Node node) throws SignalError {
-		Signal[] f = file.eval(out, 0);
-		int[] types = types(file.eval(out, 1));
-		for (int i = 0; i < f.length; i++) {
-			int ft = f[i].type;
-			check(out, 0, ft, -1);
-			Type t = type(ft);
-			if (!canAssign(types, t.par))
-				throw new SignalError(out, 1,
-					format("can't assign %s to %s", name(types), name(t.par))
-				);
-			types = t.ret;
-		}
-		node.retSideff(var(types));
-	}
-
-	static void swt(CircuitFile file, int out, Node node) throws SignalError {
-		node.direct = 1;
-		Signal tc = file.eval1(out, 0);
-		check(out, 0, tc.type, BOOL);
-		node.ret(tc.constant()
-			? file.eval(out, tc.addr != 0 ? 1 : 2)
-			: union(file.eval(out, 1), file.eval(out, 2), out)
-		);
-	}
-
-	static void loop(CircuitFile file, int out, Node node) throws SignalError {
-		node.direct = 1;
-		Signal[] res = var(file.eval(out, 0));
-		node.retSideff(res);
-		Signal tc = file.eval1(out, 1);
-		check(out, 1, tc.type, BOOL);
-		Signal[] nxt = file.eval(out, 2);
-		if (nxt.length != res.length)
-			throw new SignalError(out, 2, "wrong signal size");
-		for (int i = 0; i < res.length; i++)
-			checkAssign(out, 2, nxt[i].type, res[i].type);
-	}
-
-	static void def(CircuitFile file, int out, Node node) throws SignalError {
-		node.direct = 1;
-		int t = file.eval1(out, 0).asType();
-		check(out, 0, t, -1);
-		Type p = type(t);
-		int[] sig = p.par;
-		Signal[] res = new Signal[sig.length + 1];
-		new GlobalVar(node, null);
-		res[0] = new Signal(t, GLOBALS.size());
-		for (int i = 1; i < res.length; i++)
-			res[i] = new Signal(sig[i-1]);
-		node.retConst(res);
-		Signal[] ret = file.eval(out, 1);
-		sig = p.ret;
-		if (sig.length != ret.length)
-			throw new SignalError(out, 1, "wrong signal size");
-		for (int i = 0; i < ret.length; i++)
-			checkAssign(out, 1, ret[i].type, sig[i]);
 	}
 
 }
