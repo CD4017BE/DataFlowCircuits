@@ -2,6 +2,8 @@ package cd4017be.dfc.lang.type;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.util.Arrays;
+
 import cd4017be.dfc.lang.Signal;
 
 /**
@@ -9,10 +11,14 @@ import cd4017be.dfc.lang.Signal;
 public class Struct implements Type {
 
 	public final Type[] elements;
+	private final String[] names;
+	private final int[] nameIdx;
 	public final int id, size, align;
 
-	Struct(Type[] elements, int id) {
+	Struct(Type[] elements, String[] names, int id) {
 		this.elements = elements;
+		this.names = names;
+		this.nameIdx = Types.nameIndex(names);
 		this.id = id;
 		int size = 0, align = 0;
 		for (Type t : elements) {
@@ -21,6 +27,13 @@ public class Struct implements Type {
 		}
 		this.size = size;
 		this.align = align;
+	}
+
+	@Override
+	public int getIndex(String name) {
+		if (names == null) return -1;
+		int i = Arrays.binarySearch(names, name);
+		return i < 0 ? -1 : nameIdx[i];
 	}
 
 	@Override
@@ -46,7 +59,8 @@ public class Struct implements Type {
 
 	@Override
 	public int hashCode() {
-		return Types.contentIdentityHash(elements);
+		return Arrays.hashCode(names) * 31
+		+ Types.contentIdentityHash(elements);
 	}
 
 	@Override
@@ -54,7 +68,8 @@ public class Struct implements Type {
 		if(this == obj) return true;
 		if(!(obj instanceof Struct)) return false;
 		Struct other = (Struct)obj;
-		return Types.contentIdentical(elements, other.elements);
+		return Types.contentIdentical(elements, other.elements)
+		&& Arrays.equals(names, other.names);
 	}
 
 	@Override
@@ -88,11 +103,6 @@ public class Struct implements Type {
 	@Override
 	public boolean canAssignTo(Type t) {
 		return this == t || isWrapper() && unwrap().canAssignTo(t);
-	}
-
-	@Override
-	public Struct struct(int node, int in) {
-		return this;
 	}
 
 }

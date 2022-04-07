@@ -13,7 +13,6 @@ import java.util.function.*;
 import cd4017be.dfc.compiler.IntrinsicCompilers;
 import cd4017be.dfc.lang.type.*;
 import cd4017be.dfc.lang.type.Function;
-import cd4017be.dfc.lang.type.Type;
 import cd4017be.dfc.lang.type.Vector;
 
 /**
@@ -145,10 +144,11 @@ public class IntrinsicEvaluators {
 							rad = 1;
 							i++;
 						}
-						val[n++] = type.signed
+						long v = val[n++] = type.signed
 							? Long.parseLong(arg, i, q, rad)
 							: Long.parseUnsignedLong(arg, i, q, rad);
-						//TODO range check
+						if (v != Signal.castPrim(type, v))
+							throw new SignalError(out, -1, "number out of range");
 					}
 				} catch(NumberFormatException e) {
 					throw new SignalError(out, -1, e.getMessage());
@@ -185,70 +185,78 @@ public class IntrinsicEvaluators {
 		throw new SignalError(out, in, "expected unsigned integer value");
 	}
 
-	private static long[] parseIndices(CircuitFile file, int out, int in, boolean val)
-	throws SignalError {
+	private static Signal parseIndices(
+		CircuitFile file, int out, Node node, Signal str, int in,
+		java.util.function.Function<Type, String> check
+	) throws SignalError {
 		try {
 			String args = file.args[out];
-			String[] arg = args.split(",");
+			String[] arg = args.split("\\s*,\\s*");
 			Signal idx = evalIdx(file, out, in);
 			long[] idxs = new long[arg.length];
 			for (int i = 0; i < arg.length; i++) {
-				String s = arg[i].trim();
+				Type type = str.type;
+				String s = check.apply(type);
+				if (s != null) throw new SignalError(out, 0, s);
+				s = arg[i];
+				if (s.isEmpty())
+					throw new SignalError(out, -1, "illegal empty index spec");
+				char c = s.charAt(0);
 				long p;
-				if (!s.equals("#"))
+				if (c == '#') {
+					if (idx == null)
+						throw new SignalError(out, in, "missing index value");
+					else if (idx.isConst())
+						p = idx.value;
+					else if (!str.hasValue())
+						throw new SignalError(out, in, "can't dynamically index imaginary signal");
+					else p = -1;
+				} else if (c >= '0' && c <= '9')
 					p = Integer.parseUnsignedInt(s);
-				else if (idx == null)
-					throw new SignalError(out, in, "missing index value");
-				else if (idx.isConst())
-					p = idx.value;
-				else if (!val)
-					throw new SignalError(out, in, "can't dynamically index imaginary signal");
-				else p = -1;
+				else if ((p = type.getIndex(s)) < 0)
+					throw new SignalError(out, 0, "name '" + s + "' doesn't exist");
 				idxs[i] = p;
+				str = type.getElement(str, p);
 			}
-			return idxs;
-		} catch(NumberFormatException e) {
-			throw new SignalError(out, -1, e.getMessage());
+			node.data = idxs;
+		} catch(IllegalArgumentException e) {
+			throw new SignalError(out, 0, e.getMessage());
 		}
+		return str;
 	}
 
 	private static void get(CircuitFile file, int out, Node node) throws SignalError {
-		Signal str = file.eval(out, 0);
-		long[] idxs = parseIndices(file, out, 1, str.hasValue());
-		node.data = idxs;
-		try {
-			for (long idx : idxs)
-				str = str.type.getElement(str, idx);
-		} catch(IllegalArgumentException e) {
-			throw new SignalError(out, -1, e.getMessage());
-		}
-		node.ret(str);
+		node.ret(parseIndices(file, out, node, file.eval(out, 0), 1, t -> null));
 	}
 
 	private static void set(CircuitFile file, int out, Node node) throws SignalError {
 		Signal str = file.eval(out, 0), val = file.eval(out, 1);
 		if (!val.hasValue()) throw new SignalError(out, 1, "expected value");
-		long[] idxs = parseIndices(file, out, 2, true);
 		if (!str.isVar()) str = var(str.type);
-		boolean struct = false;
-		for (long idx : idxs) {
-			Type type = str.type;
-			if (type instanceof Vector) {
-				if (!((Vector)type).simd) struct = true;
-				else if (struct)
-					throw new SignalError(out, 0, "can't set vector element in struct");
-			} else if (type instanceof Struct) struct = true;
-			else throw new SignalError(out, 0, "can only set struct, array or vector element");
-			str = type.getElement(str, idx);
-		}
-		if (val.type != str.type)
+		boolean[] struct = {false};
+		Signal el = parseIndices(file, out, node, str, 2, t -> {
+			if (t instanceof Struct) struct[0] = true;
+			else if (!(t instanceof Vector))
+				return "can only set struct, array or vector element";
+			else if (!((Vector)t).simd) struct[0] = true;
+			else if (struct[0])
+				return "can't set vector element in struct";
+			return null;
+		});
+		if (val.type != el.type)
 			throw new SignalError(out, 1, "type mismatch");
 		node.ret(str);
 	}
 
 	private static void pack(CircuitFile file, int out, Node node) throws SignalError {
-		Signal a = file.eval(out, 0), b = file.eval(out, 1);
-		node.ret(a == NULL ? b : b == NULL ? a : bundle(a, b));
+		Signal a = file.eval(out, 0);
+		Bundle parent = a.type instanceof Bundle ? (Bundle)a.type : null;
+		if (parent == null && a.type != VOID)
+			throw new SignalError(out, 0, "expected bundle or void");
+		node.ret(new Signal(
+			new Bundle(parent, file.eval(out, 1), file.args[out]),
+			VAR, parent == null ? 1 : a.value + 1
+		));
 	}
 
 	private static void _void(CircuitFile file, int out, Node node) throws SignalError {
@@ -260,49 +268,50 @@ public class IntrinsicEvaluators {
 		node.retSideff(val);
 	}
 
-	private static void buildStruct(Node node, Type type, Signal[] elem) {
+	private static void buildStruct(Node node, Type type, Bundle elem) {
 		boolean cst = true, hasval = true;
-		for (int i = 0; i < elem.length; i++) {
-			Signal s = elem[i];
+		int l = 0;
+		for (Bundle b = elem; b != null; b = b.parent) {
+			Signal s = b.signal;
 			cst &= s.isConst();
 			hasval &= s.hasValue();
+			l++;
 		}
 		Signal r;
 		if (cst) {
-			long[] data = new long[elem.length];
-			for (int i = 0; i < elem.length; i++)
-				data[i] = elem[i].value;
+			long[] data = new long[l];
+			for (Bundle b = elem; b != null; b = b.parent)
+				data[--l] = b.signal.value;
 			r = cst(type, data);
 		} else r = hasval ? var(type) : img(type);
 		node.ret(r);
 	}
 
-	private static Type[] types(Signal[] elem) {
-		Type[] types = new Type[elem.length];
-		for (int i = 0; i < elem.length; i++)
-			types[i] = elem[i].type;
-		return types;
-	}
-
 	private static void struct(CircuitFile file, int out, Node node) throws SignalError {
 		Signal val = file.eval(out, 0);
-		Signal[] elem = val.asBundle();
-		buildStruct(node, STRUCT(types(elem)), elem);
+		int l = val.bundleSize();
+		Bundle elem = val.asBundle();
+		Type[] types = new Type[l];
+		String[] names = new String[l];
+		int i = l;
+		for(Bundle b = elem; b != null; b = b.parent) {
+			types[--i] = b.signal.type;
+			names[i] = b.name;
+		}
+		buildStruct(node, STRUCT(types, names), elem);
 	}
 
 	private static void array(CircuitFile file, int out, Node node) throws SignalError {
 		Signal count = evalIdx(file, out, 1), val = file.eval(out, 0);
 		if (count == null) {
-			Signal[] elem = val.asBundle();
-			if (elem.length == 0)
-				throw new SignalError(out, 0, "expected at least 1 element");
-			Type t = elem[0].type;
-			for (int i = 1; i < elem.length; i++) {
-				Signal s = elem[i];
-				if (s.type != t)
+			int l = val.bundleSize();
+			if (l == 0) throw new SignalError(out, 0, "expected at least 1 element");
+			Bundle elem = val.asBundle();
+			Type t = elem.signal.type;
+			for (Bundle b = elem; b != null; b = b.parent)
+				if (b.signal.type != t)
 					throw new SignalError(out, 0, "type mismatch");
-			}
-			buildStruct(node, Types.VECTOR(t, elem.length, false), elem);
+			buildStruct(node, Types.VECTOR(t, l, false), elem);
 		} else if (val.type instanceof Bundle)
 			throw new SignalError(out, 0, "expected only single type");
 		else if (!count.isConst())
@@ -313,18 +322,17 @@ public class IntrinsicEvaluators {
 	private static void vector(CircuitFile file, int out, Node node) throws SignalError {
 		Signal count = evalIdx(file, out, 1), val = file.eval(out, 0);
 		if (count == null) {
-			Signal[] elem = val.asBundle();
-			if (elem.length == 0)
+			int l = val.bundleSize();
+			if (l == 0)
 				throw new SignalError(out, 0, "expected at least 1 element");
-			Type t = elem[0].type;
+			Bundle elem = val.asBundle();
+			Type t = elem.signal.type;
 			if (!t.canSimd())
 				throw new SignalError(out, 0, "expected primitive or pointer values");
-			for (int i = 1; i < elem.length; i++) {
-				Signal s = elem[i];
-				if (s.type != t)
+			for (Bundle b = elem; b != null; b = b.parent)
+				if (b.signal.type != t)
 					throw new SignalError(out, 0, "type mismatch");
-			}
-			buildStruct(node, VECTOR(t, elem.length, true), elem);
+			buildStruct(node, VECTOR(t, l, true), elem);
 		} else if (val.type instanceof Bundle)
 			throw new SignalError(out, 0, "expected only single type");
 		else if (!val.type.canSimd())
@@ -356,35 +364,57 @@ public class IntrinsicEvaluators {
 	private static void zero(CircuitFile file, int out, Node node) throws SignalError {
 		Signal in = file.eval(out, 0);
 		if (in.type instanceof Bundle) {
-			Signal[] elem = in.asBundle();
-			Signal[] zero = new Signal[elem.length];
-			for (int i = 0; i < elem.length; i++)
-				zero[i] = new Signal(elem[i].type, CONST, 0L);
-			node.ret(bundle(zero));
+			Bundle elem = in.asBundle(), res = new Bundle(null, null, null), zero = res;
+			int n = 0;
+			for (Bundle b = elem; b != null; b = b.parent) {
+				Signal s = new Signal(b.signal.type, CONST, 0L);
+				zero = zero.parent = new Bundle(null, s, b.name);
+				n++;
+			}
+			node.ret(res.parent.toSignal(n));
 		} else node.ret(new Signal(in.type, CONST, 0L));
 	}
 
 	private static void type(CircuitFile file, int out, Node node) throws SignalError {
 		Signal in = file.eval(out, 0);
 		if (in.type instanceof Bundle) {
-			Signal[] elem = in.asBundle();
-			Signal[] img = new Signal[elem.length];
-			for (int i = 0; i < elem.length; i++)
-				img[i] = img(elem[i].type);
-			node.ret(bundle(img));
+			Bundle elem = in.asBundle(), res = new Bundle(null, null, null), img = res;
+			int n = 0;
+			for (Bundle b = elem; b != null; b = b.parent) {
+				Signal s = new Signal(b.signal.type, IMAGE, 0L);
+				img = img.parent = new Bundle(null, s, b.name);
+				n++;
+			}
+			node.ret(res.parent.toSignal(n));
 		} else node.ret(img(in.type));
 	}
 
 	private static void funt(CircuitFile file, int out, Node node) throws SignalError {
 		Type ret = file.eval(out, 0).type;
-		Signal[] param = file.eval(out, 1).asBundle();
-		node.ret(img(FUNCTION(ret, types(param))));
+		Signal par = file.eval(out, 1);
+		int l = par.bundleSize();
+		Bundle param = par.asBundle();
+		Type[] types = new Type[l];
+		String[] names = new String[l];
+		for(Bundle b = param; b != null; b = b.parent) {
+			types[--l] = b.signal.type;
+			names[l] = b.name;
+		}
+		node.ret(img(FUNCTION(ret, types, names)));
 	}
 
 	private static void ref(CircuitFile file, int out, Node node) throws SignalError {
 		Signal val = file.eval(out, 0);
+		String name = null;
+		if (val.type instanceof Bundle) {
+			Bundle b = (Bundle)val.type;
+			name = b.name;
+			val = b.signal;
+			if (b.parent != null)
+				throw new SignalError(out, 0, "expected single element");
+		}
 		Pointer type = new Pointer(0).to(val.type);
-		node.ret(val.isConst() ? global(type, node, null) : val.hasValue() ? var(type) : img(type));
+		node.ret(val.isConst() ? global(type, node, name) : val.hasValue() ? var(type) : img(type));
 	}
 
 	private static void load(CircuitFile file, int out, Node node) throws SignalError {
@@ -411,14 +441,15 @@ public class IntrinsicEvaluators {
 		if (!(f.hasValue() && f.type instanceof Function))
 			throw new SignalError(out, 0, "expected function value");
 		Function type = (Function)f.type;
-		Signal[] par = file.eval(out, 1).asBundle();
-		if (par.length != type.parTypes.length)
+		Signal par = file.eval(out, 1);
+		int l = par.bundleSize();
+		if (l != type.parTypes.length)
 			throw new SignalError(out, 1, "types don't match function");
-		for (int i = 0; i < par.length; i++) {
-			Signal s = par[i];
+		for (Bundle b = par.asBundle(); b != null; b = b.parent) {
+			Signal s = b.signal;
 			if (!s.hasValue())
 				throw new SignalError(out, 1, "can't pass imaginary parameters");
-			if (s.type != type.parTypes[i])
+			if (s.type != type.parTypes[--l])
 				throw new SignalError(out, 1, "types don't match function");
 		}
 		node.retSideff(var(type.retType));
@@ -437,11 +468,19 @@ public class IntrinsicEvaluators {
 
 	private static void def(CircuitFile file, int out, Node node) throws SignalError {
 		node.direct = 1;
-		Type t = file.eval(out, 0).type;
-		if (!(t instanceof Function))
+		Signal t = file.eval(out, 0);
+		String name = null;
+		if (t.type instanceof Bundle) {
+			Bundle b = (Bundle)t.type;
+			name = b.name;
+			t = b.signal;
+			if (b.parent != null)
+				throw new SignalError(out, 0, "expected single element");
+		}
+		if (!(t.type instanceof Function))
 			throw new SignalError(out, 0, "expected function type");
-		Function f = (Function)t;
-		node.ret(global(f, node, null));
+		Function f = (Function)t.type;
+		node.ret(global(f, node, name));
 		Signal ret = file.eval(out, 1);
 		if (!ret.hasValue())
 			throw new SignalError(out, 1, "can't return imaginary");
@@ -458,38 +497,54 @@ public class IntrinsicEvaluators {
 			node.ret(file.eval(out, con.asBool() ? 1 : 2));
 			return;
 		}
-		Signal[] as = file.eval(out, 1).asBundle(), bs = file.eval(out, 2).asBundle();
-		if (as.length != bs.length)
+		Signal as = file.eval(out, 1), bs = file.eval(out, 2), rs;
+		int l = as.bundleSize();
+		if (l != bs.bundleSize())
 			throw new SignalError(out, 2, "branch types don't match");
-		Signal[] rs = new Signal[as.length];
-		for (int i = 0; i < as.length; i++) {
-			Type type = as[i].type;
-			if (type != bs[i].type)
-				throw new SignalError(out, 2, "branch types don't match");
-			rs[i] = var(type);
-		}
-		node.ret(bundle(rs));
+		if (as.type instanceof Bundle) {
+			Bundle res = new Bundle(null, null, null);
+			for (
+				Bundle a = as.asBundle(), b = bs.asBundle(), r = res;
+				a != null; a = a.parent, b = b.parent
+			) {
+				Type type = a.signal.type;
+				if (type != b.signal.type)
+					throw new SignalError(out, 2, "branch types don't match");
+				String name = a.name == null ? b.name : b.name == null ? a.name
+					: a.name.equals(b.name) ? a.name : null;
+				r = r.parent = new Bundle(null, var(type), name);
+			}
+			rs = res.parent.toSignal(l);
+		} else if (as.type != bs.type)
+			throw new SignalError(out, 2, "branch types don't match");
+		else rs = var(as.type);
+		node.ret(rs);
 	}
 
 	private static void loop(CircuitFile file, int out, Node node) throws SignalError {
 		node.direct = 1;
-		Signal[] init = file.eval(out, 0).asBundle();
-		Signal[] res = new Signal[init.length];
-		for (int i = 0; i < res.length; i++) {
-			Signal s = init[i];
-			if (!s.hasValue())
-				throw new SignalError(out, 0, "initial state can't be imaginary");
-			res[i] = var(s.type);
-		}
-		node.ret(bundle(res));
+		Signal init = file.eval(out, 0);
+		int l = init.bundleSize();
+		Signal res;
+		if (init.type instanceof Bundle) {
+			Bundle rs = new Bundle(null, null, null), r = rs;
+			for (Bundle b = init.asBundle(); b != null; b = b.parent) {
+				Signal s = b.signal;
+				if (!s.hasValue())
+					throw new SignalError(out, 0, "initial state can't be imaginary");
+				r = r.parent = new Bundle(null, var(s.type), b.name);
+			}
+			res = rs.parent.toSignal(l);
+		} else res = var(init.type);
+		node.ret(res);
 		Signal cond = file.eval(out, 1);
 		if (!(cond.hasValue() && cond.type == BOOL))
 			throw new SignalError(out, 1, "expected boolean value");
-		Signal[] nxt = file.eval(out, 2).asBundle();
-		if (nxt.length != res.length)
+		Signal nxt = file.eval(out, 2);
+		if (nxt.bundleSize() != l)
 			throw new SignalError(out, 2, "types don't match loop state");
-		for (int i = 0; i < res.length; i++)
-			if (res[i].type != nxt[i].type)
+		for (Bundle n = nxt.asBundle(), r = res.asBundle(); r != null; n = n.parent, r = r.parent)
+			if (r.signal.type != n.signal.type)
 				throw new SignalError(out, 2, "types don't match loop state");
 	}
 

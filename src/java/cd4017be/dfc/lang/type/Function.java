@@ -7,7 +7,6 @@ import static java.lang.System.identityHashCode;
 import java.util.Arrays;
 
 import cd4017be.dfc.lang.Signal;
-import cd4017be.dfc.lang.SignalError;
 
 /**
  * @author CD4017BE */
@@ -15,10 +14,21 @@ public class Function implements Type {
 
 	public final Type retType;
 	public final Type[] parTypes;
+	private final String[] parNames;
+	private final int[] nameIdx;
 
-	Function(Type retType, Type[] parTypes) {
+	Function(Type retType, Type[] parTypes, String[] parNames) {
 		this.retType = retType;
 		this.parTypes = parTypes;
+		this.parNames = parNames;
+		this.nameIdx = Types.nameIndex(parNames);
+	}
+
+	@Override
+	public int getIndex(String name) {
+		if (parNames == null) return -2;
+		int i = Arrays.binarySearch(parNames, name);
+		return i < 0 ? -2 : nameIdx[i];
 	}
 
 	@Override
@@ -33,7 +43,7 @@ public class Function implements Type {
 
 	@Override
 	public int color(Signal s) {
-		return s.hasValue() ? 12 : 44;
+		return s.hasValue() ? 13 : 45;
 	}
 
 	@Override
@@ -48,7 +58,9 @@ public class Function implements Type {
 
 	@Override
 	public int hashCode() {
-		return contentIdentityHash(parTypes) * 31 + identityHashCode(retType);
+		return (Arrays.hashCode(parNames) * 31
+		+ contentIdentityHash(parTypes)) * 31
+		+ identityHashCode(retType);
 	}
 
 	@Override
@@ -56,7 +68,9 @@ public class Function implements Type {
 		if(this == obj) return true;
 		if(!(obj instanceof Function)) return false;
 		Function other = (Function)obj;
-		return retType == other.retType && contentIdentical(parTypes, other.parTypes);
+		return retType == other.retType
+		&& contentIdentical(parTypes, other.parTypes)
+		&& Arrays.equals(parNames, other.parNames);
 	}
 
 	@Override
@@ -71,26 +85,6 @@ public class Function implements Type {
 	@Override
 	public boolean canSimd() {
 		return false;
-	}
-
-	@Override
-	public Vector vector(int node, int in) throws SignalError {
-		throw new SignalError(node, in, "expected Vector, got Function");
-	}
-
-	@Override
-	public Struct struct(int node, int in) throws SignalError {
-		throw new SignalError(node, in, "expected Bundle, got Function");
-	}
-
-	@Override
-	public Function function(int node, int in) {
-		return this;
-	}
-
-	@Override
-	public Pointer pointer(int node, int in) throws SignalError {
-		throw new SignalError(node, in, "expected Pointer, got Function");
 	}
 
 	@Override

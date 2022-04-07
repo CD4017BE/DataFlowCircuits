@@ -89,9 +89,4 @@ public class Vector implements Type {
 		&& element.canAssignTo(((Vector)t).element);
 	}
 
-	@Override
-	public Vector vector(int node, int in) {
-		return this;
-	}
-
 }

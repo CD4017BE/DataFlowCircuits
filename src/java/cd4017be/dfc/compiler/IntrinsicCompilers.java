@@ -124,16 +124,15 @@ public class IntrinsicCompilers {
 	}
 
 	private static Instruction construct(Instruction ins, Signal out, Signal in, String op) {
-		Signal[] val = in.asBundle();
+		Bundle val = in.asBundle();
 		Type type = out.type;
 		Signal str = img(type);
-		int i = 0;
-		for (int l = val.length - 1; i < l; i++) {
+		for (int i = in.bundleSize(); --i > 0; val = val.parent) {
 			Signal old = str;
 			str = var(type);
-			ins = ins.add(op, str, old, val[i], cst(UINT, i));
+			ins = ins.add(op, str, old, val.signal, cst(UINT, i));
 		}
-		return ins.add(op, out, str, val[i], cst(UINT, i));
+		return ins.add(op, out, str, val.signal, cst(UINT, 0));
 	}
 
 	static Instruction struct(Node node, Instruction ins) {
@@ -177,12 +176,13 @@ public class IntrinsicCompilers {
 	}
 
 	static Instruction call(Node node, Instruction ins) {
-		Signal fun = node.in(0), out = node.out;
-		Signal[] par = node.in(1).asBundle();
-		Signal[] arg = new Signal[par.length + 1];
-		arg[0] = fun;
-		System.arraycopy(par, 0, arg, 1, par.length);
-		return ins.add(CALL, out, par);
+		Signal par = node.in(1);
+		int l = par.bundleSize() + 1;
+		Signal[] arg = new Signal[l];
+		for (Bundle b = par.asBundle(); b != null; b = b.parent)
+			arg[--l] = b.signal;
+		arg[0] = node.in(0);
+		return ins.add(CALL, node.out, par);
 	}
 
 	private static Instruction def(Instruction ins, Signal fun) {
@@ -220,11 +220,13 @@ public class IntrinsicCompilers {
 		bf = ins.start.set;
 		//end switch
 		ins = ins.add(end);
-		Signal[] vt = node.in(1).asBundle(),
-			vf = node.in(2).asBundle(),
-			r = node.out.asBundle();
-		for (int i = 0; i < r.length; i++)
-			ins = ins.add(PHI, r[i], vt[i], bt, vf[i], bf);
+		for (
+			Bundle vt = node.in(1).asBundle(),
+				vf = node.in(2).asBundle(),
+				r = node.out.asBundle();
+			r != null;
+			r = r.parent, vt = vt.parent, vf = vf.parent
+		) ins = ins.add(PHI, r.signal, vt.signal, bt, vf.signal, bf);
 		return ins;
 	}
 
@@ -240,12 +242,14 @@ public class IntrinsicCompilers {
 		ins = node.compIn(ins.add(body), 2).add(BR, null, loop);
 		body = ins.start.set;
 		//now since we know where body ends, insert the PHI instructions
-		Signal[] out = node.out.asBundle(),
-			init = node.in(0).asBundle(),
-			state = node.in(2).asBundle();
 		Instruction next = phi.next;
-		for (int i = 0; i < out.length; i++)
-			phi = phi.add(PHI, out[i], init[i], start, state[i], body);
+		for (
+			Bundle out = node.out.asBundle(),
+				init = node.in(0).asBundle(),
+				state = node.in(2).asBundle();
+			out != null;
+			out = out.parent, init = init.parent, state = state.parent
+		) phi = phi.add(PHI, out.signal, init.signal, start, state.signal, body);
 		phi.next = next;
 		//exit loop
 		return ins.add(end);

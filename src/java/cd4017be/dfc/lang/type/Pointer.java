@@ -71,11 +71,6 @@ public class Pointer implements Type {
 	}
 
 	@Override
-	public Pointer pointer(int node, int in) {
-		return this;
-	}
-
-	@Override
 	public boolean canCompare() {
 		return true;
 	}

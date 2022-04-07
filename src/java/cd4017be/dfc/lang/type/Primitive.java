@@ -1,7 +1,6 @@
 package cd4017be.dfc.lang.type;
 
 import cd4017be.dfc.lang.Signal;
-import cd4017be.dfc.lang.SignalError;
 
 /**
  * @author CD4017BE */
@@ -66,26 +65,6 @@ public enum Primitive implements Type {
 		if (!(t instanceof Primitive)) return false;
 		Primitive p = (Primitive)t;
 		return p.fp || bits < p.bits && (!signed || p.signed);
-	}
-
-	@Override
-	public Vector vector(int node, int in) throws SignalError {
-		throw new SignalError(node, in, "expected Vector, got Primitive");
-	}
-
-	@Override
-	public Struct struct(int node, int in) throws SignalError {
-		throw new SignalError(node, in, "expected Bundle, got Primitive");
-	}
-
-	@Override
-	public Function function(int node, int in) throws SignalError {
-		throw new SignalError(node, in, "expected Function, got Primitive");
-	}
-
-	@Override
-	public Pointer pointer(int node, int in) throws SignalError {
-		throw new SignalError(node, in, "expected Reference, got Primitive");
 	}
 
 	@Override

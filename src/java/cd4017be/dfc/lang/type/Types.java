@@ -7,8 +7,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.nio.BufferUnderflowException;
 import java.nio.CharBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
 
 /**
  * @author CD4017BE */
@@ -16,25 +15,33 @@ public class Types {
 
 	private static final ArrayList<Struct> STRUCTS = new ArrayList<>();
 	private static final HashMap<Type, Type> TYPES = new HashMap<>();
-	public static final Struct VOID = new Struct(new Type[0], -1);
+	public static final Struct VOID = new Struct(new Type[0], null, -1);
 
 	static int PTR_SIZE = 8, FUN_SIZE = 8;
 
+	public static Function FUNCTION(Type ret, Type[] par, String[] names) {
+		return unique(new Function(ret, par, names));
+	}
+
 	public static Function FUNCTION(Type ret, Type... par) {
-		return unique(new Function(ret, par));
+		return FUNCTION(ret, par, null);
 	}
 
 	public static Vector VECTOR(Type elem, int count, boolean simd) {
 		return unique(new Vector(elem, count, simd));
 	}
 
-	public static Struct STRUCT(Type... elem) {
-		if (elem.length == 0) return VOID;
+	public static Struct STRUCT(Type[] types, String[] names) {
+		if (types.length == 0) return VOID;
 		Struct s = unique(new Struct(
-			elem, elem.length > 1 ? STRUCTS.size() : -1
+			types, names, types.length > 1 ? STRUCTS.size() : -1
 		));
 		if (s.id == STRUCTS.size()) STRUCTS.add(s);
 		return s;
+	}
+
+	public static Struct STRUCT(Type... elem) {
+		return STRUCT(elem, null);
 	}
 
 	public static Type parseType(String s) {
@@ -147,6 +154,25 @@ public class Types {
 		for (int i = 0; i < a.length; i++)
 			if (a[i] != a[i]) return false;
 		return true;
+	}
+
+	static int[] nameIndex(String[] names) {
+		if (names == null) return null;
+		int l = names.length;
+		class E { String name; int idx; }
+		E[] arr = new E[l];
+		for (int i = 0; i < l; i++) {
+			E e = arr[i] = new E();
+			e.name = names[i];
+			e.idx = i;
+		}
+		Arrays.sort(arr, (a, b) -> a.name.compareTo(b.name));
+		int[] idx = new int[l];
+		for (int i = 0; i < l; i++) {
+			idx[i] = arr[i].idx;
+			names[i] = arr[i].name;
+		}
+		return idx;
 	}
 
 	public static void writeTypeDefs(Writer w) throws IOException {

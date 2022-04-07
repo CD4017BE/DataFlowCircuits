@@ -41,14 +41,13 @@ public class Signal {
 
 	public static Signal bundle(Signal... source) {
 		if (source.length == 0) return NULL;
-		if (source.length == 1) return source[0];
-		int state = IMAGE, count = 0;
-		for (Signal s : source) {
-			state = Math.max(state, s.state);
-			if (s.type instanceof Bundle) count += s.value;
-			else count++;
-		}
-		return new Signal(new Bundle(source), state, count);
+		Signal s0 = source[0];
+		if (source.length == 1) return s0;
+		Bundle b = s0.type instanceof Bundle ? (Bundle)s0.type : null;
+		int n = source.length + (b == null ? 0 : (int)s0.value - 1);
+		for (int i = b == null ? 0 : 1; i < source.length; i++)
+			b = new Bundle(b, source[i], null);
+		return new Signal(b, VAR, n);
 	}
 
 	public static Signal cst(boolean value) {
@@ -117,35 +116,17 @@ public class Signal {
 	}
 
 	public Signal getElement(int i) {
-		Bundle b = (Bundle)type;
-		if (value == b.source.length)
-			return b.source[i];
-		for (Signal s : b.source)
-			if (s.type instanceof Bundle) {
-				if (i < s.value)
-					return s.getElement(i);
-				i -= s.value;
-			} else if (i == 0) return s;
-			else i--;
-		throw new IndexOutOfBoundsException(i);
+		return ((Bundle)type).getElement(this, i);
 	}
 
-	public Signal[] asBundle() {
-		if (type == VOID) return new Signal[0];
-		if (!(type instanceof Bundle)) return new Signal[] {this};
-		Bundle b = (Bundle)type;
-		if (b.source.length == value) return b.source;
-		Signal[] arr = new Signal[(int)value];
-		putBundle(arr, 0, b);
-		return arr;
+	public Bundle asBundle() {
+		if (type == VOID) return null;
+		if (type instanceof Bundle) return (Bundle)type;
+		return new Bundle(null, this, null);
 	}
 
-	private int putBundle(Signal[] arr, int i, Bundle b) {
-		for (Signal s : b.source)
-			if (s.type instanceof Bundle)
-				i = putBundle(arr, i, (Bundle)s.type);
-			else arr[i++] = s;
-		return i;
+	public int bundleSize() {
+		return type == VOID ? 0 : type instanceof Bundle ? (int)value : 1;
 	}
 
 	private static final char[] hex = "0123456789ABCDEF".toCharArray();
@@ -160,10 +141,6 @@ public class Signal {
 		if (type instanceof Pointer || type instanceof Function) {
 			if (val <= 0) return sb.append("null");
 			return sb.append(GLOBALS.get((int)val - 1));
-		}
-		if (type instanceof Bundle) {
-			//TODO 
-			return sb;
 		}
 		if (val <= 0) return sb.append("zeroinitializer");
 		long[] data = CONSTANTS.get((int)val - 1);
@@ -208,169 +185,9 @@ public class Signal {
 		return constToString(new StringBuilder(), type, value).toString();
 	}
 
-//	public static Signal[] union(Signal[] a, Signal[] b, int node) throws SignalError {
-//		int l = a.length;
-//		if (l != b.length)
-//			throw new SignalError(node, -1, "different signal sizes");
-//		Signal[] s = new Signal[l];
-//		for (int i = 0; i < l; i++)
-//			s[i] = union(a[i], b[i], node);
-//		return s;
-//	}
-
-//	private static Signal union(Signal a, Signal b, int node) throws SignalError {
-//		int t = a.type;
-//		if (t == b.type && a.state == CONST && b.state == CONST) {
-//			if (a.addr == b.addr) return a;
-//			if (t == TYPE) return new Signal(
-//				t, Type.union((int)a.addr, (int)b.addr)
-//			);
-//		} else if ((t = Type.union(t, b.type)) == UNKNOWN)
-//			throw new SignalError(node, -1,
-//				format("can't combine %s & %s", Type.name(a.type), Type.name(b.type))
-//			);
-//		return new Signal(t);
-//	}
-
-//	public static boolean matches(Signal[] t, int... type) {
-//		if (t.length < type.length) return false;
-//		for (int i = 0; i < type.length; i++)
-//			if (t[i].type != type[i]) return false;
-//		return true;
-//	}
-
 	public static String name(Signal outType) {
 		if (outType == NULL) return "empty";
 		return outType.type.toString() + " " + outType.toString();
 	}
-
-//	public static Signal[] cstTypes(int[] vals) {
-//		Signal[] t = new Signal[vals.length];
-//		for (int i = 0; i < vals.length; i++)
-//			t[i] = new Signal(TYPE, vals[i]);
-//		return t;
-//	}
-//
-//	public static Signal[] cst(int type, long val) {
-//		return new Signal[] {new Signal(type, val)};
-//	}
-//
-//	public static Signal[] cst(int type, long[] vals) {
-//		Signal[] t = new Signal[vals.length];
-//		for (int i = 0; i < vals.length; i++)
-//			t[i] = new Signal(type, vals[i]);
-//		return t;
-//	}
-//
-//	public static Signal[] var(int... type) {
-//		Signal[] nt = new Signal[type.length];
-//		for (int i = 0; i < type.length; i++)
-//			nt[i] = new Signal(type[i]);
-//		return nt;
-//	}
-//
-//	public static Signal[] var(Signal[] type) {
-//		Signal[] nt = new Signal[type.length];
-//		for (int i = 0; i < type.length; i++) {
-//			int t = type[i].type;
-//			nt[i] = t == TYPE ? new Signal(t, UNKNOWN) : new Signal(t);
-//		}
-//		return nt;
-//	}
-//
-//	public static Signal[] vec(Signal[] type, long val) {
-//		int l = type.length;
-//		if (l == 0) return type;
-//		Signal cst = new Signal(type[0].type, val);
-//		Signal[] t = new Signal[l];
-//		for (int i = 0; i < l; i++) t[i] = cst;
-//		return t;
-//	}
-//
-//	public static Signal[] vec(int type, int len) {
-//		if (len <= 0) return EMPTY;
-//		Signal[] t = new Signal[len];
-//		for (int i = 0; i < len; i++)
-//			t[i] = new Signal(type);
-//		return t;
-//	}
-//
-//	public static int[] types(Signal[] s) {
-//		int l = s.length;
-//		if (l == 0) return Type.EMPTY;
-//		int[] types = new int[l];
-//		for (int i = 0; i < l; i++) {
-//			int t = s[i].type;
-//			types[i] = t == TYPE ? (int)s[i].addr : t;
-//		}
-//		return types;
-//	}
-//
-//	public static Signal[] parseConstants(String s, int node) throws SignalError {
-//		ArrayList<Signal> res = new ArrayList<>();
-//		int type = INT;
-//		boolean string = false;
-//		for (int i = 0, i0 = 0; i < s.length(); i++) {
-//			char c = s.charAt(i);
-//			if (string) {
-//				if (c == (type == BYTE ? '\'' : '"')) {
-//					string = false;
-//					i0 = i+1;
-//					continue;
-//				}
-//				if (c == '\\') {
-//					if (++i >= s.length())
-//						throw new SignalError(node, -1, "unexpected end of string");
-//					switch(c = s.charAt(i)) {
-//					case 'n': c = '\n'; break;
-//					case 'r': c = '\r'; break;
-//					case 't': c = '\t'; break;
-//					case '\'', '\"', '\\': break;
-//					default:
-//						i0 = i + (type == BYTE ? 2 : 4);
-//						if (i0 > s.length())
-//							throw new SignalError(node, -1, "unexpected end of string");
-//						for (c = 0; i < i0; i++) {
-//							int v = Character.digit(s.charAt(i), 16);
-//							if (v < 0)
-//								throw new SignalError(node, -1, "invalid escape char " + s.charAt(i));
-//							c = (char)(c << 4 | v);
-//						}
-//					}
-//				}
-//				res.add(new Signal(type, c));
-//				continue;
-//			}
-//			if (i == i0) switch(c) {
-//				case '\'': type = BYTE; string = true; continue;
-//				case '\"': type = SHORT; string = true; continue;
-//				case 'z', 'Z': type = BOOL; i0++; continue;
-//				case 'b', 'B': type = BYTE; i0++; continue;
-//				case 's', 'S': type = SHORT; i0++; continue;
-//				case 'i', 'I': type = INT; i0++; continue;
-//				case 'l', 'L': type = LONG; i0++; continue;
-//				case 'f', 'F': type = FLOAT; i0++; continue;
-//				case 'd', 'D': type = DOUBLE; i0++; continue;
-//				case ' ': i0++; continue;
-//			}
-//			if (c != ',')
-//				if (i+1 == s.length()) i++;
-//				else continue;
-//			Signal v; try {
-//				if (type == DOUBLE)
-//					v = new Signal(parseDouble(s.substring(i0, i)));
-//				else if (type == FLOAT)
-//					v = new Signal(parseFloat(s.substring(i0, i)));
-//				else if ((c = s.charAt(i0)) == 'x' || c == 'X')
-//					v = new Signal(type, parseUnsignedLong(s.substring(i0 + 1, i), 16));
-//				else v = new Signal(type, parseLong(s.substring(i0, i)));
-//			} catch(NumberFormatException e) {
-//				throw new SignalError(node, -1, e.getMessage());
-//			}
-//			res.add(v);
-//			i0 = i+1;
-//		}
-//		return res.toArray(Signal[]::new);
-//	}
 
 }

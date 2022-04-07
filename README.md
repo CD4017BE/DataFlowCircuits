@@ -1,7 +1,10 @@
 "Data Flow Circuits" is a hobby project, where I'm creating a data flow oriented programming language with a graphical editor.
 
 As part of my Minecraft mod RedstoneControl, I had previously implemented a runtime compiler that would translate a data flow graph into JVM byte code in order to efficiently emulate player build logic circuits.
-Now I decided to turn that concept into a complete programming Language for writing regular programs that run on computers in the real world.
+Now I decided to turn that concept into a complete programming language for writing regular programs that run on computers in the real world.
+
+The language is strongly statically typed and quite low level in its core with pointers and manual memory management.
+But most of the time types are automatically derived from input signals through compile-time polymorphic operators. And higher level abstractions will be possible via macro blocks (not implemented yet). 
 
 ![](example.png)
 
@@ -25,7 +28,9 @@ The compiler is currently outputting LLVM-IR that can be executed or further pro
 - [x] typed pointers
 - [x] functions
 - [x] declaration of external functions
-- [ ] name tags for signal and pointer type elements
+- [x] name tags for structure, function parameter and bundle elements
+- [ ] dynamic memory allocation
+- [ ] type casting operators
 - [ ] macro blocks
 - [ ] built in multi-threading
 
@@ -33,6 +38,7 @@ The compiler is currently outputting LLVM-IR that can be executed or further pro
 - [x] primitive data flow graph editor
 - [x] load / save source graph files (currently single hard-coded file path)
 - [x] type-checking in editor
+- [ ] real time type checking in editor
 - [x] panning and zooming
 - [ ] multi-selection for movement, deletion and copy-paste
 - [x] menu for multiple source files
