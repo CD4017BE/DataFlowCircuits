@@ -15,16 +15,16 @@ public class Types {
 
 	private static final ArrayList<Struct> STRUCTS = new ArrayList<>();
 	private static final HashMap<Type, Type> TYPES = new HashMap<>();
-	public static final Struct VOID = new Struct(new Type[0], null, -1);
+	public static final Struct VOID = new Struct(new Type[0], new String[0], -1);
 
 	static int PTR_SIZE = 8, FUN_SIZE = 8;
 
-	public static Function FUNCTION(Type ret, Type[] par, String[] names) {
-		return unique(new Function(ret, par, names));
+	public static Pointer ARRAYPTR(Type elem) {
+		return new Pointer(0).to(VECTOR(elem, 0, false));
 	}
 
-	public static Function FUNCTION(Type ret, Type... par) {
-		return FUNCTION(ret, par, null);
+	public static Function FUNCTION(Type ret, Type[] par, String[] names) {
+		return unique(new Function(ret, par, names));
 	}
 
 	public static Vector VECTOR(Type elem, int count, boolean simd) {
@@ -33,15 +33,15 @@ public class Types {
 
 	public static Struct STRUCT(Type[] types, String[] names) {
 		if (types.length == 0) return VOID;
-		Struct s = unique(new Struct(
-			types, names, types.length > 1 ? STRUCTS.size() : -1
-		));
+		Struct s = unique(new Struct(types, names, STRUCTS.size()));
 		if (s.id == STRUCTS.size()) STRUCTS.add(s);
 		return s;
 	}
 
-	public static Struct STRUCT(Type... elem) {
-		return STRUCT(elem, null);
+	public static Struct OPAQUE(String name) {
+		Struct s = unique(new Struct(VOID.elements, new String[] {name}, STRUCTS.size()));
+		if (s.id == STRUCTS.size()) STRUCTS.add(s);
+		return s;
 	}
 
 	public static Type parseType(String s) {
@@ -86,7 +86,7 @@ public class Types {
 				elem.add(parse(s));
 			} while(s.get() == ',');
 			if (s.get(s.position() - 1) != '}') throw new IllegalArgumentException("} expected: ");
-			yield STRUCT(elem.toArray(Type[]::new));
+			yield STRUCT(elem.toArray(Type[]::new), null);
 		}
 		default -> throw new IllegalArgumentException("invalid char: ");
 		};
@@ -97,7 +97,7 @@ public class Types {
 			default -> null;
 			case '*' -> new Pointer(0).to(t);
 			case '(' -> {
-				if (skipWhitespace(s).get() == ')') yield FUNCTION(t);
+				if (skipWhitespace(s).get() == ')') yield FUNCTION(t, VOID.elements, VOID.names);
 				s.position(s.position() - 1);
 				ArrayList<Type> elem = new ArrayList<>();
 				do {
@@ -105,7 +105,7 @@ public class Types {
 				} while(s.get() == ',');
 				if (s.get(s.position() - 1) != ')')
 					throw new IllegalArgumentException(") expected: ");
-				yield FUNCTION(t, elem.toArray(Type[]::new));
+				yield FUNCTION(t, elem.toArray(Type[]::new), new String[elem.size()]);
 			}
 			};
 			if (nt == null) {
@@ -167,10 +167,10 @@ public class Types {
 			e.idx = i;
 		}
 		Arrays.sort(arr, (a, b) -> a.name.compareTo(b.name));
-		int[] idx = new int[l];
+		int[] idx = new int[l << 1];
 		for (int i = 0; i < l; i++) {
-			idx[i] = arr[i].idx;
 			names[i] = arr[i].name;
+			idx[l + (idx[i] = arr[i].idx)] = i;
 		}
 		return idx;
 	}
@@ -182,6 +182,7 @@ public class Types {
 	public static void clear() {
 		TYPES.clear();
 		STRUCTS.clear();
+		Function.CUR_FUNCTION = null;
 	}
 
 }

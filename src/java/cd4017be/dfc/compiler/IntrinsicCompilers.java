@@ -25,25 +25,25 @@ public class IntrinsicCompilers {
 	/** LLVM op-codes */
 	private static final String
 	DEFINE = "define $r $<v($($t $<f$)) nounwind {\n",
-	RET = "  ret $1t $<v\n}\n",
-	RET_VOID = "  ret void\n}\n",
+	RET = " ret $1t $<v\n}\n",
+	RET_VOID = " ret void\n}\n",
 	DECLARE = "declare $r $<v($<p) nounwind\n",
 	PRIVATE_GLOBAL = "$v = private unnamed_addr global $<e $v\n",
 	EXTERNAL_GLOBAL = "$v = external global $<t\n",
-	EXTRACTVALUE = "  extractvalue $1t $<v, $($v$)\n",
-	INSERTVALUE = "  insertvalue $1t $<v, $t $<v, $($v$)\n",
-	EXTRACTELEMENT = "  extractelement $1t $<v, $t $v\n",
-	INSERTELEMENT = "  insertelement $1t $<v, $t $v, $t $v\n",
-	GETELEMENTPTR = "  getelementptr $1e, $<.$($t $<v$)\n",
-	BITCAST = "  bitcast $1t $<v to $0t\n",
-	ALLOCA = "  alloca $e\n",
-	CALL = "  call $1r $<v($($t $<v$))\n",
-	BR = "  br $1.$($t $<v$)\n",
-	PHI = "  phi $t [$v, $v], [$v, $v]\n",
-	LOAD = "  load $1e, $<t $<v\n",
-	STORE = "  store $1t $<v, $t $<v\n";
+	EXTRACTVALUE = " extractvalue $1t $<v, $($v$)\n",
+	INSERTVALUE = " insertvalue $1t $<v, $t $<v, $($v$)\n",
+	EXTRACTELEMENT = " extractelement $1t $<v, $t $v\n",
+	INSERTELEMENT = " insertelement $1t $<v, $t $v, $t $v\n",
+	GETELEMENTPTR = " getelementptr $1e, $<.$($t $<v$)\n",
+	BITCAST = " bitcast $1t $<v to $0t\n",
+	ALLOCA = " alloca $e\n",
+	CALL = " call $1r $<v($($t $<v$))\n",
+	BR = " br $1.$($t $<v$)\n",
+	PHI = " phi $t [$v, $v], [$v, $v]\n",
+	LOAD = " load $1e, $<t $<v\n",
+	STORE = " store $1t $<v, $t $<v\n";
 
-	static Instruction _X(Node node, Instruction ins) {
+	static Instruction _x(Node node, Instruction ins) {
 		Signal s = node.out;
 		return ins.add(s.type instanceof Function ? DECLARE : EXTERNAL_GLOBAL, s);
 	}
@@ -182,7 +182,8 @@ public class IntrinsicCompilers {
 		for (Bundle b = par.asBundle(); b != null; b = b.parent)
 			arg[--l] = b.signal;
 		arg[0] = node.in(0);
-		return ins.add(CALL, node.out, par);
+		Signal out = node.out;
+		return ins.add(CALL, out.type == VOID ? null : out, arg);
 	}
 
 	private static Instruction def(Instruction ins, Signal fun) {
@@ -266,7 +267,7 @@ public class IntrinsicCompilers {
 			if (p.fp) op = fop;
 			else if (p.signed) op = sop;
 		};
-		return ins.add("  " + op + " $1t $<v, $v\n", o, a, b);
+		return ins.add(" " + op + " $1t $<v, $v\n", o, a, b);
 	}
 
 	static Instruction add(Node node, Instruction ins) {

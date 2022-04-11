@@ -43,7 +43,7 @@ public class Vector implements Type {
 		if (!s.hasValue()) return img(element);
 		if (count > 0 || s.type == this)
 			Objects.checkIndex((int)i, count);
-		if (s.isVar()) return var(element);
+		if (s.isVar() || s.type != this) return var(element);
 		return new Signal(element, CONST, s.getIndex((int)i));
 	}
 
@@ -73,6 +73,13 @@ public class Vector implements Type {
 	@Override
 	public String toString() {
 		return (simd ? "<%d x %s>" : "[%d x %s]").formatted(count, element);
+	}
+
+	@Override
+	public StringBuilder displayString(StringBuilder sb, boolean nest) {
+		if (count > 0) sb.append(count).append(' ');
+		if (simd) return element.displayString(sb, nest);
+		return element.displayString(sb.append('['), nest).append(']');
 	}
 
 	@Override

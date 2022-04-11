@@ -185,8 +185,19 @@ public class Signal {
 		return constToString(new StringBuilder(), type, value).toString();
 	}
 
+	public StringBuilder displayString(StringBuilder sb, boolean nest) {
+		type.displayString(sb, nest);
+		if (state == IMAGE || state == VAR && type instanceof Bundle)
+			return sb;
+		sb.append(" = ");
+		if (state == VAR)
+			return sb.append('%').append(value);
+		return constToString(sb, type, value);
+	}
+
 	public static String name(Signal outType) {
 		if (outType == NULL) return "empty";
+		
 		return outType.type.toString() + " " + outType.toString();
 	}
 

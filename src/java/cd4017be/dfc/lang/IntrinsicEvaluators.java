@@ -1,7 +1,9 @@
 package cd4017be.dfc.lang;
 
 import static cd4017be.dfc.lang.GlobalVar.GLOBALS;
+import static cd4017be.dfc.lang.HeaderParser.externalSignal;
 import static cd4017be.dfc.lang.Signal.*;
+import static cd4017be.dfc.lang.type.Function.CUR_FUNCTION;
 import static cd4017be.dfc.lang.type.Primitive.*;
 import static cd4017be.dfc.lang.type.Types.*;
 import static java.lang.Double.*;
@@ -27,6 +29,10 @@ public class IntrinsicEvaluators {
 		INTRINSICS.put(name, def);
 	}
 
+	private static void alias(String alias, String def) {
+		INTRINSICS.put(alias, INTRINSICS.get(def));
+	}
+
 	static {
 		def("#uw", constant(UWORD));
 		def("#us", constant(USHORT));
@@ -40,11 +46,12 @@ public class IntrinsicEvaluators {
 		def("#d", constant(DOUBLE));
 		def("#b", constant(BOOL));
 		def("#t", IntrinsicEvaluators::constType);
-		def("#x", IntrinsicEvaluators::declare);
+		def("#x", IntrinsicEvaluators::include);
 		def("get", IntrinsicEvaluators::get);
 		def("set", IntrinsicEvaluators::set);
 		def("pack", IntrinsicEvaluators::pack);
-		def("void", IntrinsicEvaluators::_void);
+		def("pre", IntrinsicEvaluators::pre);
+		def("post", IntrinsicEvaluators::post);
 		def("struct", IntrinsicEvaluators::struct);
 		def("vector", IntrinsicEvaluators::vector);
 		def("array", IntrinsicEvaluators::array);
@@ -78,6 +85,9 @@ public class IntrinsicEvaluators {
 		def("ge", binaryOp(IntrinsicEvaluators::ge, BOOL, Type::canCompare));
 		
 		IntrinsicCompilers.define(INTRINSICS);
+		
+		//for backwards compatibility:
+		alias("void", "pre");
 	}
 
 	private static ITypeEvaluator constant(Primitive type) {
@@ -88,6 +98,12 @@ public class IntrinsicEvaluators {
 				return;
 			}
 			char c = arg.charAt(0);
+			if (Character.isJavaIdentifierStart(c)) {
+				arg = file.macros.get(arg);
+				if (arg == null)
+					throw new SignalError(out, -1, "macro undefined");
+				c = arg.charAt(0);
+			}
 			if (c == '"') {
 				if (type.fp || type.bits < 8)
 					throw new SignalError(out, -1, "string literal not allowed for float or bool");
@@ -96,10 +112,17 @@ public class IntrinsicEvaluators {
 				for (int i = 1; i < arg.length(); i++) {
 					c = arg.charAt(i);
 					long v = 0;
+					if (c == '"') {
+						if (++i < arg.length() && (c = arg.charAt(i)) == '0')
+							val[n++] = 0;
+						break;
+					}
 					if (c != '\\') v = c;
 					else if (++i < arg.length())
 						switch(c = arg.charAt(i)) {
-						case '\\': v = c; break;
+						case '\\', '"': v = c; break;
+						case 'b': v = '\b'; break;
+						case 'f': v = '\f'; break;
 						case 'n': v = '\n'; break;
 						case 't': v = '\t'; break;
 						case 'r': v = '\r'; break;
@@ -170,11 +193,15 @@ public class IntrinsicEvaluators {
 		}
 	}
 
-	private static void declare(CircuitFile file, int out, Node node) throws SignalError {
-		Type type = file.eval(out, 0).type;
-		if (!(type instanceof Pointer || type instanceof Function))
-			throw new SignalError(out, 0, "expected Function or Pointer");
-		node.ret(global(type, node, file.args[out]));
+	private static void include(CircuitFile file, int out, Node node) throws SignalError {
+		String name = file.args[out];
+		Signal s = externalSignal(file.include.get(name));
+		if (s == null) throw new SignalError(out, -1, "not defined");
+		if (s.isConst() && s.value <= 0) {
+			new GlobalVar(node, name);
+			s.value = GLOBALS.size();
+		}
+		node.ret(s);
 	}
 
 	private static Signal evalIdx(CircuitFile file, int out, int in) throws SignalError {
@@ -219,7 +246,7 @@ public class IntrinsicEvaluators {
 				str = type.getElement(str, p);
 			}
 			node.data = idxs;
-		} catch(IllegalArgumentException e) {
+		} catch(IllegalArgumentException | IndexOutOfBoundsException e) {
 			throw new SignalError(out, 0, e.getMessage());
 		}
 		return str;
@@ -259,11 +286,22 @@ public class IntrinsicEvaluators {
 		));
 	}
 
-	private static void _void(CircuitFile file, int out, Node node) throws SignalError {
+	private static void pre(CircuitFile file, int out, Node node) throws SignalError {
 		if (!file.eval(out, 0).hasValue())
 			throw new SignalError(out, 0, "can't evaluate imaginary");
 		Signal val = file.eval(out, 1);
-		if (!val.hasValue())
+		if (val == NULL) val = var(VOID);
+		else if (!val.hasValue())
+			throw new SignalError(out, 1, "can't evaluate imaginary");
+		node.retSideff(val);
+	}
+
+	private static void post(CircuitFile file, int out, Node node) throws SignalError {
+		Signal val = file.eval(out, 0);
+		if (val == NULL) val = var(VOID);
+		else if (!val.hasValue())
+			throw new SignalError(out, 0, "can't evaluate imaginary");
+		if (!file.eval(out, 1).hasValue())
 			throw new SignalError(out, 1, "can't evaluate imaginary");
 		node.retSideff(val);
 	}
@@ -449,8 +487,8 @@ public class IntrinsicEvaluators {
 			Signal s = b.signal;
 			if (!s.hasValue())
 				throw new SignalError(out, 1, "can't pass imaginary parameters");
-			if (s.type != type.parTypes[--l])
-				throw new SignalError(out, 1, "types don't match function");
+			if (!s.type.canAssignTo(type.parTypes[--l]))
+				throw new SignalError(out, 1, "wrong type for parameter " + (l + 1));
 		}
 		node.retSideff(var(type.retType));
 	}
@@ -459,7 +497,10 @@ public class IntrinsicEvaluators {
 		if (GLOBALS.size() != 0)
 			throw new SignalError(out, -1, "duplicate main");
 		node.direct = 0;
-		Function type = FUNCTION(INT, UINT, parseType("[[W]*]*"));
+		Function type = FUNCTION(INT,
+			new Type[] {UINT, ARRAYPTR(ARRAYPTR(UWORD))},
+			new String[] {"argc", "argv"}
+		);
 		node.ret(global(type, node, "main"));
 		Signal ret = file.eval(out, 0);
 		if (ret.type != type.retType)
@@ -480,8 +521,10 @@ public class IntrinsicEvaluators {
 		if (!(t.type instanceof Function))
 			throw new SignalError(out, 0, "expected function type");
 		Function f = (Function)t.type;
-		node.ret(global(f, node, name));
+		Signal outer = CUR_FUNCTION;
+		node.ret(CUR_FUNCTION = global(f, node, name));
 		Signal ret = file.eval(out, 1);
+		CUR_FUNCTION = outer;
 		if (!ret.hasValue())
 			throw new SignalError(out, 1, "can't return imaginary");
 		if (ret.type != f.retType)

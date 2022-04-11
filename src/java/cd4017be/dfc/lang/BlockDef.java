@@ -18,6 +18,7 @@ public class BlockDef {
 	public byte textL0, textX, textY;
 	/** relative I/O pin coordinates as (x, y) pairs. */
 	public byte[] ports = NO_PINS;
+	public int pins = 1;
 	/** performs compile time type evaluation */
 	public ITypeEvaluator eval;
 	/** compiles this block */
@@ -41,7 +42,7 @@ public class BlockDef {
 	public void readLayout(InputStream in) throws IOException {
 		int n = in.read();
 		if (n < 0) throw new EOFException();
-		n = (n + 1) * 2;
+		n = (pins = n + 1) * 2;
 		in.readNBytes(ports = new byte[n], 0, n);
 		n = in.read() | in.read() << 8;
 		if (n < 0) throw new EOFException();
@@ -70,6 +71,24 @@ public class BlockDef {
 		out.write(ports);
 		out.write(textX | textY << 4);
 		out.write(textL0 | (hasText ? 0x80 : 0));
+	}
+
+	public BlockDef withPins(int n) {
+		System.err.printf(
+			"warning: block %s loaded with %d inputs but defined with %d\n",
+			name, n, pins
+		);
+		BlockDef alt = new BlockDef(name);
+		alt.compiler = compiler;
+		alt.eval = eval;
+		alt.hasText = hasText;
+		alt.icon = icon;
+		alt.textL0 = textL0;
+		alt.textX = textX;
+		alt.textY = textY;
+		alt.ports = ports;
+		alt.pins = n;
+		return alt;
 	}
 
 	/**Name of the final program end block. */

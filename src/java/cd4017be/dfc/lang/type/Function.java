@@ -12,6 +12,8 @@ import cd4017be.dfc.lang.Signal;
  * @author CD4017BE */
 public class Function implements Type {
 
+	public static Signal CUR_FUNCTION;
+
 	public final Type retType;
 	public final Type[] parTypes;
 	private final String[] parNames;
@@ -28,7 +30,7 @@ public class Function implements Type {
 	public int getIndex(String name) {
 		if (parNames == null) return -2;
 		int i = Arrays.binarySearch(parNames, name);
-		return i < 0 ? -2 : nameIdx[i];
+		return i < 0 ? -2 : nameIdx[i] + 1;
 	}
 
 	@Override
@@ -38,7 +40,9 @@ public class Function implements Type {
 		if (s.type != this)
 			throw new IllegalArgumentException("can't sub address into function pointer");
 		if (i == 0) return img(retType);
-		return new Signal(parTypes[(int)i - 1], s.isConst() ? VAR : IMAGE, 0L);
+		Type t = parTypes[(int)i - 1];
+		if (s != CUR_FUNCTION) return img(t);
+		return new Signal(t, VAR, i - 1);
 	}
 
 	@Override
@@ -90,6 +94,17 @@ public class Function implements Type {
 	@Override
 	public boolean canCompare() {
 		return true;
+	}
+
+	@Override
+	public StringBuilder displayString(StringBuilder sb, boolean nest) {
+		retType.displayString(sb, false).append('(');
+		for (int i = 0, l = parTypes.length; i < l; i++) {
+			if (i > 0) sb.append(", ");
+			parTypes[i].displayString(sb, false)
+			.append(' ').append(parNames[nameIdx[i + l]]);
+		}
+		return sb.append(')');
 	}
 
 }

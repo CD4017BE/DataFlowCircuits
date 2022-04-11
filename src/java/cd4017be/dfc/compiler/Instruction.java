@@ -33,7 +33,7 @@ public class Instruction {
 	public Instruction next, start;
 	public final String format;
 	public final Signal set;
-	public final Signal[] args;
+	private final Signal[] args;
 
 	public Instruction(Instruction prev, String format, Signal set, Signal[] args) {
 		this.format = format;
@@ -94,7 +94,7 @@ public class Instruction {
 			Signal s = ins.set;
 			if (indices && s != null && !s.isConst())
 				if (s.type == LABEL) out.append(Long.toString(s.value)).append(":\n");
-				else out.append("  %").append(Long.toString(s.value)).append(" =");
+				else out.append(" %").append(Long.toString(s.value)).append(" =");
 			String fmt = ins.format;
 			if (fmt == null) continue;
 			int p = 0, i = 0, na = 0, pa = 0, nb = 0, pb = 0, l = ins.args.length + 1;

@@ -72,4 +72,10 @@ public class Bundle implements Type {
 		return new Signal(this, Signal.VAR, l);
 	}
 
+	@Override
+	public StringBuilder displayString(StringBuilder sb, boolean nest) {
+		if (parent != null) parent.displayString(sb, nest).append(", ");
+		return signal.displayString(sb, false);
+	}
+
 }

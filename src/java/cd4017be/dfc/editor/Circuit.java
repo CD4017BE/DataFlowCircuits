@@ -302,6 +302,9 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 			curFile = null;
 			setTitle(null);
 			break;
+		case GLFW_KEY_W:
+			if (ctrl) glfwSetWindowShouldClose(WINDOW, true);
+			break;
 		case GLFW_KEY_D:
 			if (ctrl) cleanUpTraces();
 			break;
@@ -324,7 +327,8 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		if (t == selTr) return false;
 		selTr = t;
 		while(t != null && t.pin > 0) t = t.from;
-		info = t == null || t.block == null ? "" : Signal.name(t.block.outType);
+		info = t == null || t.block == null ? ""
+			: t.block.outType.displayString(new StringBuilder(), true).toString();
 		refresh(0);
 		return true;
 	}
@@ -399,10 +403,27 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		refresh(0);
 	}
 
+	private boolean loadHeader(CircuitFile file) {
+		if (curFile == null) return false;
+		File h = withSuffix(curFile, ".c");
+		if (!h.exists()) return false;
+		try {
+			HeaderParser hp = new HeaderParser();
+			hp.processHeader(h);
+			file.setDefinitions(hp);
+			return true;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return false;
+		}
+	}
+
 	private void typeCheck() {
 		Profiler t = new Profiler(System.out);
 		CircuitFile file = new CircuitFile(blocks);
 		t.end("parsed");
+		if (loadHeader(file)) t.end("header included");
+		else t.end("no header included");
 		try {
 			file.typeCheck();
 			info = "Type checked!";

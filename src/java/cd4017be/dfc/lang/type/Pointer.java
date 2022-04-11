@@ -66,6 +66,11 @@ public class Pointer implements Type {
 	}
 
 	@Override
+	public StringBuilder displayString(StringBuilder sb, boolean nest) {
+		return type.displayString(sb, nest).append((flags & READ_ONLY) != 0 ? '^' : '*');
+	}
+
+	@Override
 	public boolean canSimd() {
 		return true;
 	}
@@ -73,6 +78,14 @@ public class Pointer implements Type {
 	@Override
 	public boolean canCompare() {
 		return true;
+	}
+
+	@Override
+	public boolean canAssignTo(Type t) {
+		if (t == this) return true;
+		if (!(t instanceof Pointer)) return false;
+		Pointer p = (Pointer)t;
+		return (p.type == type || p.type == VOID) && (flags & ~p.flags) == 0;
 	}
 
 }

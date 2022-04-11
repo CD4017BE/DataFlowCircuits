@@ -11,7 +11,7 @@ import cd4017be.dfc.lang.Signal;
 public class Struct implements Type {
 
 	public final Type[] elements;
-	private final String[] names;
+	protected final String[] names;
 	private final int[] nameIdx;
 	public final int id, size, align;
 
@@ -74,17 +74,31 @@ public class Struct implements Type {
 
 	@Override
 	public String toString() {
-		return id >= 0 ? "%" + id
-			: elements.length == 0 ? "{}"
-			: elements[0].toString();
+		return id >= 0 ? "%" + id : "void";
+	}
+
+	@Override
+	public StringBuilder displayString(StringBuilder sb, boolean nest) {
+		if (elements.length == 0)
+			return sb.append(names.length == 0 ? "{}" : names[0]);
+		if (!nest) return sb.append("T").append(id);
+		sb.append('{');
+		for (int i = 0, l = elements.length; i < l; i++) {
+			if (i > 0) sb.append(", ");
+			elements[i].displayString(sb, false)
+			.append(' ').append(names[nameIdx[i + l]]);
+		}
+		return sb.append('}');
 	}
 
 	void define(Writer w) throws IOException {
-		w.append('%').append(Integer.toString(id)).append(" = type {");
-		w.append(elements[0].toString());
-		for (int i = 1; i < elements.length; i++)
-			w.append(", ").append(elements[i].toString());
-		w.append("}\n");
+		w.append('%').append(Integer.toString(id));
+		if (elements.length > 0) {
+			w.append(" = type {").append(elements[0].toString());
+			for (int i = 1; i < elements.length; i++)
+				w.append(", ").append(elements[i].toString());
+			w.append("}\n");
+		} else w.append(" = type opaque\n");
 	}
 
 	public boolean isWrapper() {
@@ -98,11 +112,6 @@ public class Struct implements Type {
 	@Override
 	public boolean canSimd() {
 		return false;
-	}
-
-	@Override
-	public boolean canAssignTo(Type t) {
-		return this == t || isWrapper() && unwrap().canAssignTo(t);
 	}
 
 }

@@ -11,6 +11,7 @@ import java.util.function.Function;
 import java.util.zip.DataFormatException;
 
 import cd4017be.dfc.editor.*;
+import cd4017be.dfc.lang.HeaderParser.CDecl;
 import cd4017be.dfc.lang.type.Types;
 import cd4017be.util.*;
 import cd4017be.util.ExtOutputStream.IDTable;
@@ -29,6 +30,8 @@ public class CircuitFile {
 	public final int out;
 
 	public Node[] nodes;
+	public HashMap<String, CDecl> include = new HashMap<>();
+	public HashMap<String, String> macros = new HashMap<>();
 
 	/**Loads a program from source file.
 	 * @param dis source file
@@ -37,6 +40,8 @@ public class CircuitFile {
 	 * @throws DataFormatException */
 	public CircuitFile(ExtInputStream dis, Function<String, BlockDef> reg)
 	throws IOException, DataFormatException {
+		GlobalVar.clear();
+		Types.clear();
 		int pb = (dis.read() & 3) + 1;
 		BlockDef[] defIdx = loadDefs(dis, reg);
 		String[] argIdx = dis.readArray(String[]::new, ExtInputStream::readSmallUTF);
@@ -51,10 +56,11 @@ public class CircuitFile {
 			dis.skipNBytes(pb); //skip position
 			int ni = def.ios() - 1;
 			int[] block = blocks[i] = new int[ni];
-			for (int j = 0; j < ni; j++) {
-				block[j] = dis.readInt(nb) - 1;
+			for (int j = 0; j < def.pins; j++) {
+				if (j < ni) block[j] = dis.readInt(nb) - 1;
 				dis.skipNBytes(dis.readVarInt() * pb); //skip traces
 			}
+			for (int j = def.pins; j < ni; j++) block[j] = -1;
 		}
 		this.out = out;
 	}
@@ -62,6 +68,8 @@ public class CircuitFile {
 	/**Converts an editor's block graph into the node representation needed for compilation.
 	 * @param blocks block graph */
 	public CircuitFile(IndexedSet<Block> blocks) {
+		GlobalVar.clear();
+		Types.clear();
 		int nb = blocks.size(), out = -1;
 		this.blocks = new int[nb][];
 		this.defs = new BlockDef[nb];
@@ -82,6 +90,12 @@ public class CircuitFile {
 		this.out = out;
 	}
 
+	public CircuitFile setDefinitions(HeaderParser hp) throws IOException {
+		hp.getMacros(macros);
+		hp.getDeclarations(include);
+		return this;
+	}
+
 	public Signal eval(int from, int i) throws SignalError {
 		int j = blocks[from][i];
 		if (j < 0) return Signal.NULL;
@@ -96,8 +110,6 @@ public class CircuitFile {
 	}
 
 	public void typeCheck() throws SignalError {
-		GlobalVar.clear();
-		Types.clear();
 		if (out < 0) throw new SignalError(-1, -1, "missing root node");
 		nodes = new Node[blocks.length];
 		BlockDef def = defs[out];
@@ -112,8 +124,7 @@ public class CircuitFile {
 			BlockDef def = reg.apply(name);
 			if (def == null)
 				throw new DataFormatException("type '" + name + "' is undefined");
-			if (def.ios() != n)
-				throw new DataFormatException("pin count" + n + " doesn't match type " + def);
+			if (def.pins != n) def = def.withPins(n);
 			return def;
 		});
 	}
@@ -225,11 +236,12 @@ public class CircuitFile {
 			Block block = new Block(dis.readElement(ids), c);
 			block.data = dis.readElement(args);
 			int[] p = readPos(dis, shift, size);
-			for (int j = 1; j < block.io.length; j++) {
-				Trace t0 = block.io[j];
+			for (int j = 1; j < block.def.pins; j++) {
+				Trace t0 = j < block.io.length ? block.io[j] : null;
 				dis.readInt(n);
 				for (int l = dis.readVarInt(); l > 0; l--) {
 					int[] p1 = readPos(dis, shift, size);
+					if (t0 == null) continue;
 					Trace t = new Trace(c).pos(p1[0], p1[1]);
 					t0.connect(t);
 					t0 = t.place();

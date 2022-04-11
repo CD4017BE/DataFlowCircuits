@@ -39,4 +39,6 @@ public interface Type {
 		return false;
 	}
 
+	StringBuilder displayString(StringBuilder sb, boolean nest);
+
 }
