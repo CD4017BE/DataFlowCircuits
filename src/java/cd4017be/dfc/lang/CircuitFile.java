@@ -11,7 +11,6 @@ import java.util.function.Function;
 import java.util.zip.DataFormatException;
 
 import cd4017be.dfc.editor.*;
-import cd4017be.dfc.lang.HeaderParser.CDecl;
 import cd4017be.dfc.lang.type.Types;
 import cd4017be.util.*;
 import cd4017be.util.ExtOutputStream.IDTable;
@@ -30,16 +29,17 @@ public class CircuitFile {
 	public final int out;
 
 	public Node[] nodes;
-	public HashMap<String, CDecl> include = new HashMap<>();
-	public HashMap<String, String> macros = new HashMap<>();
+
+	public final ExternalDefinitions extDef;
 
 	/**Loads a program from source file.
 	 * @param dis source file
 	 * @param reg instruction registry
 	 * @throws IOException
 	 * @throws DataFormatException */
-	public CircuitFile(ExtInputStream dis, Function<String, BlockDef> reg)
+	public CircuitFile(ExtInputStream dis, Function<String, BlockDef> reg, ExternalDefinitions extDef)
 	throws IOException, DataFormatException {
+		this.extDef = extDef;
 		GlobalVar.clear();
 		Types.clear();
 		int pb = (dis.read() & 3) + 1;
@@ -67,7 +67,8 @@ public class CircuitFile {
 
 	/**Converts an editor's block graph into the node representation needed for compilation.
 	 * @param blocks block graph */
-	public CircuitFile(IndexedSet<Block> blocks) {
+	public CircuitFile(IndexedSet<Block> blocks, ExternalDefinitions extDef) {
+		this.extDef = extDef;
 		GlobalVar.clear();
 		Types.clear();
 		int nb = blocks.size(), out = -1;
@@ -88,12 +89,6 @@ public class CircuitFile {
 			}
 		}
 		this.out = out;
-	}
-
-	public CircuitFile setDefinitions(HeaderParser hp) throws IOException {
-		hp.getMacros(macros);
-		hp.getDeclarations(include);
-		return this;
 	}
 
 	public Signal eval(int from, int i) throws SignalError {

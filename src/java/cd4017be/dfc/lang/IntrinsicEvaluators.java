@@ -1,7 +1,6 @@
 package cd4017be.dfc.lang;
 
 import static cd4017be.dfc.lang.GlobalVar.GLOBALS;
-import static cd4017be.dfc.lang.HeaderParser.externalSignal;
 import static cd4017be.dfc.lang.Signal.*;
 import static cd4017be.dfc.lang.type.Function.CUR_FUNCTION;
 import static cd4017be.dfc.lang.type.Primitive.*;
@@ -99,7 +98,7 @@ public class IntrinsicEvaluators {
 			}
 			char c = arg.charAt(0);
 			if (Character.isJavaIdentifierStart(c)) {
-				arg = file.macros.get(arg);
+				arg = file.extDef.macro(arg);
 				if (arg == null)
 					throw new SignalError(out, -1, "macro undefined");
 				c = arg.charAt(0);
@@ -195,7 +194,7 @@ public class IntrinsicEvaluators {
 
 	private static void include(CircuitFile file, int out, Node node) throws SignalError {
 		String name = file.args[out];
-		Signal s = externalSignal(file.include.get(name));
+		Signal s = file.extDef.signal(name);
 		if (s == null) throw new SignalError(out, -1, "not defined");
 		if (s.isConst() && s.value <= 0) {
 			new GlobalVar(node, name);

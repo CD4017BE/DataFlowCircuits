@@ -32,23 +32,29 @@ public class HeaderParser {
 //	};
 
 	/**Run the given C-header file through cpp and parse its output.
-	 * The results can be obtained afterwards with
-	 * {@link #getMacros(HashMap)} and {@link #getDeclarations(HashMap)}.
+	 * The results can be obtained afterwards with {@link #getDeclarations(HashMap)}.
 	 * @param file C-header to process
+	 * @param cpp whether to feed the file through cpp first.
 	 * @throws IOException */
-	public void processHeader(File file) throws IOException {
+	public void processHeader(File file, boolean cpp) throws IOException {
 		macros.clear();
-		//types.clear();
+		types.clear();
 		map.clear();
 		names.clear();
 		tokens.clear();
-		Process p = new ProcessBuilder("cpp", "-P", "-dD", file.getName())
+		Reader r;
+		Process p;
+		if (cpp) {
+			p = new ProcessBuilder("cpp", "-P", "-dD", file.getName())
 			.redirectError(Redirect.INHERIT)
 			.directory(file.getParentFile())
 			.start();
-		try (BufferedReader in = new BufferedReader(
-			new InputStreamReader(p.getInputStream(), UTF_8)
-		)) {
+			r = new InputStreamReader(p.getInputStream(), UTF_8);
+		} else {
+			p = null;
+			r = new FileReader(file);
+		}
+		try (BufferedReader in = new BufferedReader(r)) {
 			for (int i = 0; i < HARD_CODED_IDS.length; i++) {
 				String s = HARD_CODED_IDS[i];
 				names.add(s);
@@ -57,13 +63,12 @@ public class HeaderParser {
 			for (String s; (s = in.readLine()) != null;)
 				processLine(s);
 			map.clear();
-			if (p.waitFor() != 0)
+			if (p != null && p.waitFor() != 0)
 				throw new IOException("cpp didn't complete normally");
 		} catch(InterruptedException e) {
 		} finally {
-			p.destroy();
+			if (p != null) p.destroy();
 		}
-		//TODO assign primitives from macro
 	}
 
 	private void processLine(String s) {
@@ -338,9 +343,11 @@ public class HeaderParser {
 		"inline", "_Noreturn", "sizeof",
 	};
 
-	/**Obtains all simple macros that expand to numeric expressions.
-	 * @param macr map of macros to fill */
-	public void getMacros(HashMap<String, String> macr) {
+	/**Obtains simple macros that expand to numeric expressions
+	 * and all global variable, function and type declarations.
+	 * @param extDef set of external definitions to fill
+	 * @throws IOException if the cpp output could not be parsed */
+	public void getDeclarations(ExternalDefinitions extDef) throws IOException {
 		for (Entry<Integer, int[]> e : macros.entrySet()) {
 			int[] val = e.getValue();
 			if (val[0] >= 0 || val.length != 2) continue;
@@ -350,93 +357,19 @@ public class HeaderParser {
 			String name = names.get(e.getKey() & IDX_MASK);
 			if (name.startsWith("_")) continue;
 			String text = names.get(i & IDX_MASK);
-			macr.put(name, text);
+			extDef.macros.put(name, text);
 		}
 		macros.clear();
-	}
-
-	/**Obtains all global variable, function and type declarations.
-	 * @param decl map of declarations to fill
-	 * @throws IOException if the cpp output could not be parsed */
-	public void getDeclarations(HashMap<String, CDecl> decl) throws IOException {
 		IntBuffer buf = tokens.put(EOF).flip();
 		while (buf.get(buf.position()) != EOF) {
 			buf.mark();
-			declaration(decl);
+			declaration(extDef.include);
 		}
 		tokens.clear();
 		types.clear();
 	}
 
-	private static final Primitive[] intTypes = {
-		Primitive.INT, Primitive.LONG, Primitive.LONG, Primitive.SHORT,
-		Primitive.INT, Primitive.LONG, Primitive.LONG, Primitive.SHORT,
-		Primitive.UINT, Primitive.ULONG, Primitive.ULONG, Primitive.USHORT
-	};
-
-	public static Signal externalSignal(CDecl decl) {
-		if (decl.dfcSignal != null) return decl.dfcSignal;
-		int mode = (decl.type.mods & T_STORAGE) == T_TYPEDEF
-			? Signal.IMAGE : Signal.CONST;
-		return decl.dfcSignal = new Signal(convertType(decl.type), mode, 0L);
-	}
-
-	public static Type convertType(CType type) {
-		if (type.dfcType != null) return type.dfcType;
-		int m = type.mods;
-		return type.dfcType = switch(m & T_TYPE) {
-		case T_FLOAT -> Primitive.FLOAT;
-		case T_DOUBLE -> Primitive.DOUBLE;
-		case T_CHAR -> (m & T_SIGNED) != 0 ? Primitive.WORD : Primitive.UWORD;
-		default -> intTypes[m >> 4 & 15];
-		case T_VOID -> Types.VOID;
-		case T_BOOL -> Primitive.BOOL;
-		case T_STRUCT -> {
-			CDecl elem = (CDecl)type.content;
-			int n = 0;
-			for (CDecl d = elem.next; d != null; d = d.next) n++;
-			if (n == 0 && elem.name != null)
-				yield Types.OPAQUE(elem.name);
-			String[] names = new String[n];
-			Type[] types = new Type[n];
-			n = 0;
-			for (CDecl d = elem.next; d != null; d = d.next, n++) {
-				names[n] = d.name == null ? "" : d.name;
-				types[n] = convertType(d.type);
-			}
-			yield Types.STRUCT(types, names);
-		}
-		case T_UNION -> Types.OPAQUE("union");//TODO union
-		case T_ENUM -> null;//TODO enum
-		case T_POINTER -> {
-			CType elem = (CType)type.content;
-			if (((m = elem.mods) & T_TYPE) == T_FUNCTION)
-				yield convertType(elem);
-			Pointer p = new Pointer((m & T_CONST) != 0 ? Pointer.READ_ONLY : 0);
-			type.dfcType = p;
-			yield p.to(convertType(elem));
-		}
-		case T_ARRAY -> {
-			CArray elem = (CArray)type.content;
-			yield Types.VECTOR(convertType(elem), elem.size, false);
-		}
-		case T_FUNCTION -> {
-			CFunction elem = (CFunction)type.content;
-			int n = 0;
-			for (CDecl d = elem.par; d != null; d = d.next) n++;
-			String[] names = new String[n];
-			Type[] types = new Type[n];
-			n = 0;
-			for (CDecl d = elem.par; d != null; d = d.next, n++) {
-				names[n] = d.name == null ? "" : d.name;
-				types[n] = convertType(d.type);
-			}
-			yield Types.FUNCTION(convertType(elem), types, names);
-		}
-		};
-	}
-
-	private static final int
+	static final int
 	T_CHAR = 0x0001, T_INT = 0x0002, T_FLOAT = 0x0003, T_DOUBLE = 0x0004,
 	T_VOID = 0x0005, T_BOOL = 0x0006, T_STRUCT = 0x0007, T_UNION = 0x0008,
 	T_ENUM = 0x0009, T_POINTER = 0x000A, T_ARRAY = 0x000B, T_FUNCTION = 0x000C,

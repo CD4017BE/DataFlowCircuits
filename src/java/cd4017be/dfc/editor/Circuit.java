@@ -49,6 +49,7 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 	TextField text;
 	String info = "";
 	File curFile;
+	final ExternalDefinitions extDef;
 
 	public Circuit(Palette pal) {
 		this.blockVAO = genBlockVAO(blockBuf = glGenBuffers());
@@ -57,6 +58,7 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		allocSelBuf(2);
 		this.blocks = new IndexedSet<>(new Block[16]);
 		this.traces = new HashMap<>();
+		this.extDef = new ExternalDefinitions();
 		this.icons = pal.icons;
 		pal.circuit = this;
 		
@@ -302,6 +304,18 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 			curFile = null;
 			setTitle(null);
 			break;
+		case GLFW_KEY_H:
+			if (!ctrl || curFile == null) break;
+			extDef.clear();
+			try {
+				info = loadHeader(curFile)
+					? "refreshed external declarations!"
+					: "current circuit has no .c file!";
+			} catch(IOException e) {
+				e.printStackTrace();
+				info = e.getMessage();
+			}
+			break;
 		case GLFW_KEY_W:
 			if (ctrl) glfwSetWindowShouldClose(WINDOW, true);
 			break;
@@ -383,6 +397,7 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 	private void clear() {
 		blocks.clear();
 		traces.clear();
+		extDef.clear();
 	}
 
 	private void cleanUpTraces() {
@@ -403,27 +418,22 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		refresh(0);
 	}
 
-	private boolean loadHeader(CircuitFile file) {
-		if (curFile == null) return false;
-		File h = withSuffix(curFile, ".c");
+	private boolean loadHeader(File file) throws IOException {
+		File h = withSuffix(file, ".c");
 		if (!h.exists()) return false;
-		try {
-			HeaderParser hp = new HeaderParser();
-			hp.processHeader(h);
-			file.setDefinitions(hp);
-			return true;
-		} catch (IOException e) {
-			e.printStackTrace();
-			return false;
-		}
+		Profiler t = new Profiler(System.out);
+		HeaderParser hp = new HeaderParser();
+		hp.processHeader(h, true);
+		t.end("header preprocessed");
+		hp.getDeclarations(extDef);
+		t.end("header parsed");
+		return true;
 	}
 
 	private void typeCheck() {
 		Profiler t = new Profiler(System.out);
-		CircuitFile file = new CircuitFile(blocks);
+		CircuitFile file = new CircuitFile(blocks, extDef);
 		t.end("parsed");
-		if (loadHeader(file)) t.end("header included");
-		else t.end("no header included");
 		try {
 			file.typeCheck();
 			info = "Type checked!";
@@ -483,6 +493,8 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		try(ExtInputStream in = new ExtInputStream(new FileInputStream(file))) {
 			clear();
 			CircuitFile.load(this, in);
+			in.close();
+			loadHeader(file);
 			info = "loaded!";
 		} catch(IOException | DataFormatException e) {
 			e.printStackTrace();
