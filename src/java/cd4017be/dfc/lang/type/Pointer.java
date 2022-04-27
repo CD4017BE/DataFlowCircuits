@@ -9,7 +9,11 @@ import cd4017be.dfc.lang.Signal;
  * @author CD4017BE */
 public class Pointer implements Type {
 
-	public static final int NO_CAPTURE = 1, READ_ONLY = 2;
+	/** 0: no_capture, 1: private, 2: shared,
+	 *  4: no_capture write_only, 5: write_only, 7: shared write_only,
+	 *  8: no_capture read_only, 10: read_only, 11: private read_only,
+	 * 12:  */
+	public static final int PRIVATE = 1, SHARED = 2, NO_READ = 4, NO_WRITE = 8, NO_CAPTURE = 16;
 
 	public Type type;
 	public final int flags;
@@ -67,7 +71,7 @@ public class Pointer implements Type {
 
 	@Override
 	public StringBuilder displayString(StringBuilder sb, boolean nest) {
-		return type.displayString(sb, nest).append((flags & READ_ONLY) != 0 ? '^' : '*');
+		return type.displayString(sb, nest).append((flags & NO_WRITE) != 0 ? '^' : '*');
 	}
 
 	@Override
@@ -85,7 +89,25 @@ public class Pointer implements Type {
 		if (t == this) return true;
 		if (!(t instanceof Pointer)) return false;
 		Pointer p = (Pointer)t;
-		return (p.type == type || p.type == VOID) && (flags & ~p.flags) == 0;
+		return (flags & ~p.flags) == 0
+		&& (p.flags & NO_WRITE | (flags | ~p.flags) & SHARED) != 0
+		&& (type == p.type || (~p.flags & (NO_WRITE | NO_READ)) == 0);
+	}
+
+	public enum Access {
+		SRWC(0b1111), PRWC(0b1110), SRW(0b1101), PRW(0b1100),
+		SRC(0b1011), PRC(0b1010), SR(0b1001), PR(0b1000),
+		SWC(0b0111), PWC(0b0110), SW(0b0101), PW(0b0100),
+		SC(0b0011), STACK(0b1100);
+		
+		public final boolean read, write, capture, share;
+		
+		private Access(int rwcs) {
+			this.read = (rwcs & 0b1000) != 0;
+			this.write = (rwcs & 0b0100) != 0;
+			this.capture = (rwcs & 0b0010) != 0;
+			this.share = (rwcs & 0b0001) != 0;
+		}
 	}
 
 }

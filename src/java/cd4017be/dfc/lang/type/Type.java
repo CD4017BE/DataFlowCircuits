@@ -39,6 +39,10 @@ public interface Type {
 		return false;
 	}
 
+	default boolean dynamic() {
+		return false;
+	}
+
 	StringBuilder displayString(StringBuilder sb, boolean nest);
 
 }

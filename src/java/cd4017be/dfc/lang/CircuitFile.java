@@ -40,6 +40,7 @@ public class CircuitFile {
 	public CircuitFile(ExtInputStream dis, Function<String, BlockDef> reg, ExternalDefinitions extDef)
 	throws IOException, DataFormatException {
 		this.extDef = extDef;
+		extDef.reset();
 		GlobalVar.clear();
 		Types.clear();
 		int pb = (dis.read() & 3) + 1;
@@ -69,6 +70,7 @@ public class CircuitFile {
 	 * @param blocks block graph */
 	public CircuitFile(IndexedSet<Block> blocks, ExternalDefinitions extDef) {
 		this.extDef = extDef;
+		extDef.reset();
 		GlobalVar.clear();
 		Types.clear();
 		int nb = blocks.size(), out = -1;

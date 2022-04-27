@@ -194,10 +194,15 @@ public class IntrinsicEvaluators {
 
 	private static void include(CircuitFile file, int out, Node node) throws SignalError {
 		String name = file.args[out];
-		Signal s = file.extDef.signal(name);
-		if (s == null) throw new SignalError(out, -1, "not defined");
+		Signal t = file.eval(out, 0), s = file.extDef.signal(name);
+		if (s == null) {
+			if (t == NULL) throw new SignalError(out, -1, "not defined");
+			if (!(t.type instanceof Pointer || t.type instanceof Function))
+				throw new SignalError(out, 0, "function or pointer type expected");
+			file.extDef.define(name, s = new Signal(t.type, CONST, 0));
+		}
 		if (s.isConst() && s.value <= 0) {
-			new GlobalVar(node, name);
+			GLOBALS.add(new GlobalVar(node, name));
 			s.value = GLOBALS.size();
 		}
 		node.ret(s);
@@ -332,7 +337,10 @@ public class IntrinsicEvaluators {
 		String[] names = new String[l];
 		int i = l;
 		for(Bundle b = elem; b != null; b = b.parent) {
-			types[--i] = b.signal.type;
+			Type type = b.signal.type;
+			if (i != l && type.dynamic())
+				throw new SignalError(out, 0, "only the last element may be dynamically sized");
+			types[--i] = type;
 			names[i] = b.name;
 		}
 		buildStruct(node, STRUCT(types, names), elem);
@@ -340,7 +348,7 @@ public class IntrinsicEvaluators {
 
 	private static void array(CircuitFile file, int out, Node node) throws SignalError {
 		Signal count = evalIdx(file, out, 1), val = file.eval(out, 0);
-		if (count == null) {
+		if (count == null && val.type instanceof Bundle) {
 			int l = val.bundleSize();
 			if (l == 0) throw new SignalError(out, 0, "expected at least 1 element");
 			Bundle elem = val.asBundle();
@@ -351,9 +359,9 @@ public class IntrinsicEvaluators {
 			buildStruct(node, Types.VECTOR(t, l, false), elem);
 		} else if (val.type instanceof Bundle)
 			throw new SignalError(out, 0, "expected only single type");
-		else if (!count.isConst())
+		else if (count != null && !count.isConst())
 			throw new SignalError(out, 1, "expected constant");
-		else node.ret(img(Types.VECTOR(val.type, (int)count.value, false)));
+		else node.ret(img(Types.VECTOR(val.type, count == null ? 0 : (int)count.value, false)));
 	}
 
 	private static void vector(CircuitFile file, int out, Node node) throws SignalError {
@@ -392,9 +400,10 @@ public class IntrinsicEvaluators {
 		int n;
 		if (type instanceof Vector) n = ((Vector)type).count;
 		else if (type instanceof Struct) n = ((Struct)type).elements.length;
-		else if (type instanceof Function) n = ((Function)type).parTypes.length;
-		else if (type instanceof Bundle) n = (int)in.value;
-		else n = 1;
+		else if (type instanceof Function) n = ((Function)type).parTypes.length + 1;
+		else if (type instanceof Bundle) n = in.bundleSize();
+		else if (type instanceof Pointer) n = 1;
+		else n = 0;
 		node.ret(cst(UINT, n));
 	}
 
@@ -441,17 +450,27 @@ public class IntrinsicEvaluators {
 	}
 
 	private static void ref(CircuitFile file, int out, Node node) throws SignalError {
+		node.direct = 0;
+		Pointer type = new Pointer(0);
+		GLOBALS.add(null);
+		int i = GLOBALS.size();
+		node.ret(new Signal(type, CONST, i));
 		Signal val = file.eval(out, 0);
 		String name = null;
 		if (val.type instanceof Bundle) {
 			Bundle b = (Bundle)val.type;
-			name = b.name;
 			val = b.signal;
 			if (b.parent != null)
 				throw new SignalError(out, 0, "expected single element");
+			if (!b.name.isBlank()) name = b.name;
 		}
-		Pointer type = new Pointer(0).to(val.type);
-		node.ret(val.isConst() ? global(type, node, name) : val.hasValue() ? var(type) : img(type));
+		type = type.to(val.type);
+		if (val.isConst()) {
+			GLOBALS.set(i - 1, new GlobalVar(node, name));
+			return;
+		} else if (GLOBALS.size() == node.out.value)
+			GLOBALS.remove(i - 1);
+		node.ret(val.hasValue() ? var(type) : img(type));
 	}
 
 	private static void load(CircuitFile file, int out, Node node) throws SignalError {
@@ -479,29 +498,30 @@ public class IntrinsicEvaluators {
 			throw new SignalError(out, 0, "expected function value");
 		Function type = (Function)f.type;
 		Signal par = file.eval(out, 1);
-		int l = par.bundleSize();
-		if (l != type.parTypes.length)
+		int l = par.bundleSize(), pl = type.parTypes.length;
+		if (l < pl || l > pl && !type.varArg)
 			throw new SignalError(out, 1, "types don't match function");
 		for (Bundle b = par.asBundle(); b != null; b = b.parent) {
 			Signal s = b.signal;
 			if (!s.hasValue())
 				throw new SignalError(out, 1, "can't pass imaginary parameters");
-			if (!s.type.canAssignTo(type.parTypes[--l]))
+			if (--l < pl && !s.type.canAssignTo(type.parTypes[l]))
 				throw new SignalError(out, 1, "wrong type for parameter " + (l + 1));
 		}
 		node.retSideff(var(type.retType));
 	}
 
 	private static void main(CircuitFile file, int out, Node node) throws SignalError {
-		if (GLOBALS.size() != 0)
+		if (GLOBALS.size() != 0 || CUR_FUNCTION != null)
 			throw new SignalError(out, -1, "duplicate main");
 		node.direct = 0;
 		Function type = FUNCTION(INT,
 			new Type[] {UINT, ARRAYPTR(ARRAYPTR(UWORD))},
 			new String[] {"argc", "argv"}
 		);
-		node.ret(global(type, node, "main"));
+		node.ret(CUR_FUNCTION = global(type, node, "main"));
 		Signal ret = file.eval(out, 0);
+		CUR_FUNCTION = null;
 		if (ret.type != type.retType)
 			throw new SignalError(out, 0, "signed int expected");
 	}

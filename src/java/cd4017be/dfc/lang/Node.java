@@ -42,7 +42,7 @@ public class Node {
 
 	public Instruction compIn(Instruction ins, int i) throws Throwable {
 		Node n = in[i];
-		return n.sideff || n.out.isVar() ? n.compile(ins) : ins;
+		return n != null && (n.sideff || n.out.isVar()) ? n.compile(ins) : ins;
 	}
 
 	/**

@@ -18,12 +18,14 @@ public class Function implements Type {
 	public final Type[] parTypes;
 	private final String[] parNames;
 	private final int[] nameIdx;
+	public final boolean varArg;
 
-	Function(Type retType, Type[] parTypes, String[] parNames) {
+	Function(Type retType, Type[] parTypes, String[] parNames, boolean varArg) {
 		this.retType = retType;
 		this.parTypes = parTypes;
 		this.parNames = parNames;
 		this.nameIdx = Types.nameIndex(parNames);
+		this.varArg = varArg;
 	}
 
 	@Override
@@ -64,7 +66,7 @@ public class Function implements Type {
 	public int hashCode() {
 		return (Arrays.hashCode(parNames) * 31
 		+ contentIdentityHash(parTypes)) * 31
-		+ identityHashCode(retType);
+		+ identityHashCode(retType) + (varArg ? 1 : 0);
 	}
 
 	@Override
@@ -73,17 +75,19 @@ public class Function implements Type {
 		if(!(obj instanceof Function)) return false;
 		Function other = (Function)obj;
 		return retType == other.retType
+		&& varArg == other.varArg
 		&& contentIdentical(parTypes, other.parTypes)
 		&& Arrays.equals(parNames, other.parNames);
 	}
 
 	@Override
 	public String toString() {
-		String par = Arrays.toString(parTypes);
-		return "%s(%s)*".formatted(
-			retType == VOID ? "void" : retType,
-			par.subSequence(1, par.length() - 1)
-		);
+		StringBuilder sb = new StringBuilder();
+		sb.append(retType == VOID ? "void" : retType.toString()).append('(');
+		for (Type t : parTypes) sb.append(t).append(", ");
+		if (varArg) sb.append("...)*");
+		else sb.replace(sb.length() - 2, sb.length(), ")*");
+		return sb.toString();
 	}
 
 	@Override
@@ -104,6 +108,7 @@ public class Function implements Type {
 			parTypes[i].displayString(sb, false)
 			.append(' ').append(parNames[nameIdx[i + l]]);
 		}
+		if (varArg) sb.append(parTypes.length > 0 ? ", ..." : "...");
 		return sb.append(')');
 	}
 

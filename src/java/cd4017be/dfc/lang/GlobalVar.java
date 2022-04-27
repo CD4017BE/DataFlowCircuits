@@ -24,7 +24,6 @@ public class GlobalVar {
 	public GlobalVar(Node node, String name) {
 		this.node = node;
 		this.name = "@" + (name != null ? name : NEXT_IDX++);
-		GLOBALS.add(this);
 	}
 
 	@Override

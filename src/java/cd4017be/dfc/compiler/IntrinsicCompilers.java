@@ -24,7 +24,7 @@ public class IntrinsicCompilers {
 
 	/** LLVM op-codes */
 	private static final String
-	DEFINE = "define $r $<v($($t $<f$)) nounwind {\n",
+	DEFINE = "\ndefine $r $<v($($t $<f$)) nounwind {\n",
 	RET = " ret $1t $<v\n}\n",
 	RET_VOID = " ret void\n}\n",
 	DECLARE = "declare $r $<v($<p) nounwind\n",
@@ -37,7 +37,7 @@ public class IntrinsicCompilers {
 	GETELEMENTPTR = " getelementptr $1e, $<.$($t $<v$)\n",
 	BITCAST = " bitcast $1t $<v to $0t\n",
 	ALLOCA = " alloca $e\n",
-	CALL = " call $1r $<v($($t $<v$))\n",
+	CALL = " call $1e $<v($($t $<v$))\n",
 	BR = " br $1.$($t $<v$)\n",
 	PHI = " phi $t [$v, $v], [$v, $v]\n",
 	LOAD = " load $1e, $<t $<v\n",
@@ -53,12 +53,12 @@ public class IntrinsicCompilers {
 		Signal str = node.in(0), idx = node.in(1);
 		long[] idxs = (long[])node.data;
 		int j = 0, k = 0;
-		Type type = str.type;
-		if (type instanceof Function) {
+		while(str.type instanceof Bundle) str = str.getElement((int)idxs[j++]);
+		if (str.type instanceof Function) {
 			long i = idxs[j++] - 1;
-			str = new Signal(((Function)type).parTypes[(int)i], Signal.VAR, i);
-		} else if (str.type instanceof Bundle)
-			str = str.getElement((int)idxs[j++]);
+			str = new Signal(((Function)str.type).parTypes[(int)i], Signal.VAR, i);
+		}
+		Type type = str.type;
 		for(k = j; k < idxs.length; k++)
 			if (type instanceof Struct)
 				type = ((Struct)type).elements[(int)idxs[k]];
@@ -172,7 +172,7 @@ public class IntrinsicCompilers {
 	}
 
 	static Instruction store(Node node, Instruction ins) {
-		return ins.add(STORE, null, node.in(0), node.in(1));
+		return ins.add(STORE, null, node.in(1), node.in(0));
 	}
 
 	static Instruction call(Node node, Instruction ins) {

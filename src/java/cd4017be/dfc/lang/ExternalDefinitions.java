@@ -3,6 +3,11 @@ package cd4017be.dfc.lang;
 import java.util.HashMap;
 
 import static cd4017be.dfc.lang.HeaderParser.*;
+import static cd4017be.dfc.lang.Signal.CONST;
+import static cd4017be.dfc.lang.Signal.IMAGE;
+import static cd4017be.dfc.lang.type.Pointer.NO_WRITE;
+import static cd4017be.dfc.lang.type.Pointer.SHARED;
+
 import cd4017be.dfc.lang.type.*;
 
 /**
@@ -17,12 +22,45 @@ public class ExternalDefinitions {
 		if (decl == null) return null;
 		if (decl.dfcSignal != null) return decl.dfcSignal;
 		int mode = (decl.type.mods & T_STORAGE) == T_TYPEDEF
-			? Signal.IMAGE : Signal.CONST;
+			? IMAGE : CONST;
 		return decl.dfcSignal = new Signal(convertType(decl.type), mode, 0L);
+	}
+
+	public void define(String name, Signal val) {
+		CDecl decl = new CDecl();
+		decl.dfcSignal = val;
+		include.put(name, decl);
 	}
 
 	public String macro(String name) {
 		return macros.get(name);
+	}
+
+	public void reset() {
+		for (CDecl decl : include.values())
+			if (decl.dfcSignal != null)
+				resetDecl(decl);
+	}
+
+	private static void resetDecl(CDecl decl) {
+		while(decl != null) {
+			resetType(decl.type);
+			decl.dfcSignal = null;
+			decl = decl.next;
+		}
+	}
+
+	private static void resetType(CType type) {
+		if (type.dfcType == null) return;
+		type.dfcType = null;
+		Object cont = type.content;
+		if (cont instanceof CDecl decl)
+			resetDecl(decl.next);
+		else if (cont instanceof CFunction func) {
+			resetType(func);
+			resetDecl(func.par);
+		} else if (cont instanceof CType ctype)
+			resetType(ctype);
 	}
 
 	public void clear() { 
@@ -67,7 +105,7 @@ public class ExternalDefinitions {
 			CType elem = (CType)type.content;
 			if (((m = elem.mods) & T_TYPE) == T_FUNCTION)
 				yield convertType(elem);
-			Pointer p = new Pointer((m & T_CONST) != 0 ? Pointer.READ_ONLY : 0);
+			Pointer p = new Pointer((m & T_CONST) != 0 ? NO_WRITE : SHARED);
 			type.dfcType = p;
 			yield p.to(convertType(elem));
 		}
@@ -86,7 +124,7 @@ public class ExternalDefinitions {
 				names[n] = d.name == null ? "" : d.name;
 				types[n] = convertType(d.type);
 			}
-			yield Types.FUNCTION(convertType(elem), types, names);
+			yield Types.FUNCTION(convertType(elem), types, names, elem.va_arg);
 		}
 		};
 	}

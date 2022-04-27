@@ -24,7 +24,11 @@ public class Types {
 	}
 
 	public static Function FUNCTION(Type ret, Type[] par, String[] names) {
-		return unique(new Function(ret, par, names));
+		return FUNCTION(ret, par, names, false);
+	}
+
+	public static Function FUNCTION(Type ret, Type[] par, String[] names, boolean varArg) {
+		return unique(new Function(ret, par, names, varArg));
 	}
 
 	public static Vector VECTOR(Type elem, int count, boolean simd) {

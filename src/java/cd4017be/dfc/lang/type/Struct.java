@@ -14,6 +14,7 @@ public class Struct implements Type {
 	protected final String[] names;
 	private final int[] nameIdx;
 	public final int id, size, align;
+	public final boolean dyn;
 
 	Struct(Type[] elements, String[] names, int id) {
 		this.elements = elements;
@@ -21,12 +22,15 @@ public class Struct implements Type {
 		this.nameIdx = Types.nameIndex(names);
 		this.id = id;
 		int size = 0, align = 0;
+		boolean dyn = false;
 		for (Type t : elements) {
 			align = Math.max(align, t.align());
 			size = (size + align - 1 & -align) + t.sizeOf();
+			dyn |= t.dynamic();
 		}
 		this.size = size;
 		this.align = align;
+		this.dyn = dyn;
 	}
 
 	@Override
@@ -112,6 +116,11 @@ public class Struct implements Type {
 	@Override
 	public boolean canSimd() {
 		return false;
+	}
+
+	@Override
+	public boolean dynamic() {
+		return dyn;
 	}
 
 }

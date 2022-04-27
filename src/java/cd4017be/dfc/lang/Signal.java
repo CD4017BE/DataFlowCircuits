@@ -26,7 +26,7 @@ public class Signal {
 	public long value;
 
 	public static Signal global(Type type, Node node, String name) {
-		new GlobalVar(node, name);
+		GLOBALS.add(new GlobalVar(node, name));
 		return new Signal(type, CONST, GLOBALS.size());
 	}
 

@@ -20,7 +20,7 @@ public class Palette implements IGuiSection {
 	private static final String[] DEF_LIST = {
 		"main", "def", "#x", "call", "swt", "loop",
 		"get", "set", "pack", "pre", "post", "struct", "vector", "array",
-		"count", "zero", "type", "funt", "#t",
+		"count", "zero", "type", "funt",
 		"ref", "load", "store",
 		"#uw", "#us", "#ui", "#ul", "#w", "#s", "#i", "#l",
 		"#f", "#d", "add", "sub", "mul", "div", "mod", "neg",

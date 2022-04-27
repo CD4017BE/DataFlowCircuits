@@ -1,54 +1,38 @@
 # Signals:
 Signals transfer data between operation blocks. Every signal represents the output of one operation block and may be used by one or more inputs of other operation blocks.
 
-The data carried by a signal may consist of multiple elements with different data types being bundled together similar to a C-struct that is passed by value. It is possible for a signal to have zero elements, meaning it carries no data and only declares execution order dependencies between operation blocks. This so called empty signal is often used by blocks that operate through side effects.
+Signals have a data type, a value and one of the following behaviors:
+- **Constant**: The signal value is evaluated at compile time during type checking and it will be a constant at runtime.
+- **Dynamic**: The signal value is only evaluated at runtime and unknown at compile time.
+- **Imaginary**: The signal value is never defined and only serves as a placeholder to specify data types.
 
-## Working with bundled signals:
-The individual elements of a bundled signal are addressed with a zero based index.
+Data type and behavior are always defined at compile time during type checking, which makes this language statically typed.
 
-When two signals with `N` and `M` elements are packed together by the ![pack][pack] operator, the output signal will have `N+M` elements and contain the top input at indices `0 ... N-1` and the bottom input at indices `N ... N+M-1`.
+## Data Types:
+The data types in this language can be categorized into primitive types, aggregate types and reference types.
 
-The ![pick][pick] operator isolates one or more elements of its input based the indices specified in its text argument:
-- `a` specifies the single index `a` that must be given as positive decimal number (including 0).
-- `a-b` specifies a range of indices from `a` to `b` inclusive.
-- `-b` specifies a range from 0 to `b` inclusive.
-- `a-` specifies a range from `a` up to the last element of the input.
-- `-` specifies the full range containing all input elements.
-- An index or range may be followed by `[x]` to perform pointer indexing on each element. Here `x` stands for another index or range that addresses elements in the pointer's data structure. The result is a pointer to the specified data sub-region.
-- Multiple indices or ranges may be separated by `,` (not allowed inside `[ ]`) to be concatenated as if by ![pack][pack].
+**Primitive Types**:
+- ![b](../src/resources/textures/blocks/#b.png) 1-bit boolean: `false = 0, true = 1`
+- ![w](../src/resources/textures/blocks/#w.png) 8-bit signed: `-128 ... +127`
+- ![s](../src/resources/textures/blocks/#s.png) 16-bit signed: `-32 768 ... +32 767`
+- ![i](../src/resources/textures/blocks/#i.png) 32-bit signed: `-2 147 483 648 ... +2 147 483 647`
+- ![l](../src/resources/textures/blocks/#l.png) 64-bit signed: `±9.22 x10^18`
+- ![W](../src/resources/textures/blocks/#uw.png) 8-bit unsigned: `0 ... 255`
+- ![S](../src/resources/textures/blocks/#us.png) 16-bit unsigned: `0 ... 65 535`
+- ![I](../src/resources/textures/blocks/#ui.png) 32-bit unsigned: `0 ... 4 294 967 295`
+- ![L](../src/resources/textures/blocks/#ul.png) 64-bit unsigned: `0 ... 1.845 x10^19`
+- ![f](../src/resources/textures/blocks/#f.png) 32-bit floating point: range `±1.18 x10^-38 ... ±3.4 x10^38`, relative precision `1.19 x10^-7`
+- ![d](../src/resources/textures/blocks/#d.png) 64-bit floating point: range `±2.23 x10^-308 ... ±1.80 x10^308`, relative precision `2.22 x10^-16`
 
-# The type system:
-The following lists all signal element types that are currently supported in this language:
+**Aggregate Types**:
+- ![size[element] | [element]](../src/resources/textures/blocks/array.png) array: Holds a sequence of same typed values. The size can be statically or dynamically defined, but dynamically sized arrays can only exist in memory (pointers).
+- ![size element | ptr_element size*](../src/resources/textures/blocks/vector.png) vector: Holds a sequence of same typed values. Can be supplied to all kinds of arithmetic, logic or comparison operators to perform element-wise SIMD operations. It only allows primitive or pointer types as element and the size must be statically defined. 
+- ![{elements...}](../src/resources/textures/blocks/struct.png) structure: Holds multiple values that can have different types. The content types must be statically defined. Elements can be given names to use instead of numbers for indexing.
+- ![elements...][pack] bundle: This is not technically a data type, since it is not allowed as element of any other type, can't be stored in memory and signals of this type have no behavior or value by themselves. It just packages multiple signals of possibly different data types and even different behaviors together. Just like in structures, elements can be named. Bundles allow blocks to receive a variable number of input signals (structure initializers or function parameters for example) though a fixed number of input pins. They are also useful to feed multiple signals through a switch or loop or to simply tidy up wiring in large circuits.
 
-- `?` (unknown): represents unknown data layout in pointers or an incomplete type checking result.
-- `T` (type): always constant, represents a type.
-- `V` (void): 0-bit no data, currently unused.
-- `Z` (boolean): 1-bit integer, unsigned (false = 0) < (true = 1), signed (true = -1) < (false = 0)
-- `B` (byte): 8-bit integer, unsigned 0 ... 255, signed -128 ... +127
-- `S` (short): 16-bit integer, unsigned 0 ... 65 535, signed -32 768 ... +32 767
-- `I` (int): 32-bit integer, unsigned 0 ... 4 294 967 296, signed -2 147 483 648 ... +2 147 483 648
-- `L` (long): 64-bit integer, unsigned 0 ... 1.84 x10^19, signed ±9.22 x10^18
-- `F` (float): 32-bit floating point, range ±1.18 x10^-38 ... ±3.4 x10^38, relative precision 1.19 x10^-7
-- `D` (double): 64-bit floating point, range ±2.23 x10^-308 ... ±1.80 x10^308, relative precision 2.22 x10^-16
-- `[s:a]` (heap pointer): target dependent size. Points to a fixed structure of types `s` followed by an array of types `a` allocated in heap memory and must be manually freed.
-- `[!s:a]` (stack pointer): target dependent size. Allocated on the call stack and automatically freed on return.
-- `[#s:a]`/`[!#s:a]` (read only pointers)
-- `(p:r)` (function pointer): target dependent size. Points to a function that takes parameters `p` and returns `r` (multiple return values possible).
-
-In addition to having a type, each signal element can be either constant or dynamic. Constant signal elements carry data whose state is already known at compile time. Whereas the state of dynamic signal elements is only defined at runtime.
-
-## Types as signals:
-Since everything in this language is represented by a flow graph, this also applies to its type system.
-This handled via type signals that don't carry any data but instead represent the types of other signals or the memory layout of data structures. These are always constant and only exist at compile time. This means you can not use "type" as element of a pointer's data structure or in parameters and return values of functions.
-
-The ![type constant](../src/resources/textures/blocks/#T.png) block creates a type signal bundle from its string argument (multiple types are simply concatenated without any separation characters):  
-- Primitive types are represented by the characters `VZBSILFD` according to the [list above](#the-type-system).
-- Data pointer types start with `[`, followed by an optional `!` to mark it as stack pointer and an optional `#` to mark it as read only. After that comes a (possibly empty) sequence of types describing the fixed data structure layout, followed by `:`, an optional number and another (possibly empty) sequence of types describing the array length (if known) and array element layout. Finally the pointer type ends with `]`. The `:` can be omitted if the array section of the pointer type is empty.
-- Function pointer types start with `(`, followed by a (possibly empty) sequence of parameter types, a `:` and a (possibly empty) sequence of return types. Finally it ends with `)`. The `:` can be omitted if the return types are empty.
-- `T` represents the type of type signals but is generally not useful. It is also not valid inside function or data pointer types.
-- `?` is only allowed inside the array element layout of a pointer to declare the data layout as (partially) unknown. In this case it must be the only type element in the array layout and the array length must be zero or unspecified.
-
-Pointer types can also be programmatically defined using the ![pointer typedef][ptrt] and ![function typedef][funt] blocks that take the structure & array / parameter & return type sequences as type signal inputs. These blocks can depend on their own output which makes it possible to define recursive types.
+**Reference Types**:
+- ![element*][ref] (data) pointer: Represents a location in memory and specifies the data type stored there.
+- ![return(parameters...)][funt] function pointer: Represents a callable function and specifies its parameter types and return type. Parameters can be named for clarity.
 
 # Control Flow:
 When the program is executed the operation blocks and signals in it's data flow graph are evaluated based on the following rules:
@@ -57,23 +41,46 @@ When the program is executed the operation blocks and signals in it's data flow 
 - An operation block can not be evaluated before all of it's inputs have been evaluated first.
 - An operation block is only evaluated if its output is used by at least one operation block that will be evaluated later.
 - ~An operation block that has already been evaluated will not be evaluated again unless any of its inputs is also evaluated again.~ *(not properly implemented yet) [1]*
-- An operation block that only outputs constant signal elements may be evaluated at compile time. This will not cause runtime evaluation of its inputs according to the last two rules above, even if some of these inputs are dynamic. Currently, only the signal bundling operators ![pack signals][pack], ![extract signals][pick] and ![signal dependency][dep] will runtime evaluate inputs despite the output being constant (this is so that the empty output signal from blocks that operate through side effects can be bundled together with other signals to declare a runtime dependency on that side effect).
-- A ![conditional switch][swt] block evaluates its `switch condition input` first and then only evaluates the `branch input` that is chosen by the condition.*[1]*
-- A ![loop][loop] block first evaluates its `initial state input` and provides it as output. Then it evaluates the `loop condition input` which generally should depend on the loop's output. If the condition evaluates to true then the loop's `next state input` is evaluated and used as new output for evaluating the loop block again.*[1]*
-- A ![function definition][def] block evaluates its `type input` at compile time to produce a function pointer while the remaining entries of its output (`function parameters`) are undefined. At runtime, whenever a ![call][call] block that uses this function pointer is evaluated, it will evaluate the `return input` of the corresponding ![function definition][def] block for its output. During this evaluation, the ![function definition][def] block will output the ![call][call] block's `parameters input` (functions are defined like a loop body).
-- The ![main][main] block works similar to a ![function definition][def] block but defines the program's main function with a fixed signature and doesn't output a function pointer (instead it's automatically called when the program starts).
-- The `return input` of a ![function definition][def] or ![main][main] block is not allowed to depend on the `function parameters` of a different ![function definition][def] block.
-- Except for ![loop][loop], ![function definition][def], ![main][main], ![pointer type definition][ptrt] and ![function type definition][funt], blocks are not allowed to depend on their own output.
+- An operation block that outputs a constant or imaginary signal will be evaluated at compile time. This will not cause runtime evaluation of its inputs according to the last two rules above, even if some of these inputs are dynamic. Except the operators ![pack bundle][pack], ![get element][get], ![pre-process][pre] and ![post-process][post] will always evaluate their inputs, even if the output is constant.
+- A ![pre-process][pre] block will evaluate its `side-effect` input first and its `value` input last.
+- A ![post-process][post] block will evaluate its `value` input first and its `side-effect` input last.
+- A ![conditional switch][swt] block evaluates its `switch condition` input first and then only evaluates the `branch` input that is chosen by the condition. If the condition is a constant then only the selected branch will be compiled, completely eliminating the unused branch. *[1]*
+- A ![loop][loop] block first evaluates its `loop initializer` input and provides it as output. Then it evaluates the `loop condition` input which generally should depend on the loop's output. If the condition evaluates to true then the loop's `next state` input is evaluated and used as new output for evaluating the loop block again.*[1]*
+- A ![function definition][def] block evaluates its `function signature` input at compile time to produce a function pointer of that signature. At runtime, whenever a ![call][call] block that uses this function pointer is evaluated, it will evaluate the `return` input of the corresponding ![function definition][def] block for its output. During this evaluation, the parameters passed to the ![call][call] block can be obtained by using a ![get element][get] operator on the function pointer output of ![][def] (functions are defined like a loop body).
+- The ![main][main] block works similar to a ![function definition][def] block but defines the program's main function with a fixed signature. It is automatically called when the program starts.
+- The `return` inputs of different ![function definition][def] or ![main][main] blocks are not allowed to depend on shared dynamic signals (shared constants are fine). *[2]*
+- Except for ![loop][loop], ![function definition][def], ![main][main] and ![reference][ref], blocks are not allowed to depend on their own output.
 
-*[1] : Commonly used nodes between switch branches or next loop state and loop result are not properly resolved yet. Make sure to force the switch or loop condition to depend on such common nodes via ![signal dependency][dep] to avoid generating invalid or wrong assembly code!*
+Even though block inputs may seem to be always evaluated in a particular order, programmers should not rely on that apparent behavior. Because the compiler is generally free to choose any block evaluation order (potentially even asynchronous) that complies with the above rules. If parts of a program require a specific evaluation order to function correctly you have to explicitly enforce it through signal dependencies and ![pre-process][pre] / ![post-process][post] blocks.
+
+*[1] : Commonly used nodes between switch branches or next loop state and loop result are not properly resolved yet. Make sure to force the switch or loop condition to depend on such common nodes via* ![pre-process][pre] *or* ![post-process][post] *to avoid generating invalid or wrong assembly code!*  
+*[2] : Enforcement of this rule is not implemented yet, but violating it will produce invalid assembly code!*
 
 [pack]: ../src/resources/textures/blocks/pack.png
-[pick]: ../src/resources/textures/blocks/pick.png
-[dep]: ../src/resources/textures/blocks/void.png
+[get]: ../src/resources/textures/blocks/get.png
+[pre]: ../src/resources/textures/blocks/pre.png
+[post]: ../src/resources/textures/blocks/post.png
 [swt]: ../src/resources/textures/blocks/swt.png
 [loop]: ../src/resources/textures/blocks/loop.png
 [def]: ../src/resources/textures/blocks/def.png
 [main]: ../src/resources/textures/blocks/main.png
 [call]: ../src/resources/textures/blocks/call.png
-[ptrt]: ../src/resources/textures/blocks/ptrt.png
+[ref]: ../src/resources/textures/blocks/ref.png
 [funt]: ../src/resources/textures/blocks/funt.png
+
+# External Definitions:
+A lot of advanced functionality such as file I/O or graphics rendering is only available through external libraries.
+
+You can access these in your code via the ![include][include] block that takes in an imaginary signal specifying the type of an external function or global variable pointer to declare and outputs a constant pointer for the declaration of a given name.
+
+However, manually declaring all function signatures like this for a large library is tedious and error prone. Instead you can also declare things through a C source code file that must to be located in the same folder as the `.dfc` file of your program and have the same name except for a `.c` suffix instead of `.dfc`.
+This file is automatically loaded when opening the circuit but you can also manually reload it later via `CTRL`+`H`.
+
+The file is first passed through the C preprocessor and then parsed for declarations and macro definitions.
+*Note that `cpp` is called as external program so you need to have a c compiler (such as [gcc](https://gcc.gnu.org)) installed and properly registered in the `PATH` environment variable so the editor can find it.* If you don't use any directives such as `#inlude` or `#ifdef` and don't need macro expansions in your `.c` file, you can also press `CTRL`+`SHIFT`+`H` to load the file without invoking the preprocessor (faster).
+
+When using c-libraries you can simply include their header files with `#include "header.h"` (or `#include <header.h>` for system headers) in your `.c` file.
+
+After that you can access the declarations through the ![include][include] block from just the name without having to provide type templates. In addition to functions and globals it also provides any C type declaration as an imaginary signal. Also any C macro that is defined to a numeric value can be used inside numeric constant blocks.
+
+[include]: ../src/resources/textures/blocks/#x.png

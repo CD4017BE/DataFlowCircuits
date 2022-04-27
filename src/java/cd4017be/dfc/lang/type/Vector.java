@@ -14,12 +14,13 @@ public class Vector implements Type {
 
 	public final Type element;
 	public final int count, size, align;
-	public final boolean simd;
+	public final boolean simd, dyn;
 
 	Vector(Type element, int count, boolean simd) {
 		this.element = element;
 		this.count = count;
 		this.simd = simd;
+		this.dyn = count == 0 || element.dynamic();
 		int size = element.sizeOf() * count;
 		if (simd)
 			this.size = this.align = highestOneBit(size - 1) << 1;
@@ -85,6 +86,11 @@ public class Vector implements Type {
 	@Override
 	public boolean canSimd() {
 		return false;
+	}
+
+	@Override
+	public boolean dynamic() {
+		return dyn;
 	}
 
 	@Override

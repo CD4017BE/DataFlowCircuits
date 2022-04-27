@@ -2,7 +2,7 @@ package cd4017be.dfc.compiler;
 
 import static cd4017be.dfc.lang.GlobalVar.GLOBALS;
 import static cd4017be.dfc.lang.type.Pointer.NO_CAPTURE;
-import static cd4017be.dfc.lang.type.Pointer.READ_ONLY;
+import static cd4017be.dfc.lang.type.Pointer.NO_WRITE;
 import static cd4017be.dfc.lang.type.Primitive.LABEL;
 import java.io.*;
 
@@ -161,16 +161,19 @@ public class Instruction {
 		if (!(type instanceof Pointer)) return;
 		int flags = ((Pointer)type).flags;
 		if ((flags & NO_CAPTURE) != 0) out.append(" nocapture");
-		if ((flags & READ_ONLY) != 0) out.append(" readonly");
+		if ((flags & NO_WRITE) != 0) out.append(" readonly");
 	}
 
 	private static void parameters(Writer out, Signal f) throws IOException {
+		Function fn = (Function)f.type;
 		int i = 0;
-		for (Type type : ((Function)f.type).parTypes) {
+		for (Type type : fn.parTypes) {
 			if (i++ > 0) out.append(", ");
 			out.append(type.toString());
 			appendFlags(out, type);
 		}
+		if (fn.varArg)
+			out.append(i == 0 ? "..." : ", ...");
 	}
 
 }
