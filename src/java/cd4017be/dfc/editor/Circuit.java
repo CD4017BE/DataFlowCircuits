@@ -24,10 +24,12 @@ import static org.lwjgl.opengl.GL32C.*;
 public class Circuit implements IGuiSection, Function<String, BlockDef> {
 
 	/**Editing modes */
-	private static final byte M_IDLE = 0, M_BLOCK_SEL = 1, M_TRACE_SEL = 2, M_TRACE_MV = 3, M_TRACE_DRAW = 4;
+	private static final byte M_IDLE = 0, M_BLOCK_SEL = 1, M_TRACE_SEL = 2, M_TRACE_MV = 3, M_TRACE_DRAW = 4,
+	M_MULTI_SEL = 5, M_MULTI_MOVE = 6;
 
 	public final IndexedSet<Block> blocks;
 	public final HashMap<Integer, Trace> traces;
+	final ArrayList<IMovable> moving = new ArrayList<>();
 	final BlockIcons icons;
 	/** GL vertex arrays */
 	final int blockVAO, traceVAO;
@@ -110,6 +112,8 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		glDrawArrays(GL_POINTS, 0, blocks.size());
 		checkGLErrors();
 		
+		if (mode == M_MULTI_SEL || mode == M_MULTI_MOVE)
+			addSel(min(lmx, mx), min(lmy, my), abs(mx - lmx), abs(my - lmy), 0xff80ff80);
 		if (selBlock != null)
 			addSel(selBlock.x * 2, selBlock.y * 2, selBlock.w() * 2, selBlock.h() * 2, 0xff8080ff);
 		if (selTr != null)
@@ -190,7 +194,8 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 			return;
 		}
 		mx = x; my = y;
-		if (mode == M_IDLE) {
+		switch(mode) {
+		case M_IDLE:
 			selTrace(traces.get(Trace.key(x + 1 >> 1, y + 1 >> 1)));
 			Block old = selBlock;
 			selBlock = null;
@@ -200,17 +205,35 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 					break;
 				}
 			if (selBlock != old) refresh(0);
-		} else if (mode == M_TRACE_SEL && selTr.pin < 0) {
-			selTr.pickup();
-			mode = M_TRACE_MV;
-		}
-		if (mode == M_TRACE_MV || mode == M_TRACE_DRAW)
+			return;
+		case M_TRACE_SEL:
+			if (selTr.pin < 0) {
+				selTr.pickup();
+				mode = M_TRACE_MV;
+			} else {
+				selBlock = selTr.block;
+				mode = M_BLOCK_SEL;
+				lmx = x;
+				lmy = y;
+				return;
+			}
+		case M_TRACE_MV, M_TRACE_DRAW:
 			selTr.pos(x + 1 >> 1, y + 1 >> 1);
-		else if (mode == M_BLOCK_SEL && selBlock != null) {
-			int dx = x - lmx >> 1, dy = y - lmy >> 1;
-			selBlock.pickup().pos(selBlock.x + dx, selBlock.y + dy);
-			lmx += dx << 1; lmy += dy << 1;
+			return;
+		case M_MULTI_SEL:
+			refresh(0);
+		default: return;
+		case M_BLOCK_SEL:
+			if (moving.isEmpty())
+				moving.add(selBlock.pickup());
+		case M_MULTI_MOVE:
 		}
+		int dx = x - lmx >> 1, dy = y - lmy >> 1;
+		if (dx == 0 && dy == 0) return;
+		for (IMovable m : moving)
+			m.pos(m.x() + dx, m.y() + dy);
+		lmx += dx << 1;
+		lmy += dy << 1;
 	}
 
 	@Override
@@ -228,44 +251,66 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 				if (mode != M_IDLE) break;
 				lmx = mx;
 				lmy = my;
-				mode = M_BLOCK_SEL;
+				mode = selBlock == null ? M_MULTI_SEL : M_BLOCK_SEL;
 				refresh(0);
 			} else if (mode == M_TRACE_DRAW) {
 				Trace t = selTr.place();
 				if (selTrace(t)) mode = M_IDLE;
 				else mode = M_TRACE_SEL;
-			} else if (mode == M_IDLE && selTr.pin != 0)
+			} else if (mode == M_IDLE)
 				mode = M_TRACE_SEL;
-			else if (mode == M_BLOCK_SEL && selBlock != null) {
+			else if (mode == M_BLOCK_SEL) {
 				selBlock.place();
+				moving.clear();
 				mode = M_IDLE;
 			}
 			break;
 		case GLFW_RELEASE | GLFW_MOUSE_BUTTON_LEFT<<1:
-			if (mode == M_BLOCK_SEL) {
+			if (mode == M_MULTI_SEL) {
+				int x0 = min(lmx, mx) >> 1, x1 = max(lmx, mx) + 1 >> 1,
+				    y0 = min(lmy, my) >> 1, y1 = max(lmy, my) + 1 >> 1;
+				for (Trace trace : traces.values())
+					if (trace.pin < 0 && trace.inRange(x0, y0, x1, y1))
+						moving.add(trace);
+				for (Block block : blocks)
+					if (block.inRange(x0, y0, x1, y1))
+						moving.add(block);
+				for (IMovable m : moving) m.pickup();
+				for (IMovable m : moving) m.pickup();
+				lmx = mx;
+				lmy = my;
+				mode = moving.isEmpty() ? M_IDLE : M_MULTI_MOVE;
+				refresh(0);
+			} else if (mode == M_MULTI_MOVE) {
+				for (IMovable m : moving)
+					m.place();
+				moving.clear();
+				mode = M_IDLE;
+				fullRedraw();
+			} else if (mode == M_BLOCK_SEL) {
 				Block block = selBlock;
-				if (block != null) {
-					block.place();
-					if (block.def.hasText) {
-						int tx = block.textX();
-						text = new TextField(t -> {
-							block.data = t;
-							block.redraw();
-						}, tx / 4F, block.textY() / 6F);
-						text.set(block.data, 1 + (lmx * 2 - tx >> 2));
-					}
+				block.place();
+				if (block.def.hasText) {
+					int tx = block.textX();
+					text = new TextField(t -> {
+						block.data = t;
+						block.redraw();
+					}, tx / 4F, block.textY() / 6F);
+					text.set(block.data, 1 + (lmx * 2 - tx >> 2));
 				}
+				moving.clear();
 				mode = M_IDLE;
 				refresh(0);
 			} else if (mode == M_TRACE_MV) {
 				selTr.place();
 				mode = M_IDLE;
-			} else if (mode == M_TRACE_SEL) {
-				mode = M_TRACE_DRAW;
-				Trace t = new Trace(this).pos(mx + 1 >> 1, my + 1 >> 1);
-				selTr.connect(t);
-				selTrace(t);
-			}
+			} else if (mode == M_TRACE_SEL)
+				if (selTr.pin != 0) {
+					mode = M_TRACE_DRAW;
+					Trace t = new Trace(this).pos(mx + 1 >> 1, my + 1 >> 1);
+					selTr.connect(t);
+					selTrace(t);
+				} else mode = M_IDLE;
 			break;
 		case GLFW_RELEASE | GLFW_MOUSE_BUTTON_MIDDLE<<1:
 			int x = mx >> 1, y = my >> 1;
@@ -287,8 +332,15 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		boolean shift = (mods & GLFW_MOD_SHIFT) != 0;
 		switch(key) {
 		case GLFW_KEY_DELETE:
-			blocks.remove(selBlock);
+			if (selBlock != null)
+				selBlock.remove();
+			if (selTr != null && selTr.pin < 0)
+				selTr.remove();
+			for (IMovable m : moving) m.remove();
 			selBlock = null;
+			selTr = null;
+			moving.clear();
+			mode = M_IDLE;
 			break;
 		case GLFW_KEY_S:
 			if (!ctrl) break;
@@ -308,7 +360,7 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 			if (!ctrl || curFile == null) break;
 			extDef.clear();
 			try {
-				info = loadHeader(curFile)
+				info = loadHeader(curFile, !shift)
 					? "refreshed external declarations!"
 					: "current circuit has no .c file!";
 			} catch(IOException e) {
@@ -418,12 +470,12 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		refresh(0);
 	}
 
-	private boolean loadHeader(File file) throws IOException {
+	private boolean loadHeader(File file, boolean cpp) throws IOException {
 		File h = withSuffix(file, ".c");
 		if (!h.exists()) return false;
 		Profiler t = new Profiler(System.out);
 		HeaderParser hp = new HeaderParser();
-		hp.processHeader(h, true);
+		hp.processHeader(h, cpp);
 		t.end("header preprocessed");
 		hp.getDeclarations(extDef);
 		t.end("header parsed");
@@ -494,7 +546,7 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 			clear();
 			CircuitFile.load(this, in);
 			in.close();
-			loadHeader(file);
+			loadHeader(file, true);
 			info = "loaded!";
 		} catch(IOException | DataFormatException e) {
 			e.printStackTrace();

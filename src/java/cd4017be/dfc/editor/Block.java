@@ -12,7 +12,7 @@ import cd4017be.util.IndexedSet;
 
 /**Represents an operand block.
  * @author CD4017BE */
-public class Block extends IndexedSet.Element {
+public class Block extends IndexedSet.Element implements IMovable {
 
 	public final BlockDef def;
 	public final Trace[] io;
@@ -42,11 +42,13 @@ public class Block extends IndexedSet.Element {
 			&& (y -= this.y) >= 0 && y < h();
 	}
 
+	@Override
 	public Block pickup() {
 		for (Trace tr : io) tr.pickup();
 		return this;
 	}
 
+	@Override
 	public Block pos(int x, int y) {
 		this.x = (short)x;
 		this.y = (short)y;
@@ -68,6 +70,7 @@ public class Block extends IndexedSet.Element {
 		return y * 4 + def.textY * 2 + 1;
 	}
 
+	@Override
 	public Block place() {
 		for (Trace tr : io) tr.place();
 		return this;
@@ -101,6 +104,26 @@ public class Block extends IndexedSet.Element {
 
 	public String id() {
 		return def.name;
+	}
+
+	@Override
+	public short x() { 
+		return x;
+	}
+
+	@Override
+	public short y() { 
+		return y;
+	}
+
+	@Override
+	public void remove() {
+		io[0].cc.blocks.remove(this);
+	}
+
+	@Override
+	public boolean inRange(int x0, int y0, int x1, int y1) { 
+		return x < x1 && y < y1 && x + w() > x0 && y + h() > y0;
 	}
 
 }

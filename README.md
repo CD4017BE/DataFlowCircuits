@@ -40,7 +40,7 @@ The compiler is currently outputting LLVM-IR that can be executed or further pro
 - [x] type-checking in editor
 - [ ] real time type checking in editor
 - [x] panning and zooming
-- [ ] multi-selection for movement, deletion and copy-paste
+- [x] multi-selection for movement and deletion
 - [x] menu for multiple source files
 - [x] improved block palette
 - [ ] improved signal type inspection (as tree)
@@ -60,12 +60,15 @@ Left-click ...
 - drag a trace node to move it (pushing a node on top of another will connect them).
 - a text containing block to edit it (click somewhere else to end text edit mode).
 - drag a block to move it (overlapping pins will auto-connect).
+- drag from an empty position to select multiple blocks and traces to be moved after release. Then click again to finish movement.
 
 Key-bindings:
 - `CTRL`+`O`: open a circuit schematic file.
 - `CTRL`+`S`: save circuit schematic to current file.
 - `CTRL`+`SHIFT`+`S`: save circuit schematic to a different file.
 - `CTRL`+`T`: run the type checker to show traces colored depending on data type. If the type check fails, an error message is displayed at the bottom of the screen and the problematic circuit block is selected.
+- `CTRL`+`H`: reload external declarations specified in a `.c` file with the same name as the current circuit schematic.
+- `CTRL`+`SHIFT`+`H`: reload external declarations without preprocessing the `.c` file through cpp.
 - `CTRL`+`M`: run the compiler, creating a LLVM_IR assembly file in same place as the circuit schematic with `.dfc` replaced by `.ll`.
 - `CTRL`+`SHIFT`+`M`: compile with explicit variable assignments and labels included.
 - `CTRL`+`D`: remove all orphaned traces.

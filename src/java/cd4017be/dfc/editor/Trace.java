@@ -1,12 +1,14 @@
 package cd4017be.dfc.editor;
 
+import static java.lang.Math.min;
+
 import java.nio.ByteBuffer;
 
 import cd4017be.dfc.lang.Signal;
 
 /**Represents a data trace node.
  * @author CD4017BE */
-public class Trace {
+public class Trace implements IMovable {
 
 	public final Circuit cc;
 	public Block block;
@@ -26,14 +28,17 @@ public class Trace {
 		this.pin = pin;
 	}
 
+	@Override
 	public short x() {
 		return (short)pos;
 	}
 
+	@Override
 	public short y() {
 		return (short)(pos >> 16);
 	}
 
+	@Override
 	public Trace pos(int x, int y) {
 		if (placed) throw new IllegalStateException("must pickup before move");
 		pos = key(x, y);
@@ -45,6 +50,7 @@ public class Trace {
 		return this;
 	}
 
+	@Override
 	public Trace pickup() {
 		if (!placed) return this;
 		cc.traces.remove(pos, this);
@@ -55,10 +61,22 @@ public class Trace {
 		return this;
 	}
 
+	@Override
 	public Trace place() {
 		if (placed) return this;
-		placed = true;
-		return cc.traces.merge(pos, this, Trace::merge);
+		try {
+			placed = true;
+			return cc.traces.merge(pos, this, Trace::merge);
+		} catch (MergeConflict e) {
+			placed = false;
+			Trace[] io0 = e.conflict.block.io, io1 = block.io;
+			for (Trace out = io0[0]; out.to != null;)
+				out.to.connect(this);
+			for (int i = min(io0.length, io1.length) - 1; i > 0; i--)
+				io1[i].connect(io0[i].from);
+			e.conflict.block.remove();
+			return place();
+		}
 	}
 
 	private Trace merge(Trace tr) {
@@ -66,13 +84,15 @@ public class Trace {
 		if (tr.pin < 0) {
 			rem = tr;
 			tr = this;
-		} else if (pin < 0) rem = this;
+		} else if (this.pin < 0)
+			rem = this;
 		else {
 			if (tr.pin > 0) {
 				rem = tr;
 				tr = this;
-			} else if (pin > 0) rem = this;
-			else throw new IllegalStateException("output pin collision");
+			} else if (this.pin > 0)
+				rem = this;
+			else throw new MergeConflict(this);
 			rem.connect(tr);
 			rem.placed = false;
 			return tr;
@@ -82,6 +102,14 @@ public class Trace {
 		rem.placed = false;
 		cc.fullRedraw();
 		return tr;
+	}
+
+	@SuppressWarnings("serial")
+	private static class MergeConflict extends IllegalStateException {
+		final Trace conflict;
+		MergeConflict(Trace collision) {
+			this.conflict = collision;
+		}
 	}
 
 	public void connect(Trace tr) {
@@ -102,6 +130,7 @@ public class Trace {
 		}
 	}
 
+	@Override
 	public void remove() {
 		pickup();
 		while(to != null) to.connect(from);
@@ -128,6 +157,12 @@ public class Trace {
 
 	public static int key(int x, int y) {
 		return y << 16 | x & 0xffff;
+	}
+
+	@Override
+	public boolean inRange(int x0, int y0, int x1, int y1) { 
+		int x = x(), y = y();
+		return x < x1 && y < y1 && x > x0 && y > y0;
 	}
 
 }
