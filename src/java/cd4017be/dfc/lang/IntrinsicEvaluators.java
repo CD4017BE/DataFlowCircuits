@@ -33,6 +33,8 @@ public class IntrinsicEvaluators {
 	}
 
 	static {
+		def("out", (file, out, node) -> node.ret(file.eval(out, 0)));
+		def("in", IntrinsicEvaluators::in);
 		def("#uw", constant(UWORD));
 		def("#us", constant(USHORT));
 		def("#ui", constant(UINT));
@@ -87,6 +89,20 @@ public class IntrinsicEvaluators {
 		
 		//for backwards compatibility:
 		alias("void", "pre");
+	}
+
+	private static void in(CircuitFile file, int out, Node node) throws SignalError {
+		node.ret(NULL);
+		if (file.parent == null) return;
+		int in;
+		try {
+			in = Integer.parseInt(file.args[out]);
+			Objects.checkIndex(in, file.parentNode.in.length);
+		} catch(NumberFormatException | IndexOutOfBoundsException e) {
+			throw new SignalError(out, -1, "invalid pin number");
+		}
+		node = file.parent.evalChild(file.parentOut, file.lastIn = in);
+		if (node != null) file.setNode(out, node);
 	}
 
 	private static ITypeEvaluator constant(Primitive type) {

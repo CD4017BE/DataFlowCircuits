@@ -51,7 +51,7 @@ public class ExternalDefinitions {
 	}
 
 	private static void resetType(CType type) {
-		if (type.dfcType == null) return;
+		if (type == null || type.dfcType == null) return;
 		type.dfcType = null;
 		Object cont = type.content;
 		if (cont instanceof CDecl decl)

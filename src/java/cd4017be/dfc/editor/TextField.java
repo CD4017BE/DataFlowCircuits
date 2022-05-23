@@ -45,7 +45,7 @@ public class TextField {
 		if (cur0 != cur1) {
 			int i0 = min(cur0, cur1), i1 = max(cur0, cur1);
 			print(text.subSequence(i0, i1), l - i0, fg, c, x + (float)i0 * sx, y, sx, sy);
-		} else print("|", l, c, 0, x + ((float)cur1 - 0.5F) * sx, y, sx, sy);
+		} else print("|", l, c, 0, x + ((float)(cur1 % l) - 0.5F) * sx, y + (float)(cur1 / l) * sy, sx, sy);
 	}
 
 	public boolean onKeyInput(int key, int mods) {

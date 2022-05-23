@@ -18,7 +18,8 @@ import cd4017be.dfc.lang.BlockDef;
 public class Palette implements IGuiSection {
 
 	private static final String[] DEF_LIST = {
-		"main", "def", "#x", "call", "swt", "loop",
+		"in", "out",
+		"main", "def", "#x", "call", "swt", "loop", "for",
 		"get", "set", "pack", "pre", "post", "struct", "vector", "array",
 		"count", "zero", "type", "funt",
 		"ref", "load", "store",

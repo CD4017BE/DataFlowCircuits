@@ -63,6 +63,16 @@ pinCount * {
 4 bit = textBaseLen
 3 bit = 0
 1 bit = hasText
+if hasText {
+  8 bit = stringLen
+  stringLen * 8 bit = macroString
+}
+pinCount * {
+  8 bit = stringLen
+  stringLen * 8 bit = pinNameString
+}
+16 bit = stringLen
+stringLen * 8 bit = descriptionString
 ```
 **Variables:**
 - `pinCount` can range from 1 up to 256. Pin 0 is output, the remaining pins are inputs.
@@ -70,3 +80,7 @@ pinCount * {
 - `hasText` = 1 if the block supports a text argument.
 - `textX` and `textY` specify the text position relative to the icon's upper left corner in steps of 2 pixels.
 - `textBaseLen` specifies the number of characters that can fit into the block without stretching it. Beyond that the icon will stretch in the middle by 4 pixels per character.
+- Every `stringLen` specifies the number of bytes in the following utf8 encoded string.
+- `macroString` contains the comma separated list of identifiers to assign the text arguments to.
+- `pinNameString` specifies the name of each pin.
+- `descriptionString` contains arbitrary documentation text for the block.

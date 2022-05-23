@@ -290,7 +290,7 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 			} else if (mode == M_BLOCK_SEL) {
 				Block block = selBlock;
 				block.place();
-				if (block.def.hasText) {
+				if (block.def.textMacro != null) {
 					int tx = block.textX();
 					text = new TextField(t -> {
 						block.data = t;
@@ -381,6 +381,10 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 			if (!ctrl) break;
 			if (curFile != null) compile(curFile, shift);
 			else new FileBrowser(FILE, "Compile to ", f -> compile(f, shift));
+			break;
+		case GLFW_KEY_B:
+			if (!ctrl) break;
+			new MacroEdit(icons, new BlockDef(""));
 			break;
 		case GLFW_KEY_HOME:
 			ofsX = ofsY = 0;
@@ -484,10 +488,10 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 
 	private void typeCheck() {
 		Profiler t = new Profiler(System.out);
-		CircuitFile file = new CircuitFile(blocks, extDef);
+		CircuitFile file = new CircuitFile(blocks);
 		t.end("parsed");
 		try {
-			file.typeCheck();
+			file.typeCheck(extDef);
 			info = "Type checked!";
 			selBlock = blocks.get(file.out);
 		} catch(SignalError e) {
@@ -498,6 +502,7 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 			} else selBlock = null;
 		}
 		t.end("checked");
+		extDef.reset();
 		for (int i = 0; i < blocks.size(); i++) {
 			Block block = blocks.get(i);
 			Node val = file.nodes[i];

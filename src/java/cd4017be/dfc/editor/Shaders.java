@@ -39,6 +39,7 @@ public class Shaders {
 	private static final int blockF = loadShader(GL_FRAGMENT_SHADER, "/shaders/block_frag.glsl");
 	/** block rendering shader */
 	public static final int blockP = program(blockV, blockG, blockF, "outColor");
+	/** ivec4: (x, y, extWH, id) */
 	private static final int block_data = glGetAttribLocation(blockP, "data");
 	/** vec2: texture coordinate to block grid scale */
 	public static final int block_gridScale = glGetUniformLocation(blockP, "gridScale");

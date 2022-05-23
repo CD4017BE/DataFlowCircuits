@@ -17,7 +17,7 @@ import cd4017be.util.ExtOutputStream.IDTable;
 
 /**
  * @author CD4017BE */
-public class CircuitFile {
+public class CircuitFile implements ITypeEvaluator {
 
 	/** input indices for each block */
 	public final int[][] blocks;
@@ -29,21 +29,21 @@ public class CircuitFile {
 	public final int out;
 
 	public Node[] nodes;
-
-	public final ExternalDefinitions extDef;
+	public CircuitFile parent;
+	public Node parentNode;
+	public int parentOut, lastIn = -1;
+	public ExternalDefinitions extDef;
 
 	/**Loads a program from source file.
 	 * @param dis source file
 	 * @param reg instruction registry
 	 * @throws IOException
 	 * @throws DataFormatException */
-	public CircuitFile(ExtInputStream dis, Function<String, BlockDef> reg, ExternalDefinitions extDef)
+	public CircuitFile(ExtInputStream dis, Function<String, BlockDef> reg)
 	throws IOException, DataFormatException {
-		this.extDef = extDef;
-		extDef.reset();
 		GlobalVar.clear();
 		Types.clear();
-		int pb = (dis.read() & 3) + 1;
+		int pb = (dis.readByte() & 3) + 1;
 		BlockDef[] defIdx = loadDefs(dis, reg);
 		String[] argIdx = dis.readArray(String[]::new, ExtInputStream::readSmallUTF);
 		int nb = dis.readVarInt(), out = -1;
@@ -55,22 +55,22 @@ public class CircuitFile {
 			if (OUT_ID.equals(def.name)) out = i;
 			args[i] = dis.readElement(argIdx);
 			dis.skipNBytes(pb); //skip position
-			int ni = def.ios() - 1;
+			int ni = def.ios() - 1, pins = def.ioNames.length - 1;
 			int[] block = blocks[i] = new int[ni];
-			for (int j = 0; j < def.pins; j++) {
-				if (j < ni) block[j] = dis.readInt(nb) - 1;
+			for (int j = 0; j < pins; j++) {
+				int link = dis.readInt(nb) - 1;
+				if (j < ni) block[j] = link;
 				dis.skipNBytes(dis.readVarInt() * pb); //skip traces
 			}
-			for (int j = def.pins; j < ni; j++) block[j] = -1;
+			for (int j = pins; j < ni; j++)
+				block[j] = -1;
 		}
-		this.out = out;
+		this.out = out >= 0 ? blocks[out][0] : out;
 	}
 
 	/**Converts an editor's block graph into the node representation needed for compilation.
 	 * @param blocks block graph */
-	public CircuitFile(IndexedSet<Block> blocks, ExternalDefinitions extDef) {
-		this.extDef = extDef;
-		extDef.reset();
+	public CircuitFile(IndexedSet<Block> blocks) {
 		GlobalVar.clear();
 		Types.clear();
 		int nb = blocks.size(), out = -1;
@@ -90,7 +90,28 @@ public class CircuitFile {
 				data[j] = tr != null && tr.block != null ? tr.block.getIdx() : -1;
 			}
 		}
-		this.out = out;
+		this.out = out >= 0 ? this.blocks[out][0] : out;
+	}
+
+	public Node evalChild(int from, int i) throws SignalError {
+		int j = blocks[from][i];
+		if (j < 0) return null;
+		Node n = nodes[j];
+		if (n != null) return n;
+		BlockDef def = defs[j];
+		nodes[j] = n = new Node(def, blocks[j].length);
+		try {
+			def.eval.eval(this, j, n);
+		} catch (SignalError e) {
+			throw new SignalError(-1, -1, e);
+		}
+		return nodes[j];
+	}
+
+	public void setNode(int o, Node n) {
+		nodes[o] = n;
+		if (o == out && parent != null)
+			parent.setNode(parentOut, n);
 	}
 
 	public Signal eval(int from, int i) throws SignalError {
@@ -101,16 +122,52 @@ public class CircuitFile {
 			BlockDef def = defs[j];
 			nodes[j] = n = new Node(def, blocks[j].length);
 			def.eval.eval(this, j, n);
+			n = nodes[j];
 		}
 		nodes[from].in[i] = n;
-		return n.out;
+		Signal s = n.out;
+		if (s == null) throw new SignalError(from, i, "illegal self reference");
+		return s;
 	}
 
-	public void typeCheck() throws SignalError {
-		if (out < 0) throw new SignalError(-1, -1, "missing root node");
+	public Node typeCheck(ExternalDefinitions extDef) throws SignalError {
 		nodes = new Node[blocks.length];
+		if (out < 0) throw new SignalError(-1, -1, "missing root node");
+		this.extDef = extDef;
 		BlockDef def = defs[out];
-		def.eval.eval(this, out, nodes[out] = new Node(def, blocks[out].length));
+		Node n = new Node(def, blocks[out].length);
+		def.eval.eval(this, out, nodes[out] = n);
+		return n;
+	}
+
+	@Override
+	public void eval(CircuitFile file, int out, Node n) throws SignalError {
+		if (parent != null) throw new SignalError(out, -1, "recursive macro");
+		int o = this.out;
+		if (o < 0) {
+			n.ret(Signal.NULL);
+			return;
+		}
+		try {
+			this.parent = file;
+			this.parentOut = out;
+			this.parentNode = n;
+			this.extDef = file.extDef;
+			this.nodes = new Node[blocks.length];
+			BlockDef def = defs[o];
+			file.setNode(out, nodes[o] = n = new Node(def, blocks[o].length));
+			def.eval.eval(this, o, n);
+		} catch (SignalError e) {
+			Throwable c = e.getCause();
+			if (e.block < 0 && c instanceof SignalError)
+				throw (SignalError)c;
+			else throw new SignalError(out, lastIn, e);
+		} finally {
+			this.parent = null;
+			this.parentNode = null;
+			this.extDef = null;
+			this.nodes = null;
+		}
 	}
 
 	private static BlockDef[] loadDefs(ExtInputStream dis, Function<String, BlockDef> reg)
@@ -121,7 +178,7 @@ public class CircuitFile {
 			BlockDef def = reg.apply(name);
 			if (def == null)
 				throw new DataFormatException("type '" + name + "' is undefined");
-			if (def.pins != n) def = def.withPins(n);
+			if (def.ioNames.length != n) def = def.withPins(n);
 			return def;
 		});
 	}
@@ -233,7 +290,7 @@ public class CircuitFile {
 			Block block = new Block(dis.readElement(ids), c);
 			block.data = dis.readElement(args);
 			int[] p = readPos(dis, shift, size);
-			for (int j = 1; j < block.def.pins; j++) {
+			for (int j = 1; j < block.def.ioNames.length; j++) {
 				Trace t0 = j < block.io.length ? block.io[j] : null;
 				dis.readInt(n);
 				for (int l = dis.readVarInt(); l > 0; l--) {

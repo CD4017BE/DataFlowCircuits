@@ -88,7 +88,7 @@ public class ImageConverter {
 				}
 				BlockDef def = new BlockDef(m.group(1));
 				if (m.start(2) >= 0) {
-					def.hasText = true;
+					def.textMacro = "";
 					def.textL0 = (byte)parseInt(m.group(2));
 					def.textX = (byte)parseInt(m.group(3));
 					def.textY = (byte)parseInt(m.group(4));
