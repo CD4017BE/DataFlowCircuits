@@ -71,7 +71,8 @@ public class Pointer implements Type {
 
 	@Override
 	public StringBuilder displayString(StringBuilder sb, boolean nest) {
-		return type.displayString(sb, nest).append((flags & NO_WRITE) != 0 ? '^' : '*');
+		return (type == null ? sb.append('?') : type.displayString(sb, nest))
+			.append((flags & NO_WRITE) != 0 ? '^' : '*');
 	}
 
 	@Override

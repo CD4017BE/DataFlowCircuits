@@ -4,23 +4,13 @@ import static cd4017be.dfc.lang.Signal.*;
 import static cd4017be.dfc.lang.type.Primitive.LABEL;
 import static cd4017be.dfc.lang.type.Primitive.UINT;
 import static cd4017be.dfc.lang.type.Types.VOID;
-import static java.lang.invoke.MethodHandles.*;
-import static java.lang.invoke.MethodType.methodType;
-
-import java.util.Map;
+import cd4017be.dfc.graph.Node;
 import cd4017be.dfc.lang.*;
 import cd4017be.dfc.lang.type.*;
 
 /**
  * @author CD4017BE */
 public class IntrinsicCompilers {
-
-	/**@param defs known block types to define instructions for */
-	public static void define(Map<String, BlockDef> defs) {
-		BlockDef.setCompilers(defs, IntrinsicCompilers.class, lookup(), methodType(
-			Instruction.class, Node.class, Instruction.class
-		), dropArguments(identity(Instruction.class), 0, Node.class));
-	}
 
 	/** LLVM op-codes */
 	private static final String
@@ -43,15 +33,25 @@ public class IntrinsicCompilers {
 	LOAD = " load $1e, $<t $<v\n",
 	STORE = " store $1t $<v, $t $<v\n";
 
-	static Instruction _x(Node node, Instruction ins) {
-		Signal s = node.out;
-		return ins.add(s.type instanceof Function ? DECLARE : EXTERNAL_GLOBAL, s);
+	static void out(NodeInstruction ni, Compiler c) {
+		new NodeInstruction(ni, ni.node.input(0), ni.after);
 	}
 
-	static Instruction get(Node node, Instruction ins) {
-		if (!node.out.isVar()) return ins;
-		Signal str = node.in(0), idx = node.in(1);
-		long[] idxs = (long[])node.data;
+	static void in(NodeInstruction ni, Compiler c) {
+		new NodeInstruction(ni, ni.node.input(0), ni.after);
+	}
+
+	static void _x(NodeInstruction ni, Compiler c) {
+		Signal s = ni.out();
+		c.addGlobal(s.type instanceof Function ? DECLARE : EXTERNAL_GLOBAL, false, s);
+	}
+
+	static void get(NodeInstruction ni, Compiler c) {
+		Signal o = ni.out();
+		if (ni.evalConst(o)) return;
+		Signal str = ni.in(0), idx = ni.in(1);
+		Instruction ins = ni.evalIns(0, 1).after;
+		long[] idxs = ni.data();
 		int j = 0, k = 0;
 		while(str.type instanceof Bundle) str = str.getElement((int)idxs[j++]);
 		if (str.type instanceof Function) {
@@ -70,16 +70,16 @@ public class IntrinsicCompilers {
 			arg[0] = str;
 			for (int i = 1; j < k; i++, j++)
 				arg[i] = cst(UINT, idxs[j]);
-			str = j < idxs.length ? var(type) : node.out;
+			str = j < idxs.length ? var(type) : o;
 			ins = ins.add(EXTRACTVALUE, str, arg);
 		}
-		if (j >= idxs.length) return ins;
+		if (j >= idxs.length) return;
 		if (type instanceof Vector) {
 			long i = idxs[j++];
 			type = ((Vector)type).element;
-			Signal next = j < idxs.length ? var(type) : node.out;
+			Signal next = j < idxs.length ? var(type) : o;
 			ins = ins.add(EXTRACTELEMENT, next, str, i < 0 ? idx : cst(UINT, i));
-			if (j >= idxs.length) return ins;
+			if (j >= idxs.length) return;
 			str = next;
 		}
 		type = ((Pointer)type).type;
@@ -96,31 +96,44 @@ public class IntrinsicCompilers {
 			long i1 = idxs[j];
 			arg[i] = i1 < 0 ? idx : cst(UINT, i1);
 		}
-		str = end ? node.out : var(new Pointer(0).to(type));
+		str = end ? o : var(new Pointer(0).to(type));
 		ins = ins.add(GETELEMENTPTR, str, arg);
-		if (end) return ins;
+		if (end) return;
 		long i = idxs[j];
 		if (i >= 0) idx = cst(UINT, i);
-		Signal ep = var(node.out.type);
-		return ins.add(BITCAST, ep, str).add(GETELEMENTPTR, node.out, ep, idx);
+		Signal ep = var(o.type);
+		ins.add(BITCAST, ep, str).add(GETELEMENTPTR, o, ep, idx);
 	}
 
-	static Instruction set(Node node, Instruction ins) {
-		if (!node.out.isVar()) return ins;
-		long[] idxs = (long[])node.data;
+	static void set(NodeInstruction ni, Compiler c) {
+		Signal o = ni.out();
+		if (ni.evalConst(o)) return;
+		long[] idxs = ni.data();
 		Signal[] arg = new Signal[idxs.length + 2];
-		arg[0] = node.in(0);
-		arg[1] = node.in(1);
+		arg[0] = ni.in(0);
+		arg[1] = ni.in(1);
 		for (int i = 0; i < idxs.length; i++) {
 			long j = idxs[i];
-			arg[i+2] = j < 0 ? node.in(2) : cst(UINT, j);
+			arg[i+2] = j < 0 ? ni.in(2) : cst(UINT, j);
 		}
 		Type type = arg[0].type;
-		return ins.add(
+		ni.evalIns(0, 1, 2).after.add(
 			(type instanceof Vector && ((Vector)type).simd)
 				? INSERTELEMENT : INSERTVALUE,
-			node.out, arg
+			o, arg
 		);
+	}
+
+	static void pack(NodeInstruction ni, Compiler c) {
+		ni.evalIns(0, 1);
+	}
+
+	static void pre(NodeInstruction ni, Compiler c) {
+		ni.evalIns(0, 1);
+	}
+
+	static void post(NodeInstruction ni, Compiler c) {
+		ni.evalIns(0, 1);
 	}
 
 	private static Instruction construct(Instruction ins, Signal out, Signal in, String op) {
@@ -135,195 +148,213 @@ public class IntrinsicCompilers {
 		return ins.add(op, out, str, val.signal, cst(UINT, 0));
 	}
 
-	static Instruction struct(Node node, Instruction ins) {
-		if (!node.out.isVar()) return ins;
-		return construct(ins, node.out, node.in(0), INSERTVALUE);
+	static void struct(NodeInstruction ni, Compiler c) {
+		Signal o = ni.out();
+		if (ni.evalConst(o)) return;
+		construct(ni.evalIns(0).after, o, ni.in(0), INSERTVALUE);
 	}
 
-	static Instruction array(Node node, Instruction ins) {
-		if (!node.out.isVar()) return ins;
-		return construct(ins, node.out, node.in(0), INSERTVALUE);
+	static void array(NodeInstruction ni, Compiler c) {
+		Signal o = ni.out();
+		if (ni.evalConst(o)) return;
+		construct(ni.evalIns(0).after, o, ni.in(0), INSERTVALUE);
 	}
 
-	static Instruction vector(Node node, Instruction ins) {
-		if (!node.out.isVar()) return ins;
-		Signal count = node.in(1), val = node.in(0);
-		if (count.type == VOID)
-			return construct(ins, node.out, val, INSERTELEMENT);
-		Type type = node.out.type;
-		Signal str = img(type);
-		for (int l = (int)count.value, i = 0; i < l; i++) {
+	static void vector(NodeInstruction ni, Compiler c) {
+		Signal o = ni.out();
+		if (ni.evalConst(o)) return;
+		Signal count = ni.in(1), val = ni.in(0);
+		if (count.type == VOID) {
+			construct(ni.evalIns(0).after, o, val, INSERTELEMENT);
+			return;
+		}
+		Instruction ins = ni.evalIns(0, 1).after;
+		Signal str = img(o.type);
+		for (int l = (int)count.asLong(), i = 0; i < l; i++) {
 			Signal old = str;
-			str = i == l - 1 ? node.out : var(type);
+			str = i == l - 1 ? o : var(o.type);
 			ins = ins.add(INSERTELEMENT, str, old, val, cst(UINT, i));
 		}
-		return ins;
 	}
 
-	static Instruction ref(Node node, Instruction ins) throws Throwable {
-		Signal out = node.out, in = node.in(0);
-		if (out.isConst())
-			return ins.add(PRIVATE_GLOBAL, out, in);
-		return ins.add(ALLOCA, out).add(STORE, null, out, in);
+	static void ref(NodeInstruction ni, Compiler c) {
+		Signal out = ni.out(), in = ni.in(0);
+		if (out.isConst()) {
+			ni.evalConst(in);
+			c.addGlobal(PRIVATE_GLOBAL, false, out, in);
+		} else ni.evalIns(0).after.add(ALLOCA, out).add(STORE, null, out, in);
 	}
 
-	static Instruction load(Node node, Instruction ins) {
-		return ins.add(LOAD, node.out, node.in(0));
+	static void load(NodeInstruction ni, Compiler c) {
+		ni.evalIns(0).after.add(LOAD, ni.out(), ni.in(0));
 	}
 
-	static Instruction store(Node node, Instruction ins) {
-		return ins.add(STORE, null, node.in(1), node.in(0));
+	static void store(NodeInstruction ni, Compiler c) {
+		ni.evalIns(0, 1).after.add(STORE, null, ni.in(1), ni.in(0));
 	}
 
-	static Instruction call(Node node, Instruction ins) {
-		Signal par = node.in(1);
+	static void call(NodeInstruction ni, Compiler c) {
+		Signal par = ni.in(1);
 		int l = par.bundleSize() + 1;
 		Signal[] arg = new Signal[l];
 		for (Bundle b = par.asBundle(); b != null; b = b.parent)
 			arg[--l] = b.signal;
-		arg[0] = node.in(0);
-		Signal out = node.out;
-		return ins.add(CALL, out.type == VOID ? null : out, arg);
+		arg[0] = ni.in(0);
+		Signal out = ni.out();
+		ni.evalIns(0, 1).after.add(CALL, out.type == VOID ? null : out, arg);
 	}
 
-	private static Instruction def(Instruction ins, Signal fun) {
+	private static void defFunction(NodeInstruction ni, Compiler c, int retIn) {
+		Signal fun = ni.out();
 		Type[] pt = ((Function)fun.type).parTypes;
 		Signal[] par = new Signal[pt.length];
 		for (int i = 0; i < par.length; i++)
 			par[i] = var(pt[i]);
-		return ins.add(DEFINE, fun, par).add(var(LABEL));
+		Instruction ins = c.addGlobal(DEFINE, true, fun, par);
+		ins = new NodeInstruction(ni, ni.node.input(retIn), ins).after;
+		Signal ret = ni.in(retIn);
+		if (ret.type == VOID)
+			ins.add(RET_VOID, null);
+		else ins.add(RET, null, ret);
 	}
 
-	static Instruction main(Node node, Instruction ins) throws Throwable {
-		ins = node.compIn(def(ins, node.out), 0);
-		return ins.add(RET, null, node.in(0));
+	static void main(NodeInstruction ni, Compiler c) {
+		defFunction(ni, c, 0);
 	}
 
-	static Instruction def(Node node, Instruction ins) throws Throwable {
-		ins = node.compIn(def(ins, node.out), 1);
-		Signal ret = node.in(1);
-		return ret.type == VOID
-			? ins.add(RET_VOID, null)
-			: ins.add(RET, null, ret);
+	static void def(NodeInstruction ni, Compiler c) {
+		defFunction(ni, c, 1);
 	}
 
-	static Instruction swt(Node node, Instruction ins) throws Throwable {
-		Signal cond = node.in(0);
-		if (cond.isConst()) return ins;
+	static void swt(NodeInstruction ni, Compiler c) {
+		Signal cond = ni.in(0);
+		if (cond.isConst()) {
+			ni.evalIns(1, 2);
+			return;
+		}
+		Bundle vt = ni.in(1).asBundle(), vf = ni.in(2).asBundle(), r = ni.out().asBundle();
+		Node node = ni.node;
+		Instruction ins = (ni = ni.evalIns(0)).after;
 		Signal bt = var(LABEL), bf = var(LABEL), end = var(LABEL);
 		//select branch
 		ins = ins.add(BR, null, cond, bt, bf);
 		//evaluate true branch
-		ins = node.compIn(ins.add(bt), 1).add(BR, null, end);
-		bt = ins.start.set;
+		ni = new NodeInstruction(ni, node.input(1), ins.add(bt));
+		ins = ni.after.add(bt = var(LABEL)).add(BR, null, end);
 		//evaluate false branch
-		ins = node.compIn(ins.add(bf), 2).add(BR, null, end);
-		bf = ins.start.set;
+		ni = new NodeInstruction(ni, node.input(2), ins.add(bf));
+		ins = ni.after.add(bf = var(LABEL)).add(BR, null, end);
 		//end switch
 		ins = ins.add(end);
-		for (
-			Bundle vt = node.in(1).asBundle(),
-				vf = node.in(2).asBundle(),
-				r = node.out.asBundle();
-			r != null;
-			r = r.parent, vt = vt.parent, vf = vf.parent
-		) ins = ins.add(PHI, r.signal, vt.signal, bt, vf.signal, bf);
-		return ins;
+		for (; r != null; r = r.parent, vt = vt.parent, vf = vf.parent)
+			ins = ins.add(PHI, r.signal, vt.signal, bt, vf.signal, bf);
 	}
 
-	static Instruction loop(Node node, Instruction ins) throws Throwable {
-		Signal loop = var(LABEL), body = var(LABEL), end = var(LABEL);
+	static void loop(NodeInstruction ni, Compiler c) {
+		Bundle out = ni.out().asBundle(), init = ni.in(0).asBundle(), state = ni.in(2).asBundle();
+		Node node = ni.node;
+		Instruction ins = (ni = ni.evalIns(0)).after;
+		Signal loop = var(LABEL), body = var(LABEL), end = var(LABEL), start = var(LABEL);
 		//enter the loop
-		ins = ins.add(BR, null, loop);
-		Signal start = ins.start.set;
+		ins = ins.add(start).add(BR, null, loop);
 		Instruction phi = ins = ins.add(loop); //remember insertion point for PHI instructions
 		//evaluate while condition
-		ins = node.compIn(ins, 1).add(BR, null, node.in(1), body, end);
+		ni = new NodeInstruction(ni, node.input(1), ins);
+		ins = ni.after.add(BR, null, node.input(1).out, body, end);
 		//evaluate body
-		ins = node.compIn(ins.add(body), 2).add(BR, null, loop);
-		body = ins.start.set;
+		ni = new NodeInstruction(ni, node.input(2), ins.add(body));
+		ins = ni.after.add(body = var(LABEL)).add(BR, null, loop);
 		//now since we know where body ends, insert the PHI instructions
 		Instruction next = phi.next;
-		for (
-			Bundle out = node.out.asBundle(),
-				init = node.in(0).asBundle(),
-				state = node.in(2).asBundle();
-			out != null;
-			out = out.parent, init = init.parent, state = state.parent
-		) phi = phi.add(PHI, out.signal, init.signal, start, state.signal, body);
+		for (; out != null; out = out.parent, init = init.parent, state = state.parent)
+			phi = phi.add(PHI, out.signal, init.signal, start, state.signal, body);
 		phi.next = next;
 		//exit loop
-		return ins.add(end);
+		ins.add(end);
 	}
 
-	private static Instruction vec2(
-		Node node, Instruction ins,
+	private static void vec2(
+		NodeInstruction ni,
 		String sop, String uop, String fop
 	) {
-		Signal a = node.in(0), b = node.in(1), o = node.out;
-		String op = uop;
-		if (a.type instanceof Primitive) {
-			Primitive p = (Primitive)a.type;
-			if (p.fp) op = fop;
-			else if (p.signed) op = sop;
-		};
-		return ins.add(" " + op + " $1t $<v, $v\n", o, a, b);
+		Signal o = ni.out();
+		if (ni.evalConst(o)) return;
+		Signal a = ni.in(0), b = ni.in(1);
+		String op = a.type instanceof Primitive p
+			? p.fp ? fop : p.signed ? sop : uop
+			: uop;
+		ni.evalIns(0, 1).after.add(" " + op + " $1t $<v, $v\n", o, a, b);
 	}
 
-	static Instruction add(Node node, Instruction ins) {
-		return vec2(node, ins, "add", "add", "fadd");
+	static void add(NodeInstruction ni, Compiler c) {
+		vec2(ni, "add", "add", "fadd");
 	}
 
-	static Instruction sub(Node node, Instruction ins) {
-		return vec2(node, ins, "sub", "sub", "fsub");
+	static void sub(NodeInstruction ni, Compiler c) {
+		vec2(ni, "sub", "sub", "fsub");
 	}
 
-	static Instruction mul(Node node, Instruction ins) {
-		return vec2(node, ins, "mul", "mul", "fmul");
+	static void mul(NodeInstruction ni, Compiler c) {
+		vec2(ni, "mul", "mul", "fmul");
 	}
 
-	static Instruction div(Node node, Instruction ins) {
-		return vec2(node, ins, "sdiv", "udiv", "fdiv");
+	static void div(NodeInstruction ni, Compiler c) {
+		vec2(ni, "sdiv", "udiv", "fdiv");
 	}
 
-	static Instruction mod(Node node, Instruction ins) {
-		return vec2(node, ins, "srem", "urem", "frem");
+	static void mod(NodeInstruction ni, Compiler c) {
+		vec2(ni, "srem", "urem", "frem");
 	}
 
-	static Instruction or(Node node, Instruction ins) {
-		return vec2(node, ins, "or", "or", null);
+	static void or(NodeInstruction ni, Compiler c) {
+		vec2(ni, "or", "or", null);
 	}
 
-	static Instruction and(Node node, Instruction ins) {
-		return vec2(node, ins, "and", "and", null);
+	static void and(NodeInstruction ni, Compiler c) {
+		vec2(ni, "and", "and", null);
 	}
 
-	static Instruction xor(Node node, Instruction ins) {
-		return vec2(node, ins, "xor", "xor", null);
+	static void xor(NodeInstruction ni, Compiler c) {
+		vec2(ni, "xor", "xor", null);
 	}
 
-	static Instruction eq(Node node, Instruction ins) {
-		return vec2(node, ins, "icmp eq", "icmp eq", "fcmp oeq");
+	static void eq(NodeInstruction ni, Compiler c) {
+		vec2(ni, "icmp eq", "icmp eq", "fcmp oeq");
 	}
 
-	static Instruction ne(Node node, Instruction ins) {
-		return vec2(node, ins, "icmp ne", "icmp ne", "fcmp une");
+	static void ne(NodeInstruction ni, Compiler c) {
+		vec2(ni, "icmp ne", "icmp ne", "fcmp une");
 	}
 
-	static Instruction lt(Node node, Instruction ins) {
-		return vec2(node, ins, "icmp slt", "icmp ult", "fcmp olt");
+	static void lt(NodeInstruction ni, Compiler c) {
+		vec2(ni, "icmp slt", "icmp ult", "fcmp olt");
 	}
 
-	static Instruction gt(Node node, Instruction ins) {
-		return vec2(node, ins, "icmp sgt", "icmp ugt", "fcmp ogt");
+	static void gt(NodeInstruction ni, Compiler c) {
+		vec2(ni, "icmp sgt", "icmp ugt", "fcmp ogt");
 	}
 
-	static Instruction le(Node node, Instruction ins) {
-		return vec2(node, ins, "icmp sle", "icmp ule", "fcmp ole");
+	static void le(NodeInstruction ni, Compiler c) {
+		vec2(ni, "icmp sle", "icmp ule", "fcmp ole");
 	}
 
-	static Instruction ge(Node node, Instruction ins) {
-		return vec2(node, ins, "icmp sge", "icmp uge", "fcmp oge");
+	static void ge(NodeInstruction ni, Compiler c) {
+		vec2(ni, "icmp sge", "icmp uge", "fcmp oge");
+	}
+
+	static void neg(NodeInstruction ni, Compiler c) {
+		Signal a = ni.in(0), o = ni.out();
+		if (ni.evalConst(o)) return;
+		ni.evalIns(0).after.add(
+			((Primitive)a.type).fp ? " fneg $1t $<v\n" : " sub $1t 0, $<v\n",
+			o, a
+		);
+	}
+
+	static void not(NodeInstruction ni, Compiler c) {
+		Signal o = ni.out();
+		if (ni.evalConst(o)) return;
+		ni.evalIns(0).after.add(" xor $1t -1, $<v\n", o, ni.in(0));
 	}
 
 }

@@ -1,5 +1,7 @@
 package cd4017be.dfc.lang.type;
 
+import cd4017be.dfc.compiler.NodeInstruction;
+import cd4017be.dfc.graph.Node;
 import cd4017be.dfc.lang.Signal;
 
 /**
@@ -41,6 +43,11 @@ public interface Type {
 
 	default boolean dynamic() {
 		return false;
+	}
+
+	default void evalConst(NodeInstruction ni, Object val) {
+		if (val instanceof Node n)
+			new NodeInstruction(ni, n, ni.after);
 	}
 
 	StringBuilder displayString(StringBuilder sb, boolean nest);

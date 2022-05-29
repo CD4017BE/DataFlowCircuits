@@ -6,8 +6,6 @@ import static cd4017be.dfc.lang.HeaderParser.*;
 import static cd4017be.dfc.lang.Signal.CONST;
 import static cd4017be.dfc.lang.Signal.IMAGE;
 import static cd4017be.dfc.lang.type.Pointer.NO_WRITE;
-import static cd4017be.dfc.lang.type.Pointer.SHARED;
-
 import cd4017be.dfc.lang.type.*;
 
 /**
@@ -105,7 +103,7 @@ public class ExternalDefinitions {
 			CType elem = (CType)type.content;
 			if (((m = elem.mods) & T_TYPE) == T_FUNCTION)
 				yield convertType(elem);
-			Pointer p = new Pointer((m & T_CONST) != 0 ? NO_WRITE : SHARED);
+			Pointer p = new Pointer((m & T_CONST) != 0 ? NO_WRITE : 0);
 			type.dfcType = p;
 			yield p.to(convertType(elem));
 		}

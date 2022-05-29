@@ -6,6 +6,7 @@ import static java.lang.System.identityHashCode;
 
 import java.util.Objects;
 
+import cd4017be.dfc.compiler.NodeInstruction;
 import cd4017be.dfc.lang.Signal;
 
 /**
@@ -100,6 +101,16 @@ public class Vector implements Type {
 		&& t instanceof Vector
 		&& count == ((Vector)t).count
 		&& element.canAssignTo(((Vector)t).element);
+	}
+
+	@Override
+	public void evalConst(NodeInstruction ni, Object val) {
+		Type t;
+		for (t = element; t instanceof Vector v; t = v.element);
+		if (t instanceof Primitive) return;
+		if (val instanceof Object[] arr)
+			for (Object e : arr)
+				element.evalConst(ni, e);
 	}
 
 }

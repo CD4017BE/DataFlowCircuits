@@ -2,18 +2,19 @@ package cd4017be.dfc.editor;
 
 import java.io.*;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.function.Function;
-import java.util.zip.DataFormatException;
-
+import java.util.*;
 import org.lwjgl.system.MemoryStack;
-import cd4017be.dfc.compiler.Instruction;
+
+import cd4017be.dfc.compiler.CompileError;
+import cd4017be.dfc.compiler.Compiler;
+import cd4017be.dfc.graph.*;
+import cd4017be.dfc.graph.Node;
 import cd4017be.dfc.lang.*;
 import cd4017be.util.*;
 
 import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
+import static cd4017be.dfc.graph.Circuit.SEP;
 import static java.lang.Math.*;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.lwjgl.glfw.GLFW.*;
@@ -21,7 +22,7 @@ import static org.lwjgl.opengl.GL32C.*;
 
 /**Implements the circuit editor user interface.
  * @author CD4017BE */
-public class Circuit implements IGuiSection, Function<String, BlockDef> {
+public class CircuitEditor implements IGuiSection, Macro {
 
 	/**Editing modes */
 	private static final byte M_IDLE = 0, M_BLOCK_SEL = 1, M_TRACE_SEL = 2, M_TRACE_MV = 3, M_TRACE_DRAW = 4,
@@ -31,6 +32,8 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 	public final HashMap<Integer, Trace> traces;
 	final ArrayList<IMovable> moving = new ArrayList<>();
 	final BlockIcons icons;
+	final BlockRegistry reg;
+	final MacroEdit edit;
 	/** GL vertex arrays */
 	final int blockVAO, traceVAO;
 	/** GL buffers */
@@ -50,26 +53,41 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 	Block selBlock;
 	TextField text;
 	String info = "";
-	File curFile;
-	final ExternalDefinitions extDef;
+	final Context context;
 
-	public Circuit(Palette pal) {
+	public CircuitEditor(MacroEdit edit, Palette pal, BlockRegistry reg) {
 		this.blockVAO = genBlockVAO(blockBuf = glGenBuffers());
 		glBufferData(GL_ARRAY_BUFFER, 256 * BLOCK_STRIDE, GL_DYNAMIC_DRAW);
 		this.traceVAO = genTraceVAO(traceBuf = glGenBuffers());
 		allocSelBuf(2);
 		this.blocks = new IndexedSet<>(new Block[16]);
 		this.traces = new HashMap<>();
-		this.extDef = new ExternalDefinitions();
+		this.context = new Context(reg);
 		this.icons = pal.icons;
+		this.reg = reg;
+		this.edit = edit;
 		pal.circuit = this;
+		initGraph(edit.getDef());
 		
 		fullRedraw();
 		glUseProgram(traceP);
 		glUniform2f(trace_lineSize, 0.25F, 1F);
 		checkGLErrors();
 		
-		new Block(icons.get(BlockDef.OUT_ID), this).pos(0, 0).place();
+		load(edit.curFile);
+		if (blocks.isEmpty()) {
+			BlockDef def = edit.getDef(),
+			out = reg.get(BlockDef.OUT_ID),
+			in = reg.get(BlockDef.IN_ID);
+			for (int o = def.outCount, i = 0; i < def.ios(); i++) {
+				Block block = new Block(i < o ? out : in, this);
+				block.setText(def.ioNames[i]);
+				block.pos(
+					i < o ? 2 : -2 - block.w(),
+					(i < o ? i : i - o) * 4
+				).place();
+			}
+		}
 	}
 
 	public void reserveBlockBuf(int size) {
@@ -87,6 +105,7 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 
 	@Override
 	public void redraw() {
+		updateTypeCheck();
 		if (icons.update() || redraw < 0) redrawTraces();
 		redraw = 0;
 		//draw frame
@@ -112,6 +131,25 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		glDrawArrays(GL_POINTS, 0, blocks.size());
 		checkGLErrors();
 		
+		ArrayList<SignalError> errors = new ArrayList<>();
+		for (SignalError e = context.errors.next; e != null; e = e.next) {
+			Node node = e.node;
+			if (node != null && node.macro == this && node.idx >= 0 && node.idx < blocks.size())
+				errors.add(e);
+		}
+		allocSelBuf(3 + errors.size());
+		Node node = context.firstUpdate;
+		if (node != null && node.idx >= 0 && node.idx < blocks.size()) {
+			Block block = blocks.get(node.idx);
+			addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, 0xff00ff00);
+		}
+		for (SignalError e : errors) {
+			Block block = blocks.get(e.node.idx);
+			if (e.io < block.io.length) {
+				Trace tr = block.io[e.io];
+				addSel(tr.x() * 2 - 1, tr.y() * 2 - 1, 2, 2, 0xffff0000);
+			} else addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, 0xffff0000);
+		}
 		if (mode == M_MULTI_SEL || mode == M_MULTI_MOVE)
 			addSel(min(lmx, mx), min(lmy, my), abs(mx - lmx), abs(my - lmy), 0xff80ff80);
 		if (selBlock != null)
@@ -128,9 +166,9 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 				0xffffff80, 0xffffff80, 0xffff8080
 			);
 		for (Block block : blocks) {
-			if (block.data.isBlank()) continue;
+			if (block.text().isBlank()) continue;
 			print(
-				block.data, 256, 0xffffff80, 0x00000000,
+				block.text(), 256, 0xffffff80, 0x00000000,
 				block.textX() / 4F * sx + ofsX,
 				block.textY() / 6F * sy - ofsY,
 				sx, sy
@@ -202,6 +240,8 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 			for (Block block : blocks)
 				if (block.isInside(x >> 1, y >> 1)) {
 					selBlock = block;
+					if (block.node != null && block.node.error != null)
+						info = block.node.error.getLocalizedMessage();
 					break;
 				}
 			if (selBlock != old) refresh(0);
@@ -290,13 +330,14 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 			} else if (mode == M_BLOCK_SEL) {
 				Block block = selBlock;
 				block.place();
-				if (block.def.textMacro != null) {
+				if (block.def.hasArg) {
 					int tx = block.textX();
 					text = new TextField(t -> {
-						block.data = t;
+						block.setText(t);
 						block.redraw();
+						context.updateNode(getNode(block), 0);
 					}, tx / 4F, block.textY() / 6F);
-					text.set(block.data, 1 + (lmx * 2 - tx >> 2));
+					text.set(block.text(), 1 + (lmx * 2 - tx >> 2));
 				}
 				moving.clear();
 				mode = M_IDLE;
@@ -305,7 +346,7 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 				selTr.place();
 				mode = M_IDLE;
 			} else if (mode == M_TRACE_SEL)
-				if (selTr.pin != 0) {
+				if (!selTr.isOut()) {
 					mode = M_TRACE_DRAW;
 					Trace t = new Trace(this).pos(mx + 1 >> 1, my + 1 >> 1);
 					selTr.connect(t);
@@ -344,29 +385,32 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 			break;
 		case GLFW_KEY_S:
 			if (!ctrl) break;
-			if (curFile != null && !shift) save(curFile);
-			else new FileBrowser(FILE, "Save as ", this::save);
+			if (edit.curFile != null && !shift) save(edit.curFile);
+			else new FileBrowser(FILE, "Save as ", CircuitFile.FILTER, this::save);
 			break;
 		case GLFW_KEY_O:
-			if (ctrl) new FileBrowser(FILE, "Open ", this::load);
+			if (ctrl) new FileBrowser(FILE, "Open ", CircuitFile.FILTER, this::load);
 			break;
 		case GLFW_KEY_N:
 			if (!ctrl) break;
 			clear();
-			curFile = null;
+			edit.curFile = null;
 			setTitle(null);
 			break;
 		case GLFW_KEY_H:
-			if (!ctrl || curFile == null) break;
-			extDef.clear();
+			if (!ctrl || edit.curFile == null) break;
+			context.clear();
+			for (Block block : blocks)
+				createNode(block);
 			try {
-				info = loadHeader(curFile, !shift)
+				info = loadHeader(edit.curFile, !shift)
 					? "refreshed external declarations!"
 					: "current circuit has no .c file!";
 			} catch(IOException e) {
 				e.printStackTrace();
 				info = e.getMessage();
 			}
+			refresh(0);
 			break;
 		case GLFW_KEY_W:
 			if (ctrl) glfwSetWindowShouldClose(WINDOW, true);
@@ -374,17 +418,14 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		case GLFW_KEY_D:
 			if (ctrl) cleanUpTraces();
 			break;
-		case GLFW_KEY_T:
-			if (ctrl) typeCheck();
-			break;
 		case GLFW_KEY_M:
 			if (!ctrl) break;
-			if (curFile != null) compile(curFile, shift);
-			else new FileBrowser(FILE, "Compile to ", f -> compile(f, shift));
+			if (edit.curFile != null) compile(edit.curFile, shift);
+			else new FileBrowser(FILE, "Compile to ", n -> n.endsWith(".ll"), f -> compile(f, shift));
 			break;
 		case GLFW_KEY_B:
 			if (!ctrl) break;
-			new MacroEdit(icons, new BlockDef(""));
+			//new MacroEdit(icons, new BlockDef(""));
 			break;
 		case GLFW_KEY_HOME:
 			ofsX = ofsY = 0;
@@ -396,9 +437,16 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 	boolean selTrace(Trace t) {
 		if (t == selTr) return false;
 		selTr = t;
+		StringBuilder sb = new StringBuilder();
+		if (t != null && t.block != null && t.pin >= 0) {
+			sb.append(t.block.def.ioNames[t.pin]).append(": ");
+		}
 		while(t != null && t.pin > 0) t = t.from;
-		info = t == null || t.block == null ? ""
-			: t.block.outType.displayString(new StringBuilder(), true).toString();
+		if (t != null && t.block != null) {
+			Signal sg = t.block.signal();
+			if (sg != null) sg.displayString(sb, true);
+		}
+		info = sb.toString();
 		refresh(0);
 		return true;
 	}
@@ -415,7 +463,7 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		selBlock = new Block(type, this)
 		.pos(mx + 1 - type.icon.w >> 1, my + 1 - type.icon.h >> 1);
 		Trace t = selBlock.io[0];
-		if (selTr != null)
+		if (selTr != null && t.isOut())
 			(selTr.pin >= 0 ? selTr : selTr.to).connect(t);
 		selTrace(t);
 		mode = M_BLOCK_SEL;
@@ -436,6 +484,10 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		}
 	}
 
+	public void redrawSignal(int idx) {
+		fullRedraw();
+	}
+
 	/**Schedule a complete re-render of all vertex buffers. */
 	public void fullRedraw() {
 		refresh(0);
@@ -453,7 +505,7 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 	private void clear() {
 		blocks.clear();
 		traces.clear();
-		extDef.clear();
+		context.clear();
 	}
 
 	private void cleanUpTraces() {
@@ -481,62 +533,37 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		HeaderParser hp = new HeaderParser();
 		hp.processHeader(h, cpp);
 		t.end("header preprocessed");
-		hp.getDeclarations(extDef);
+		hp.getDeclarations(context.extDef);
 		t.end("header parsed");
 		return true;
 	}
 
-	private void typeCheck() {
-		Profiler t = new Profiler(System.out);
-		CircuitFile file = new CircuitFile(blocks);
-		t.end("parsed");
-		try {
-			file.typeCheck(extDef);
-			info = "Type checked!";
-			selBlock = blocks.get(file.out);
-		} catch(SignalError e) {
-			info = "Error: " + e.getMessage();
-			if (e.block >= 0) {
-				selBlock = blocks.get(e.block);
-				selTr = selBlock.io[e.in + 1];
-			} else selBlock = null;
-		}
-		t.end("checked");
-		extDef.reset();
-		for (int i = 0; i < blocks.size(); i++) {
-			Block block = blocks.get(i);
-			Node val = file.nodes[i];
-			block.outType = val == null || val.out == null ? Signal.NULL : val.out;
-		}
-		refresh(0);
-		redraw = -1;
-	}
-
 	private void compile(File file, boolean debug) {
 		file = withSuffix(file, ".ll");
-		Profiler t = new Profiler(System.out);
-		Instruction code = Instruction.compile();
-		t.end("sequentialized");
-		Instruction.initIds(code);
-		t.end("resolved variables");
-		try (FileWriter fw = new FileWriter(file, US_ASCII)){
-			Instruction.print(fw, code, debug);
-			t.end("written");
-			info = "compiled!";
-		/*} catch(CompileError e) {
-			selBlock = e.idx >= 0 ? blocks.get(e.idx + paletteSize) : null;
-			changeInfo("Error: " + e.getMessage());
-			return;*/
-		} catch(IOException e) {
-			e.printStackTrace();
-			info = e.toString();
+		try {
+			Profiler t = new Profiler(System.out);
+			Compiler c = new Compiler(getOutput(context));
+			t.end("sequentialized");
+			c.resolveIds();
+			t.end("resolved variables");
+			try (FileWriter fw = new FileWriter(file, US_ASCII)){
+				c.assemble(fw, debug);
+				t.end("written");
+				info = "compiled!";
+			} catch(IOException e) {
+				e.printStackTrace();
+				info = e.toString();
+			}
+		} catch(CompileError e) {
+			selBlock = e.idx >= 0 ? blocks.get(e.idx) : null;
+			info = "Error: " + e.getMessage();
 		}
 		refresh(0);
 	}
 
-	static final File FILE = new File("./test");
+	public static final File FILE = new File("./test");
 
-	private static File withSuffix(File file, String sfx) {
+	public static File withSuffix(File file, String sfx) {
 		String name = file.getName();
 		if (name.endsWith(sfx)) return file;
 		int i = name.lastIndexOf(sfx.charAt(0));
@@ -546,28 +573,28 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 
 	private void load(File file) {
 		if (file == null) return;
-		setTitle((curFile = file).getName());
-		try(ExtInputStream in = new ExtInputStream(new FileInputStream(file))) {
+		setTitle((edit.curFile = file).getName());
+		try(CircuitFile cf = new CircuitFile(file.toPath(), false)) {
 			clear();
-			CircuitFile.load(this, in);
-			in.close();
+			cf.readLayout(this, cf.readCircuit(reg));
 			loadHeader(file, true);
 			info = "loaded!";
-		} catch(IOException | DataFormatException e) {
+		} catch(IOException e) {
 			e.printStackTrace();
 			info = e.toString();
 		}
+		reg.load();
 		refresh(0);
 	}
 
 	private void save(File file) {
 		if (file == null) return;
-		curFile = file = withSuffix(file, ".dfc");
+		edit.curFile = file = withSuffix(file, ".dfc");
 		setTitle(file.getName());
 		try {
-			file.createNewFile();
-			try(ExtOutputStream out = new ExtOutputStream(new FileOutputStream(file))) {
-				CircuitFile.save(blocks, out);
+			try(CircuitFile out = new CircuitFile(file.toPath(), true)) {
+				out.writeLayout(blocks);
+				out.writeHeader();
 			}
 			info = "saved!";
 		} catch (IOException e) {
@@ -577,9 +604,111 @@ public class Circuit implements IGuiSection, Function<String, BlockDef> {
 		refresh(0);
 	}
 
+	HashMap<String, Block> outputs = new HashMap<>();
+	ArrayDeque<Trace> traceUpdates = new ArrayDeque<>();
+	Node parent;
+	HashMap<String, Integer> links = new HashMap<>();
+	String[] args;
+	int argCount, extraArgs;
+
+	private void initGraph(BlockDef def) {
+		this.parent = new Root(def).getOutput(context);
+		links.clear();
+		if (def.hasArg) {
+			String[] args = SEP.split(def.ioNames[def.ioNames.length - 1]);
+			for (int i = 0; i < args.length; i++)
+				links.put(args[i], i);
+			this.argCount = args.length;
+		} else this.argCount = 0;
+		this.args = parent.arguments(argCount);
+		this.extraArgs = args.length - argCount;
+		parent.data = this;
+	}
+
+	private void updateTypeCheck() {
+		while(!traceUpdates.isEmpty()) {
+			Trace tr = traceUpdates.remove();
+			for (Trace to = tr.to; to != null; to = to.adj)
+				traceUpdates.add(to);
+			if (tr.pin > 0 && tr.block.node != null)
+				tr.block.node.connect(tr.pin - 1, null, context);
+		}
+		if (context.tick(1000)) {
+			//TODO repeated frame updates
+		}
+	}
+
+	private String resolveArg(String arg) {
+		int idx = links.getOrDefault(arg, -1);
+		return idx < 0 ? arg : args[idx];
+	}
+
+	public Node createNode(Block block) {
+		BlockDef def = block.def;
+		Node node = new Node(
+			this, block.getIdx(), def,
+			BlockDef.IN_ID.equals(def.name) ? 2 : 1 + def.inCount
+		);
+		context.updateNode(node, 0);
+		return block.node = node;
+	}
+
+	private Node getNode(Block block) {
+		if (block == null) return Node.NULL;
+		return block.node != null ? block.node : createNode(block);
+	}
+
 	@Override
-	public BlockDef apply(String t) {
-		return icons.get(t);
+	public Node getOutput(Context c) {
+		return getNode(outputs.get(parent.def.ioNames[0]));
+	}
+
+	@Override
+	public void connectInput(Node n, int i, Context c) {
+		Node src = Node.NULL;
+		Block block = blocks.get(n.idx);
+		if (block.def.name.equals(BlockDef.IN_ID)) {
+			String name = resolveArg(block.text());
+			block = outputs.get(name);
+			if (block != null) src = getNode(block);
+			else {
+				BlockDef def = parent.def;
+				String[] names = def.ioNames;
+				for (int k = 0, j = def.outCount; k < def.inCount; j++, k++)
+					if (names[j].equals(name)) {
+						src = parent.getInput(k, c);
+						break;
+					}
+			}
+		} else {
+			Trace t = block.io[i + block.def.outCount];
+			while(t.from != null) t = t.from;
+			if (t.isOut()) src = getNode(t.block);
+		}
+		n.connect(i, src, c);
+	}
+
+	@Override
+	public String[] arguments(Node node, int min) { 
+		String s = blocks.get(node.idx).text();
+		int[] argbuf = new int[254];
+		int n = CircuitFile.parseArgument(s, argbuf);
+		String last = s.substring(n == 0 ? 0 : argbuf[n - 1] + 1).trim();
+		String[] res;
+		int l = n + 1;
+		if (l > 0 && extraArgs > 0 && links.getOrDefault(last, -1) == argCount - 1) {
+			int m = extraArgs + l;
+			if (m >= min) res = new String[m];
+			else Arrays.fill(res = new String[min], m, min, "");
+			System.arraycopy(args, argCount, res, l, extraArgs);
+		} else if (l >= min) res = new String[l];
+		else Arrays.fill(res = new String[min], l, min, "");
+		for (int i = 0, p = 0; i < l; i++, p++) {
+			String arg = i == n ? last : s.substring(p, p = argbuf[i]).trim();
+			int id = links.getOrDefault(arg, -1);
+			res[i] = id >= 0 ? args[id] : arg;
+		}
+		return res;
 	}
 
 }

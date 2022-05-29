@@ -8,12 +8,14 @@ import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.*;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 
 import cd4017be.dfc.lang.BlockDef;
+import cd4017be.dfc.lang.CircuitFile;
 
 /**
  * @author CD4017BE */
@@ -86,12 +88,13 @@ public class ImageConverter {
 					System.err.printf("invalid entry in line %d\n", l);
 					continue;
 				}
-				BlockDef def = new BlockDef(m.group(1));
-				if (m.start(2) >= 0) {
-					def.textMacro = "";
-					def.textL0 = (byte)parseInt(m.group(2));
-					def.textX = (byte)parseInt(m.group(3));
-					def.textY = (byte)parseInt(m.group(4));
+				String name = m.group(1);
+				byte textL = 0, textX = 0, textY = 0;
+				boolean has = m.start(2) >= 0;
+				if (has) {
+					textL = (byte)parseInt(m.group(2));
+					textX = (byte)parseInt(m.group(3));
+					textY = (byte)parseInt(m.group(4));
 				}
 				m.usePattern(PIN_POS);
 				while(m.find()) points.add(
@@ -101,14 +104,20 @@ public class ImageConverter {
 					System.err.printf("missing pin coordinates in line %d\n", l);
 					continue;
 				}
-				def.ports = new byte[points.size() * 2];
-				for (int i = 0; i < points.size(); i++) {
-					int v = points.get(i);
-					def.ports[i*2] = (byte)v;
-					def.ports[i*2+1] = (byte)(v >> 8);
+				BlockDef def = new BlockDef(name, 1, points.size() - 1, has);
+				int i = 0;
+				for (Integer v : points) {
+					def.pins[i++] = v.byteValue();
+					def.pins[i++] = (byte)(v >> 8);
 				}
 				points.clear();
-				convert(new File(src, def.name + ".png"), new File(dir, def.name + ".im"), def);
+				if (has) {
+					def.pins[i++] = textX;
+					def.pins[i++] = textY;
+					def.pins[i++] = textL;
+				}
+				Arrays.fill(def.ioNames, "");
+				convert(new File(src, def.name + ".png"), new File(dir, def.name + ".dfc"), def);
 			}
 			return true;
 		} catch(FileNotFoundException e) {
@@ -119,7 +128,7 @@ public class ImageConverter {
 		}
 	}
 
-	private static void convert(File src, File dst, BlockDef def) {
+	private static void convertImg(File src, File dst) {
 		System.out.printf("converting: %s\n", src.getName());
 		try(
 			FileInputStream in = new FileInputStream(src);
@@ -127,8 +136,28 @@ public class ImageConverter {
 		) {
 			convert(in, out);
 			in.close();
-			if (def != null) def.writeLayout(out);
 			out.close();
+		} catch(IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	static ByteBuffer buf;
+
+	private static void convert(File src, File dst, BlockDef def) {
+		System.out.printf("converting: %s\n", src.getName());
+		try(
+			FileInputStream in = new FileInputStream(src);
+			CircuitFile ccf = new CircuitFile(dst.toPath(), true)
+		) {
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			convert(in, out);
+			in.close();
+			out.close();
+			ccf.writeIcon(out);
+			ccf.writeInterface(def);
+			ccf.writeHeader();
+			ccf.close();
 		} catch(IOException e) {
 			e.printStackTrace();
 		}
@@ -145,7 +174,7 @@ public class ImageConverter {
 		} else {
 			int i = name.lastIndexOf('.');
 			if (i < 0) return;
-			convert(src, new File(dst, name.substring(0, i).concat(".im")), null);
+			convertImg(src, new File(dst, name.substring(0, i).concat(".im")));
 		}
 	}
 

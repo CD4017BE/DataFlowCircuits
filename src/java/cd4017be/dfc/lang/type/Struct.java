@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.Arrays;
 
+import cd4017be.dfc.compiler.NodeInstruction;
 import cd4017be.dfc.lang.Signal;
 
 /**
@@ -121,6 +122,13 @@ public class Struct implements Type {
 	@Override
 	public boolean dynamic() {
 		return dyn;
+	}
+
+	@Override
+	public void evalConst(NodeInstruction ni, Object val) {
+		if (val instanceof Object[] arr)
+			for (int i = 0; i < elements.length; i++)
+				elements[i].evalConst(ni, arr[i]);
 	}
 
 }

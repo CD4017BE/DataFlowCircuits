@@ -1,14 +1,13 @@
 package cd4017be.dfc.lang;
 
-import static cd4017be.dfc.lang.GlobalVar.GLOBALS;
 import static cd4017be.dfc.lang.type.Primitive.WORD;
 import static cd4017be.dfc.lang.type.Primitive.UWORD;
 import static cd4017be.dfc.lang.type.Types.VOID;
 import static java.lang.Double.*;
 import static java.lang.Float.*;
 
-import java.util.ArrayList;
-
+import java.lang.reflect.Array;
+import cd4017be.dfc.graph.Node;
 import cd4017be.dfc.lang.type.*;
 import cd4017be.dfc.lang.type.Type;
 
@@ -18,26 +17,11 @@ public class Signal {
 
 	/**state ids */
 	public static final int IMAGE = 0, CONST = 1, VAR = 2;
-	public static final Signal NULL = new Signal(VOID, IMAGE, 0L);
-	private static final ArrayList<long[]> CONSTANTS = new ArrayList<>();
+	public static final Signal NULL = new Signal(VOID, IMAGE, null);
 
 	public final Type type;
 	public final int state;
-	public long value;
-
-	public static Signal global(Type type, Node node, String name) {
-		GLOBALS.add(new GlobalVar(node, name));
-		return new Signal(type, CONST, GLOBALS.size());
-	}
-
-	public static Signal cst(Type type, long[] value) {
-		for (long v : value)
-			if (v != 0L) {
-				CONSTANTS.add(value);
-				return new Signal(type, CONST, CONSTANTS.size());
-			}
-		return new Signal(type, CONST, 0L);
-	}
+	public Object value;
 
 	public static Signal bundle(Signal... source) {
 		if (source.length == 0) return NULL;
@@ -73,14 +57,14 @@ public class Signal {
 	}
 
 	public static Signal var(Type type) {
-		return new Signal(type, VAR, -1);
+		return new Signal(type, VAR, null);
 	}
 
 	public static Signal img(Type type) {
-		return new Signal(type, IMAGE, 0);
+		return new Signal(type, IMAGE, null);
 	}
 
-	public Signal(Type type, int state, long value) {
+	public Signal(Type type, int state, Object value) {
 		this.type = type;
 		this.state = state;
 		this.value = value;
@@ -98,21 +82,24 @@ public class Signal {
 		return state == VAR;
 	}
 
+	public long asLong() {
+		return value == null ? 0 : (Long)value;
+	}
+
 	public float asFloat() {
-		return intBitsToFloat((int)value);
+		return intBitsToFloat((int)asLong());
 	}
 
 	public double asDouble() {
-		return longBitsToDouble(value);
+		return longBitsToDouble(asLong());
 	}
 
 	public boolean asBool() {
-		return value != 0;
+		return (asLong() & 1L) != 0;
 	}
 
-	public long getIndex(int i) {
-		if (value == 0) return 0L;
-		return CONSTANTS.get((int)value - 1)[i];
+	public Object getIndex(int i) {
+		return value == null ? null : Array.get(value, i);
 	}
 
 	public Signal getElement(int i) {
@@ -131,26 +118,27 @@ public class Signal {
 
 	private static final char[] hex = "0123456789ABCDEF".toCharArray();
 
-	private static StringBuilder constToString(StringBuilder sb, Type type, long val) {
+	private static StringBuilder constToString(StringBuilder sb, Type type, Object val) {
 		if (type instanceof Primitive)
 			switch((Primitive)type) {
-			case FLOAT: return sb.append(intBitsToFloat((int)val));
-			case DOUBLE: return sb.append(longBitsToDouble(val));
+			case FLOAT: return sb.append(intBitsToFloat(((Long)val).intValue()));
+			case DOUBLE: return sb.append(longBitsToDouble((Long)val));
 			default: return sb.append(val);
 			}
 		if (type instanceof Pointer || type instanceof Function) {
-			if (val <= 0) return sb.append("null");
-			return sb.append(GLOBALS.get((int)val - 1));
+			return val instanceof Node n
+				? sb.append('@').append(n.data)
+				: sb.append("null");
 		}
-		if (val <= 0) return sb.append("zeroinitializer");
-		long[] data = CONSTANTS.get((int)val - 1);
+		if (val == null) return sb.append("zeroinitializer");
+		int len = Array.getLength(val);
 		if (type instanceof Vector) {
 			Vector vec = (Vector)type;
-			if (data.length != vec.count) throw new IllegalStateException();
+			if (len != vec.count) throw new IllegalStateException();
 			type = vec.element;
 			if (!vec.simd && (type == WORD || type == UWORD)) {
 				sb.append("c\"");
-				for (long e : data) {
+				for (long e : (long[])val) {
 					char c = (char)(e & 0xff);
 					if (c < 32 || c == '"' || c == '\\')
 						sb.append('\\').append(hex[c >>> 4 & 15]).append(hex[c & 15]);
@@ -160,18 +148,18 @@ public class Signal {
 			}
 			sb.append(vec.simd ? '<' : '[');
 			String pre = type.canSimd() ? type.toString() + ' ' : "";
-			for (long e : data)
-				constToString(sb.append(pre), type, e).append(", ");
+			for (int i = 0; i < len; i++)
+				constToString(sb.append(pre), type, Array.get(val, i)).append(", ");
 			return sb.replace(sb.length() - 2, sb.length(), vec.simd ? ">" : "]");
 		}
 		if (type instanceof Struct) {
 			Struct str = (Struct)type;
-			if (data.length != str.elements.length) throw new IllegalStateException();
+			if (len != str.elements.length) throw new IllegalStateException();
 			sb.append('{');
-			for (int i = 0; i < data.length; i++) {
+			for (int i = 0; i < len; i++) {
 				type = str.elements[i];
 				if (type.canSimd()) sb.append(type).append(' ');
-				constToString(sb, type, data[i]).append(", ");
+				constToString(sb, type, Array.get(val, i)).append(", ");
 			}
 			return sb.replace(sb.length() - 2, sb.length(), "}");
 		}
@@ -180,9 +168,9 @@ public class Signal {
 
 	@Override
 	public String toString() {
-		if (state == IMAGE) return "undef";
-		if (state == VAR) return "%" + value;
-		return constToString(new StringBuilder(), type, value).toString();
+		return value != null
+			? state == VAR ? "%" + value : constToString(new StringBuilder(), type, value).toString()
+			: state == IMAGE ? "undef" : "zeroinitializer";
 	}
 
 	public StringBuilder displayString(StringBuilder sb, boolean nest) {
@@ -191,7 +179,8 @@ public class Signal {
 			return sb;
 		sb.append(" = ");
 		if (state == VAR)
-			return sb.append('%').append(value);
+			return value == null ? sb.append("%?")
+				: sb.append('%').append(value);
 		return constToString(sb, type, value);
 	}
 

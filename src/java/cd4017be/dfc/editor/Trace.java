@@ -10,7 +10,7 @@ import cd4017be.dfc.lang.Signal;
  * @author CD4017BE */
 public class Trace implements IMovable {
 
-	public final Circuit cc;
+	public final CircuitEditor cc;
 	public Block block;
 	public Trace from, to, adj;
 	/**-1: trace, 0: output, 1..: input */
@@ -18,14 +18,18 @@ public class Trace implements IMovable {
 	private int pos, bufOfs;
 	public boolean placed;
 
-	public Trace(Circuit cc) {
+	public Trace(CircuitEditor cc) {
 		this(cc, null, -1);
 	}
 
-	Trace(Circuit cc, Block block, int pin) {
+	Trace(CircuitEditor cc, Block block, int pin) {
 		this.cc = cc;
 		this.block = block;
 		this.pin = pin;
+	}
+
+	public boolean isOut() {
+		return pin >= 0 && pin < block.def.outCount;
 	}
 
 	@Override
@@ -128,6 +132,7 @@ public class Trace implements IMovable {
 			adj = tr.to;
 			tr.to = this;
 		}
+		cc.traceUpdates.add(this);
 	}
 
 	@Override
@@ -146,10 +151,11 @@ public class Trace implements IMovable {
 			}
 		if (pin < 0) this.block = block;
 		bufOfs = buf.position();
+		Signal s = block == null ? null : block.signal();
 		buf.putInt(pos).putShort(
 			start ? STOP_COLOR :
-			block == null || block.outType == Signal.NULL ? VOID_COLOR :
-			(short)block.outType.type.color(block.outType)
+			s == null ? VOID_COLOR :
+			(short)s.type.color(s)
 		);
 	}
 

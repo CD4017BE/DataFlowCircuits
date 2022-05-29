@@ -1,12 +1,12 @@
 package cd4017be.dfc.editor;
 
 import static cd4017be.dfc.editor.Shaders.BLOCK_STRIDE;
-import static java.lang.Math.max;
 import java.nio.ByteBuffer;
 import org.lwjgl.system.MemoryStack;
 
 import static org.lwjgl.opengl.GL32C.*;
 
+import cd4017be.dfc.graph.Node;
 import cd4017be.dfc.lang.*;
 import cd4017be.util.IndexedSet;
 
@@ -16,11 +16,11 @@ public class Block extends IndexedSet.Element implements IMovable {
 
 	public final BlockDef def;
 	public final Trace[] io;
-	public String data = "";
-	public Signal outType = Signal.NULL;
+	private String data = "";
+	public Node node;
 	public short x, y;
 
-	public Block(BlockDef def, Circuit cc) {
+	public Block(BlockDef def, CircuitEditor cc) {
 		this.def = def;
 		this.io = new Trace[def.ios()];
 		for (int i = 0; i < io.length; i++)
@@ -29,8 +29,12 @@ public class Block extends IndexedSet.Element implements IMovable {
 		cc.fullRedraw();
 	}
 
+	public CircuitEditor circuit() {
+		return io[0].cc;
+	}
+
 	public int w() {
-		return def.icon.w + max(0, data.length() - def.textL0);
+		return def.icon.w + def.stretch(data);
 	}
 
 	public int h() {
@@ -53,7 +57,7 @@ public class Block extends IndexedSet.Element implements IMovable {
 		this.x = (short)x;
 		this.y = (short)y;
 		redraw();
-		byte[] ports = def.ports;
+		byte[] ports = def.pins;
 		int w = w() + 1;
 		for (int i = 0, j = 0; i < io.length; i++) {
 			int dx = ports[j++];
@@ -63,11 +67,15 @@ public class Block extends IndexedSet.Element implements IMovable {
 	}
 
 	public int textX() {
-		return x * 4 + (def.textX + max(0, def.textL0 - data.length())) * 2;
+		return x * 4 + def.textX(data) * 2;
 	}
 
 	public int textY() {
-		return y * 4 + def.textY * 2 + 1;
+		return y * 4 + def.textY() * 2 + 1;
+	}
+
+	public String text() {
+		return data;
 	}
 
 	@Override
@@ -76,13 +84,22 @@ public class Block extends IndexedSet.Element implements IMovable {
 		return this;
 	}
 
+	public void setText(String s) {
+		if (BlockDef.OUT_ID.equals(def.name)) {
+			var out = circuit().outputs;
+			out.remove(data, this);
+			out.put(s, this);
+		}
+		data = s;
+	}
+
 	public void redraw() {
 		try(MemoryStack ms = MemoryStack.stackPush()) {
 			ByteBuffer buf = ms.malloc(BLOCK_STRIDE);
 			buf.putShort(x).putShort(y)
-			.put((byte)max(0, data.length() - def.textL0))
+			.put((byte)def.stretch(data))
 			.put((byte)0).putShort((short)def.icon.id);
-			glBindBuffer(GL_ARRAY_BUFFER, io[0].cc.blockBuf);
+			glBindBuffer(GL_ARRAY_BUFFER, circuit().blockBuf);
 			glBufferSubData(GL_ARRAY_BUFFER, getIdx() * BLOCK_STRIDE, buf.flip());
 		}
 		Main.refresh(0);
@@ -91,10 +108,16 @@ public class Block extends IndexedSet.Element implements IMovable {
 	@Override
 	public void setIdx(int idx) {
 		super.setIdx(idx);
+		CircuitEditor cc = circuit();
 		if (idx < 0) { // disconnect all Wires on removal
 			for (Trace tr : io) tr.remove();
-			io[0].cc.fullRedraw();
-		} else redraw();
+			cc.fullRedraw();
+			if (node != null) node.remove(cc.context);
+		} else {
+			redraw();
+			if (node != null) node.idx = idx;
+			else cc.createNode(this);
+		}
 	}
 
 	@Override
@@ -118,12 +141,16 @@ public class Block extends IndexedSet.Element implements IMovable {
 
 	@Override
 	public void remove() {
-		io[0].cc.blocks.remove(this);
+		circuit().blocks.remove(this);
 	}
 
 	@Override
 	public boolean inRange(int x0, int y0, int x1, int y1) { 
 		return x < x1 && y < y1 && x + w() > x0 && y + h() > y0;
+	}
+
+	public Signal signal() {
+		return node == null ? null : node.out;
 	}
 
 }

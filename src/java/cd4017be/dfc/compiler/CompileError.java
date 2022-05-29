@@ -1,5 +1,7 @@
 package cd4017be.dfc.compiler;
 
+import cd4017be.dfc.graph.Node;
+
 /**
  * @author CD4017BE */
 public class CompileError extends Exception {
@@ -8,9 +10,9 @@ public class CompileError extends Exception {
 
 	public final int idx;
 
-	public CompileError(int idx, String message) {
+	public CompileError(Node node, String message) {
 		super(message);
-		this.idx = idx;
+		this.idx = node.idx;
 	}
 
 	@Override

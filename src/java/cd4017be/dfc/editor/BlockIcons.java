@@ -3,18 +3,18 @@ package cd4017be.dfc.editor;
 import static cd4017be.dfc.editor.Main.checkGLErrors;
 import static org.lwjgl.glfw.GLFW.glfwExtensionSupported;
 import static org.lwjgl.opengl.ARBCopyImage.glCopyImageSubData;
+import static org.lwjgl.opengl.GL11C.*;
+import static org.lwjgl.opengl.GL12C.GL_BGRA;
+import static org.lwjgl.opengl.GL12C.GL_UNSIGNED_SHORT_1_5_5_5_REV;
 import static org.lwjgl.opengl.GL31C.*;
 
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.*;
-import java.util.zip.DataFormatException;
-
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 
-import cd4017be.dfc.lang.BlockDef;
-import cd4017be.dfc.lang.CircuitFile;
+import cd4017be.dfc.lang.*;
 import cd4017be.util.*;
 
 /**
@@ -23,24 +23,24 @@ public class BlockIcons {
 
 	private static final boolean CAN_ENLARGE = glfwExtensionSupported("GL_ARB_copy_image");
 	private static final int SCALE = 2;
-	public final HashMap<String, BlockDef> defs;
-	private final ArrayList<BlockDef> loaded, missing;
+	private final ArrayList<BlockDef> loaded;
 	private AtlasSprite atlas;
 	private int texId, idBuf;
 	public float scaleX, scaleY;
 	private boolean update;
 	public File root;
+	public final BlockDef placeholder;
 
-	public BlockIcons(HashMap<String, BlockDef> defs) {
-		this.defs = defs;
+	public BlockIcons() {
 		this.loaded = new ArrayList<>();
-		this.missing = new ArrayList<>();
 		glBindBuffer(GL_TEXTURE_BUFFER, idBuf = glGenBuffers());
 		glBufferData(GL_TEXTURE_BUFFER, 1024, GL_STATIC_DRAW);
 		checkGLErrors();
 		int size = CAN_ENLARGE ? 16 : 256;
 		init(size, size);
-		load("../traces", null);
+		load("traces", null);
+		load("placeholder", placeholder = new BlockDef("", 0, 0, false));
+		placeholder.shortDesc = placeholder.longDesc = placeholder.name;
 	}
 
 	private void init(int w, int h) {
@@ -56,31 +56,11 @@ public class BlockIcons {
 		update = true;
 	}
 
-	private InputStream open(String name, boolean im) throws FileNotFoundException {
-		if (name.startsWith("/"))
-			return new FileInputStream(new File(root, name + (im ? ".im" : ".dfc")));
-		InputStream is = BlockIcons.class.getResourceAsStream(
-			im ? name.startsWith("../") ? "/textures/" + name.substring(3) + ".im"
-				: "/textures/blocks/" + name + ".im"
-				: "/circuits/" + name + ".dfc"
-		);
-		if (is == null) throw new FileNotFoundException(name);
-		return is;
-	}
-
 	public boolean update() {
 		if (!update) return false;
 		glUseProgram(Shaders.blockP);
 		glUniform2f(Shaders.block_gridScale, scaleX, scaleY);
 		checkGLErrors();
-		while (!missing.isEmpty()) {
-			BlockDef def = missing.remove(missing.size() - 1);
-			try (ExtInputStream in = new ExtInputStream(open(def.name, false))) {
-				def.eval = new CircuitFile(in, this::get);
-			} catch(IOException | DataFormatException e) {
-				e.printStackTrace();
-			}
-		}
 		update = false;
 		return true;
 	}
@@ -90,46 +70,73 @@ public class BlockIcons {
 		glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA8UI, idBuf);
 	}
 
-	public BlockDef get(String name) {
-		BlockDef def = defs.computeIfAbsent(name, name1 -> {
-			BlockDef def1 = new BlockDef(name1);
-			missing.add(def1);
-			update = true;
-			return def1;
-		});
-		if (def.icon == null) load(name, def);
-		return def;
+	/**@return {short scanline, short... pixels} */
+	public ByteBuffer getData(MemoryStack ms) {
+		glBindTexture(GL_TEXTURE_2D, texId);
+		int tw = glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH);
+		int th = glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT);
+		ByteBuffer buf = ms.malloc(tw * th * 2 + 2);
+		buf.putShort((short)(tw * 2));
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, buf);
+		return buf.clear();
 	}
 
-	public AtlasSprite load(String path, BlockDef def) {
-		System.out.println("loading icon: " + path);
-		AtlasSprite icon = AtlasSprite.NULL;
-		try(MemoryStack ms = MemoryStack.stackPush()) {
-			ByteBuffer img;
-			try (InputStream is = open(path, true)) {
-				img = GLUtils.readImage(is);
-				if (def != null) def.readLayout(is);
-			} catch(IOException e) {
-				e.printStackTrace();
-				return icon;
-			}
-			glBindTexture(GL_TEXTURE_2D, texId);
-			glBindBuffer(GL_TEXTURE_BUFFER, idBuf);
-			int w = img.getShort(), h = img.getShort();
-			while((icon = atlas.place(w >> SCALE, h >> SCALE)) == null) enlarge();
-			glTexSubImage2D(
-				GL_TEXTURE_2D, 0, icon.x << SCALE, icon.y << SCALE, w, h,
-				img.getChar(), img.getChar(), img
-			);
-			checkGLErrors();
-			setIndex(icon, def != null ? loaded.size() : -1);
-			return icon;
-		} finally {
-			if (def != null) {
-				def.icon = icon;
-				loaded.add(def);
-			}
+	public void load(BlockDef def, BlockRegistry reg) {
+		if (def.icon != null) return;
+		System.out.println("loading icon: " + def.name);
+		try (CircuitFile file = reg.openFile(def.name, false)) {
+			load(file.readIcon(), def);
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
+	}
+
+	private AtlasSprite load(String path, BlockDef def) {
+		path = "/textures/" + path + ".tga";
+		try (
+			InputStream is = BlockIcons.class.getResourceAsStream(path);
+			MemoryStack ms = MemoryStack.stackPush()
+		) {
+			if (is == null) throw new FileNotFoundException(path);
+			return load(GLUtils.readTGA(is, ms), def);
+		} catch(IOException e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+
+	public AtlasSprite load(InputStream is, BlockDef def) throws IOException {
+		if (is == null) return def.icon = placeholder.icon;
+		try(MemoryStack ms = MemoryStack.stackPush()) {
+			return load(GLUtils.readImage(is, ms), def);
+		}
+	}
+
+	public AtlasSprite load(ByteBuffer img, BlockDef def) throws IOException {
+		AtlasSprite icon = AtlasSprite.NULL;
+		glBindTexture(GL_TEXTURE_2D, texId);
+		glBindBuffer(GL_TEXTURE_BUFFER, idBuf);
+		int w = img.getShort(), h = img.getShort(), ws = w >> SCALE, hs = h >> SCALE;
+		if (def != null && def.icon != null && def.icon.w >= ws && def.icon.h >= hs) {
+			icon = def.icon;
+			icon.w = ws;
+			icon.h = hs;
+		} else while((icon = atlas.place(ws, hs)) == null)
+			enlarge();
+		glTexSubImage2D(
+			GL_TEXTURE_2D, 0, icon.x << SCALE, icon.y << SCALE, w, h,
+			img.getChar(), img.getChar(), img
+		);
+		checkGLErrors();
+		if (def == null) setIndex(icon, -1);
+		else if (def.icon == null) {
+			setIndex(def.icon = icon, loaded.size());
+			loaded.add(def);
+		} else {
+			setIndex(icon, def.icon.id);
+			def.icon = icon;
+		}
+		return icon;
 	}
 
 	private void enlarge() {

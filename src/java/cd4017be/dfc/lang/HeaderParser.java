@@ -232,50 +232,53 @@ public class HeaderParser {
 		if (tk.get(tp) != '#') return;
 		tk.put(EOF); //so no need to check hasRemaining() every time.
 		tk.flip().position(tp + 1);
-		int t = tk.get();
-		dir: switch(t) {
-		case UNDEF:
-			if ((t = tk.get()) >= 0) break;
-			macros.remove(t);
-			tk.clear().position(tp);
-			return;
-		case DEFINE:
-			if ((t = tk.get()) >= 0) break;
-			tk.mark();
-			int t1 = tk.get(), n = -1;
-			if (t1 == '(' && s.charAt(s.indexOf('(') - 1) != ' ') {
-				int p = tk.position();
-				n = 0;
-				do {
-					t1 = tk.get();
-					if (t1 == ')') break;
-					if (t1 >= 0 && t1 != ELIPSIS) break dir;
-					n++;
-					t1 = tk.get();
-				} while(t1 == ',');
-				if (t1 != ')') break dir;
+		directive: {
+			int t = tk.get();
+			dir: switch(t) {
+			case UNDEF:
+				if ((t = tk.get()) >= 0) break;
+				macros.remove(t);
+				tk.clear().position(tp);
+				break directive;
+			case DEFINE:
+				if ((t = tk.get()) >= 0) break;
 				tk.mark();
-				while ((t1 = tk.get()) != EOF) {
-					if (t1 >= 0) continue;
-					for (int j = 0; j < n; j++)
-						if (tk.get(p + j * 2) == t1) {
-							tk.put(tk.position() - 1, j | REPLACE);
-							break;
-						}
+				int t1 = tk.get(), n = -1;
+				if (t1 == '(' && s.charAt(s.indexOf('(') - 1) != ' ') {
+					int p = tk.position();
+					n = 0;
+					do {
+						t1 = tk.get();
+						if (t1 == ')') break;
+						if (t1 >= 0 && t1 != ELIPSIS) break dir;
+						n++;
+						t1 = tk.get();
+					} while(t1 == ',');
+					if (t1 != ')') break dir;
+					tk.mark();
+					while ((t1 = tk.get()) != EOF) {
+						if (t1 >= 0) continue;
+						for (int j = 0; j < n; j++)
+							if (tk.get(p + j * 2) == t1) {
+								tk.put(tk.position() - 1, j | REPLACE);
+								break;
+							}
+					}
 				}
+				tk.reset();
+				int[] macro = new int[tk.remaining()];
+				macro[0] = n;
+				tk.get(macro, 1, macro.length - 1);
+				macros.put(t, macro);
+				tk.clear().position(tp);
+				break directive;
+			default:
+				if (t >= 0) break directive;
 			}
-			tk.reset();
-			int[] macro = new int[tk.remaining()];
-			macro[0] = n;
-			tk.get(macro, 1, macro.length - 1);
-			macros.put(t, macro);
-			tk.clear().position(tp);
-			return;
-		default:
-			if (t >= 0) return;
+			System.err.print("unknown directive: ");
+			System.err.println(s);
 		}
-		System.err.print("unknown directive: ");
-		System.err.println(s);
+		tk.clear().position(tp);
 	}
 
 	private int getIdx(String s) {
@@ -623,7 +626,39 @@ public class HeaderParser {
 	}
 
 	private void enums(CType type) throws IOException {
-		throw error();
+		CDecl struct;
+		int t = tokens.get();
+		if (t < 0) {
+			CType tp = types.get(t);
+			if (tp != null && ((tp.mods ^ type.mods) & T_TYPE) == 0)
+				struct = (CDecl)tp.content;
+			else {
+				struct = new CDecl();
+				struct.name = names.get(t & IDX_MASK);
+				types.put(t, type);
+			}
+			t = tokens.get();
+		} else struct = new CDecl();
+		type.content = struct;
+		if (t != '{') {
+			back();
+			return;
+		}
+		long val = 0;
+		while((t = tokens.get()) != '}') {
+			if (t >= 0) throw error();
+			CDecl decl = new CDecl();
+			struct = struct.next = decl;
+			decl.type = type;
+			decl.name = names.get(t & IDX_MASK);
+			if ((t = tokens.get()) == '=') {
+				val = assignmentExpr();
+				t = tokens.get();
+			}
+			decl.dfcSignal = new Signal(null, Signal.CONST, val++);
+			if (t == '}') break;
+			if (t != ',') throw error();
+		}
 	}
 
 	private void align() throws IOException {

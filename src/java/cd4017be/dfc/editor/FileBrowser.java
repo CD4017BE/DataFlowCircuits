@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * @author CD4017BE */
@@ -20,12 +21,14 @@ public class FileBrowser implements IGuiSection {
 	final String title;
 	final ArrayList<String> names = new ArrayList<>(), filtered = new ArrayList<>();
 	final TextField text = new TextField(this::filter, 0, 0);
+	final Predicate<String> filter;
 	File dir;
 	int sel;
 
-	public FileBrowser(File dir, String title, Consumer<File> result) {
+	public FileBrowser(File dir, String title, Predicate<String> filter, Consumer<File> result) {
 		this.result = result;
 		this.title = title;
+		this.filter = filter;
 		boolean isdir = dir.isDirectory();
 		this.dir = isdir ? dir : dir.getParentFile();
 		enter("./");
@@ -38,7 +41,8 @@ public class FileBrowser implements IGuiSection {
 
 	private void enter(String name) {
 		if (!isDir(name)) {
-			exit(new File(dir, name));
+			if (filter.test(name))
+				exit(new File(dir, name));
 			return;
 		}
 		try {
@@ -50,8 +54,13 @@ public class FileBrowser implements IGuiSection {
 		names.clear();
 		names.add("./");
 		names.add("../");
-		for (File f : dir.listFiles())
-			names.add(f.isDirectory() ? f.getName() + '/' : f.getName());
+		for (File f : dir.listFiles()) {
+			String n = f.getName();
+			if (f.isDirectory())
+				names.add(n.concat("/"));
+			else if (filter.test(n))
+				names.add(n);
+		}
 		Collections.sort(names, FileBrowser::order);
 		text.set("", -1);
 		filtered.clear();

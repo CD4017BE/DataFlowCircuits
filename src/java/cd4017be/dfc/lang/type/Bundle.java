@@ -35,7 +35,7 @@ public class Bundle implements Type {
 			throw new IllegalArgumentException("can't dynamically index bundle");
 		Bundle b = this;
 		Objects.checkIndex((int)i, (int)s.value);
-		for (int j = (int)(s.value - i) - 1; j > 0; j--)
+		for (int j = (Integer)s.value - (int)i - 1; j > 0; j--)
 			b = b.parent;
 		return b.signal;
 	}

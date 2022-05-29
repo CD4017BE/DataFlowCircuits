@@ -1,12 +1,13 @@
 package cd4017be.util;
 
 import static java.lang.Math.min;
+import static org.lwjgl.opengl.GL11C.GL_UNSIGNED_BYTE;
+import static org.lwjgl.opengl.GL12C.*;
 import static org.lwjgl.opengl.GL32C.*;
 
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
+import java.nio.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
@@ -170,7 +171,7 @@ public class GLUtils {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
 		try(MemoryStack ms = MemoryStack.stackPush()) {
-			loadTexture(readImage(path), GL_TEXTURE_2D, format);
+			loadTexture(readImage(path, ms), GL_TEXTURE_2D, format);
 		}
 		return tex;
 	}
@@ -200,11 +201,11 @@ public class GLUtils {
 	/**@param path local texture path
 	 * @return image data: {S w, S h, US gl_format, US gl_type, (w * h * T) pixel data}
 	 * allocated from {@link MemoryStack} or null if can't load */
-	public static ByteBuffer readImage(String path) {
-		path = "/textures/" + path + ".im";
+	public static ByteBuffer readImage(String path, MemoryStack ms) {
+		path = "/textures/" + path + ".tga";
 		try (InputStream is = GLUtils.class.getResourceAsStream(path)) {
 			if (is == null) throw new FileNotFoundException(path);
-			return readImage(is);
+			return readTGA(is, ms);
 		} catch(IOException e) {
 			e.printStackTrace();
 			return null;
@@ -251,13 +252,13 @@ public class GLUtils {
 	 * @return image data: {S w, S h, US gl_format, US gl_type, (w * h * T) pixel data}
 	 * allocated from {@link MemoryStack}.
 	 * @throws IOException */
-	public static ByteBuffer readImage(InputStream is) throws IOException {
+	public static ByteBuffer readImage(InputStream is, MemoryStack ms) throws IOException {
 		int f = is.read(), w = is.read(), h = is.read();
 		if ((f | w | h) < 0) throw new EOFException();
 		int fmt = FORMATS[f & 31];
 		if (fmt == 0) throw new IOException("unsupported color format: " + (f & 31));
 		int e = f & 3, l = ++w * ++h << e;
-		ByteBuffer img = MemoryStack.stackMalloc(8 + l);
+		ByteBuffer img = ms.malloc(8 + l);
 		img.putShort((short)w).putShort((short)h).putInt(fmt);
 		if ((byte)f < 0) {
 			int p = is.read();
@@ -282,6 +283,86 @@ public class GLUtils {
 			}
 		}
 		return img.flip();
+	}
+
+	private static ByteBuffer readRLE(InputStream in, ByteBuffer buf, int unit) throws IOException {
+		byte[] arr = new byte[unit];
+		while(buf.hasRemaining()) {
+			int hdr = in.read();
+			if (hdr < 0) throw new EOFException();
+			if ((hdr & 128) != 0) {
+				for (int i = 0; i < unit; i++)
+					arr[i] = (byte)in.read();
+				for (hdr &= 127; hdr >= 0; hdr--)
+					buf.put(arr);
+			} else for (hdr = (hdr + 1) * unit; hdr > 0; hdr--)
+				buf.put((byte)in.read());
+		}
+		return buf;
+	}
+
+	public static ByteBuffer readTGA(InputStream in, MemoryStack ms) throws IOException {
+		ByteBuffer hdr = ByteBuffer.wrap(in.readNBytes(18)).order(ByteOrder.LITTLE_ENDIAN);
+		in.skipNBytes(hdr.get(0) & 0xff); //skip id field
+		ByteBuffer map = hdr.get(1) == 0 ? null
+			: ByteBuffer.wrap(in.readNBytes(((hdr.get(7) & 0xff) + 7 >> 3) * hdr.getChar(5)));
+		short w = hdr.getShort(12), h = hdr.getShort(14);
+		int type = hdr.get(2);
+		if (type != 1 && type != 2 && type != 9 && type != 10)
+			throw new IOException("unsupported TGA image type " + type);
+		int depth = (hdr.get((type & 7) == 1 ? 7 : 16) & 0xff) + 7 >> 3;
+		ByteBuffer img = ms.malloc(8 + w * h * depth);
+		img.putShort(w).putShort(h).putInt(switch(depth) {
+			case 2 -> GL_BGRA | GL_UNSIGNED_SHORT_1_5_5_5_REV << 16;
+			case 3 -> GL_BGR | GL_UNSIGNED_BYTE << 16;
+			case 4 -> GL_BGRA | GL_UNSIGNED_BYTE << 16;
+			default -> throw new IOException("unsupported " + depth * 8 + " bit color depth");
+		});
+		int dataUnit = (hdr.get(16) & 0xff) + 7 >> 3;
+		ByteBuffer data = img.position(img.capacity() - w * h * dataUnit).slice();
+		((type & 8) != 0 ? readRLE(in, data, dataUnit) : data.put(in.readNBytes(data.remaining()))).flip();
+		if ((hdr.get(17) & 32) == 0) {//vertical flip
+			for (int y = (h >> 1) - 1; y >= 0; y--) {
+				for (int s = w * dataUnit, p = y * s, q = (h - y - 1) * s; s > 0; s--, p++, q++) {
+					byte b = data.get(p);
+					data.put(p, data.get(q));
+					data.put(q, b);
+				}
+			}
+		}
+		if ((type & 7) == 1) {
+			if (dataUnit != 1 && dataUnit != 2)
+				throw new IOException("unsupported index size " + dataUnit + " bytes");
+			int ofs = hdr.getChar(3);
+			for (int p = 8; data.hasRemaining();) {
+				int i = dataUnit == 1 ? data.get() & 0xff : data.getShort() & 0xffff;
+				img.put(p, map, (i - ofs) * depth, depth);
+			}
+		}
+		return img.clear();
+	}
+
+	private static void write(OutputStream out, int bytes, int val) throws IOException {
+		for (; bytes > 0; bytes--, val >>= 8)
+			out.write(val);
+	}
+
+	public static void writeTGA16(OutputStream out, ByteBuffer data, int scan, int w, int h) throws IOException {
+		out.write(0); //ID length
+		out.write(0); //color palette
+		out.write(2); //type: uncompressed RGB
+		out.write(new byte[5]); //palette info
+		write(out, 2, 0); //origin X
+		write(out, 2, 0); //origin Y
+		write(out, 2, w); //width
+		write(out, 2, h); //height
+		out.write(16); //16 bit color depth
+		out.write(0b10_0001); //upper left origin
+		byte[] arr = new byte[w * 2];
+		for (int i = h, p = data.position(); i > 0; i--, p += scan) {
+			data.position(p).get(arr);
+			out.write(arr);
+		}
 	}
 
 }

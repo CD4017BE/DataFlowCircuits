@@ -2,7 +2,6 @@ package cd4017be.dfc.editor;
 
 import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
-import static cd4017be.dfc.lang.IntrinsicEvaluators.INTRINSICS;
 import static java.lang.Math.*;
 import static org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT;
 import static org.lwjgl.glfw.GLFW.GLFW_RELEASE;
@@ -12,6 +11,7 @@ import java.nio.ByteBuffer;
 import org.lwjgl.system.MemoryStack;
 
 import cd4017be.dfc.lang.BlockDef;
+import cd4017be.dfc.lang.BlockRegistry;
 
 /**
  * @author CD4017BE */
@@ -35,14 +35,15 @@ public class Palette implements IGuiSection {
 	public int idx;
 	int bw, bh, nw, scroll;
 	int blockBuf, blockVAO;
-	Circuit circuit;
+	CircuitEditor circuit;
 
-	public Palette() {
-		this.icons = new BlockIcons(INTRINSICS);
+	public Palette(BlockIcons icons, BlockRegistry reg) {
+		this.icons = icons;
 		this.palette = new BlockDef[DEF_LIST.length];
 		int i = 0, w = 0, h = 0;
 		for (String name : DEF_LIST) {
-			BlockDef def = palette[i++] = icons.get(name);
+			BlockDef def = palette[i++] = reg.get(name);
+			icons.load(def, reg);
 			w = max(w, def.icon.w);
 			h = max(h, def.icon.h);
 		}

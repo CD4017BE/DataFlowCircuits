@@ -70,13 +70,14 @@ public class Main {
 		glClearColor(0, 0, 0, 1);
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		Palette pal = new Palette();
-		GUI.add(new Circuit(pal));
-		GUI.add(pal);
+		//Palette pal = new Palette();
+		//GUI.add(new Circuit(pal));
+		//GUI.add(pal);
+		new MacroEdit(new BlockIcons());
 	}
 
 	private static void run(long window) {
-		while(!glfwWindowShouldClose(window)) {
+		while(!glfwWindowShouldClose(window) && !GUI.isEmpty()) {
 			if (redraw) {
 				redraw = false;
 				glClear(GL_COLOR_BUFFER_BIT);
