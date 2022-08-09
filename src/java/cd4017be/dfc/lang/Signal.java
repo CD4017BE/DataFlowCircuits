@@ -7,6 +7,8 @@ import static java.lang.Double.*;
 import static java.lang.Float.*;
 
 import java.lang.reflect.Array;
+import java.util.Objects;
+
 import cd4017be.dfc.graph.Node;
 import cd4017be.dfc.lang.type.*;
 import cd4017be.dfc.lang.type.Type;
@@ -114,6 +116,13 @@ public class Signal {
 
 	public int bundleSize() {
 		return type == VOID ? 0 : type instanceof Bundle ? (int)value : 1;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		return obj == this
+			|| obj instanceof Signal s && s.state == state
+			&& type.equals(s.type) && Objects.equals(s.value, value);
 	}
 
 	private static final char[] hex = "0123456789ABCDEF".toCharArray();

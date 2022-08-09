@@ -143,10 +143,17 @@ public class CircuitEditor implements IGuiSection, Macro {
 			Block block = blocks.get(node.idx);
 			addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, 0xff00ff00);
 		}
-		for (SignalError e : errors) {
-			Block block = blocks.get(e.node.idx);
-			if (e.io < block.io.length) {
-				Trace tr = block.io[e.io];
+		errors: for (SignalError e : errors) {
+			node = e.node;
+			int io = e.io;
+			while (node.macro != this) {
+				if (node.macro == null || (node = node.macro.parent()) == null)
+					continue errors;
+				io = Integer.MAX_VALUE;
+			}
+			Block block = blocks.get(node.idx);
+			if (io < block.io.length) {
+				Trace tr = block.io[io];
 				addSel(tr.x() * 2 - 1, tr.y() * 2 - 1, 2, 2, 0xffff0000);
 			} else addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, 0xffff0000);
 		}
@@ -335,7 +342,10 @@ public class CircuitEditor implements IGuiSection, Macro {
 					text = new TextField(t -> {
 						block.setText(t);
 						block.redraw();
-						context.updateNode(getNode(block), 0);
+						if (block.node != null)
+							if (block.def.name.equals(BlockDef.IN_ID))
+								block.node.connect(0, null, context);
+							else context.updateNode(block.node, 0);
 					}, tx / 4F, block.textY() / 6F);
 					text.set(block.text(), 1 + (lmx * 2 - tx >> 2));
 				}
@@ -630,8 +640,11 @@ public class CircuitEditor implements IGuiSection, Macro {
 			Trace tr = traceUpdates.remove();
 			for (Trace to = tr.to; to != null; to = to.adj)
 				traceUpdates.add(to);
-			if (tr.pin > 0 && tr.block.node != null)
-				tr.block.node.connect(tr.pin - 1, null, context);
+			Block block = tr.block;
+			if (block == null) continue;
+			int in = tr.pin - block.def.outCount;
+			if (in >= 0 && block.node != null)
+				block.node.connect(in, null, context);
 		}
 		if (context.tick(1000)) {
 			//TODO repeated frame updates
@@ -655,7 +668,9 @@ public class CircuitEditor implements IGuiSection, Macro {
 
 	private Node getNode(Block block) {
 		if (block == null) return Node.NULL;
-		return block.node != null ? block.node : createNode(block);
+		if (block.node == null) return createNode(block);
+		return block.node.data instanceof Macro m
+			? m.getOutput(context) : block.node;
 	}
 
 	@Override
@@ -689,7 +704,7 @@ public class CircuitEditor implements IGuiSection, Macro {
 	}
 
 	@Override
-	public String[] arguments(Node node, int min) { 
+	public String[] arguments(Node node, int min) {
 		String s = blocks.get(node.idx).text();
 		int[] argbuf = new int[254];
 		int n = CircuitFile.parseArgument(s, argbuf);
@@ -709,6 +724,11 @@ public class CircuitEditor implements IGuiSection, Macro {
 			res[i] = id >= 0 ? args[id] : arg;
 		}
 		return res;
+	}
+
+	@Override
+	public Node parent() {
+		return parent;
 	}
 
 }

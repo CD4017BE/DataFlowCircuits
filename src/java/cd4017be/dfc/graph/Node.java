@@ -40,7 +40,7 @@ public class Node {
 	 * @param c the current context */
 	public void connect(int i, Node src, Context c) {
 		Vertex in = io[i + 1];
-		if (in.src == src) return;
+		if (src != null && in.src == src) return;
 		if (in.src != null) {
 			Vertex v = in.src.io[0];
 			if (v == in) in.src.io[0] = in.next;
@@ -87,6 +87,17 @@ public class Node {
 			c.updateNode(v.dst, v.pin);
 	}
 
+	public void updateChngOutput(Signal s, Context c) {
+		if (s == null) {
+			out = s;
+			return;
+		}
+		if (s.equals(out)) return;
+		out = s;
+		for (Vertex v = io[0]; v != null; v = v.next)
+			c.updateNode(v.dst, v.pin);
+	}
+
 	public void replaceWith(Node node, Context c) {
 		for (Vertex v; (v = io[0]) != null;)
 			v.dst.connect(v.pin - 1, node, c);
@@ -98,10 +109,13 @@ public class Node {
 		replaceWith(null, c);
 		if (data instanceof Macro m) {
 			m.getOutput(c).replaceWith(null, c);
-			for (int i = 1; i < io.length; i++)
-				for (Vertex v = io[i].src.io[0]; v != null; v = v.next)
+			for (int i = 1; i < io.length; i++) {
+				Node n = io[i].src;
+				if (n == null) continue;
+				for (Vertex v = n.io[0]; v != null; v = v.next)
 					if (v.dst.macro == m)
 						v.dst.connect(v.pin - 1, null, c);
+			}
 		}
 		for (int i = 1; i < io.length; i++)
 			connect(i - 1, null, c);

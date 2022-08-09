@@ -78,4 +78,16 @@ public class Bundle implements Type {
 		return signal.displayString(sb, false);
 	}
 
+	@Override
+	public boolean equals(Object obj) {
+		if (obj == this) return true;
+		if (!(obj instanceof Bundle b)) return false;
+		do {
+			if (!Objects.equals(name, b.name)) return false;
+			if (!signal.equals(b.signal)) return false;
+			b = parent;
+		} while (b != null);
+		return true;
+	}
+
 }

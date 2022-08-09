@@ -16,4 +16,6 @@ public interface Macro {
 
 	String[] arguments(Node n, int min);
 
+	Node parent();
+
 }

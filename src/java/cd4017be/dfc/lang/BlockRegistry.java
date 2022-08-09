@@ -20,9 +20,8 @@ public class BlockRegistry {
 
 	private final HashMap<String, BlockDef> defs = new HashMap<>();
 	private final ArrayDeque<BlockDef> toLoad = new ArrayDeque<>();
-	private final Path[] sourcePaths;
+	public final Path[] sourcePaths;
 	private final ArrayList<Plugin> plugins = new ArrayList<>();
-
 
 	public BlockRegistry(String... sourcePaths) {
 		this.sourcePaths = new Path[sourcePaths.length];
@@ -62,6 +61,7 @@ public class BlockRegistry {
 	public Behavior load(BlockDef def) {
 		String name = def.name;
 		BlockDef loaded = defs.get(name);
+		if (loaded == null) loaded = def;
 		if (loaded.behavior == null) {
 			try (CircuitFile file = openFile(name, false)) {
 				BlockInfo[] blocks = file.readCircuit(this);

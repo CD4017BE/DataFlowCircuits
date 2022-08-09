@@ -32,4 +32,9 @@ public class Root implements Macro {
 		return args;
 	}
 
+	@Override
+	public Node parent() {
+		return null;
+	}
+
 }

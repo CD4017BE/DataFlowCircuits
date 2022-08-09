@@ -82,7 +82,7 @@ public class IntrinsicEvaluators {
 		} catch (RuntimeException e) {
 			throw new SignalError(node, 0, e);
 		}
-		node.updateOutput(out, c);
+		node.updateChngOutput(out, c);
 	}
 
 	static void add(Node node, Context c) throws SignalError {
@@ -425,13 +425,13 @@ public class IntrinsicEvaluators {
 			if (t == NULL) throw new SignalError(node, 2, "not defined");
 			if (!(t.type instanceof Pointer || t.type instanceof Function))
 				throw new SignalError(node, 1, "function or pointer type expected");
-			c.extDef.define(name, s = new Signal(t.type, CONST, null));
+			/*c.extDef.define(name,*/ s = new Signal(t.type, CONST, null)/*)*/;
 		}
 		if (s.isConst()) {
 			node.data = name;
 			s.value = node;
 		}
-		node.updateOutput(s, c);
+		node.updateChngOutput(s, c);
 	}
 
 	private static Signal evalIdx(Node node, Context c, int in) throws SignalError {
@@ -472,6 +472,7 @@ public class IntrinsicEvaluators {
 					throw new SignalError(node, 0, "name '" + s + "' doesn't exist");
 				idxs[i] = p;
 				str = type.getElement(str, p);
+				if (str == null) return str;
 			}
 			node.data = idxs;
 		} catch(IllegalArgumentException | IndexOutOfBoundsException e) {
@@ -507,7 +508,7 @@ public class IntrinsicEvaluators {
 				return "can't set vector element in struct";
 			return null;
 		});
-		if (val.type != el.type)
+		if (el != null && val.type != el.type)
 			throw new SignalError(node, 3, "type mismatch");
 		node.updateOutput(str, c);
 	}
@@ -597,7 +598,7 @@ public class IntrinsicEvaluators {
 			}
 			val = buildStruct(STRUCT(types, names), elem);
 		}
-		node.updateOutput(val, c);
+		node.updateChngOutput(val, c);
 	}
 
 	static void array(Node node, Context c) throws SignalError {
@@ -617,7 +618,7 @@ public class IntrinsicEvaluators {
 		else if (count != NULL && !count.isConst())
 			throw new SignalError(node, 2, "expected constant");
 		else r = img(VECTOR(val.type, (int)count.asLong(), false));
-		node.updateOutput(r, c);
+		node.updateChngOutput(r, c);
 	}
 
 	static void vector(Node node, Context c) throws SignalError {
@@ -654,7 +655,7 @@ public class IntrinsicEvaluators {
 				r = new Signal(type, CONST, arr);
 			}
 		}
-		node.updateOutput(r, c);
+		node.updateChngOutput(r, c);
 	}
 
 	static void count(Node node, Context c) throws SignalError {
@@ -670,7 +671,7 @@ public class IntrinsicEvaluators {
 			else n = 0;
 			in = cst(UINT, n);
 		}
-		node.updateOutput(in, c);
+		node.updateChngOutput(in, c);
 	}
 
 	static void zero(Node node, Context c) throws SignalError {
@@ -686,7 +687,7 @@ public class IntrinsicEvaluators {
 			}
 			r = res.parent.toSignal(n);
 		} else r = new Signal(in.type, CONST, 0L);
-		node.updateOutput(r, c);
+		node.updateChngOutput(r, c);
 	}
 
 	static void type(Node node, Context c) throws SignalError {
@@ -702,7 +703,7 @@ public class IntrinsicEvaluators {
 			}
 			r = res.parent.toSignal(n);
 		} else r = img(in.type);
-		node.updateOutput(r, c);
+		node.updateChngOutput(r, c);
 	}
 
 	static void funt(Node node, Context c) throws SignalError {
@@ -720,7 +721,7 @@ public class IntrinsicEvaluators {
 			types[--l] = b.signal.type;
 			names[l] = b.name;
 		}
-		node.updateOutput(img(FUNCTION(rett, types, names)), c);
+		node.updateChngOutput(img(FUNCTION(rett, types, names)), c);
 	}
 
 	static void ref(Node node, Context c) throws SignalError {
@@ -742,6 +743,8 @@ public class IntrinsicEvaluators {
 		Pointer type = ((Pointer)out.type).to(val.type);
 		if (val.isConst()) {
 			node.out = null;
+			if (!out.isConst() || out.type != type)
+				out = new Signal(type, CONST, node);
 			node.updateOutput(out, c);
 			return;
 		}
@@ -754,7 +757,7 @@ public class IntrinsicEvaluators {
 		else if (!(ptr.hasValue() && ptr.type instanceof Pointer))
 			throw new SignalError(node, 1, "pointer value expected");
 		else r = var(((Pointer)ptr.type).type);
-		node.updateOutput(r, c);
+		node.updateChngOutput(r, c);
 	}
 
 	static void store(Node node, Context c) throws SignalError {
@@ -790,7 +793,7 @@ public class IntrinsicEvaluators {
 			if (--l < pl && !s.type.canAssignTo(type.parTypes[l]))
 				throw new SignalError(node, 2, "wrong type for parameter " + (l + 1));
 		}
-		node.updateOutput(var(type.retType), c);
+		node.updateChngOutput(var(type.retType), c);
 	}
 
 	static void main(Node node, Context c) throws SignalError {
@@ -808,7 +811,6 @@ public class IntrinsicEvaluators {
 	}
 
 	static void def(Node node, Context c) throws SignalError {
-		//TODO node.direct = 1;
 		Signal t = node.getInput(0, c).out;
 		if (t == null) {
 			node.updateOutput(null, c);
@@ -841,7 +843,6 @@ public class IntrinsicEvaluators {
 	}
 
 	static void swt(Node node, Context c) throws SignalError {
-		//TODO node.direct = 1;
 		Signal con = node.getInput(0, c).out;
 		if (con == null) {
 			node.updateOutput(null, c);
@@ -874,7 +875,7 @@ public class IntrinsicEvaluators {
 		} else if (as.type != bs.type)
 			throw new SignalError(node, 0, "branch types don't match");
 		else rs = var(as.type);
-		node.updateOutput(rs, c);
+		node.updateChngOutput(rs, c);
 	}
 
 	static void loop(Node node, Context c) throws SignalError {
@@ -894,7 +895,7 @@ public class IntrinsicEvaluators {
 			}
 			res = rs.parent.toSignal(l);
 		} else res = var(init.type);
-		node.updateOutput(res, c);
+		node.updateChngOutput(res, c);
 		Signal cond = node.getInput(1, c).out, nxt = node.getInput(2, c).out;
 		if (cond == null || nxt == null) return;
 		if (!(cond.hasValue() && cond.type == BOOL))

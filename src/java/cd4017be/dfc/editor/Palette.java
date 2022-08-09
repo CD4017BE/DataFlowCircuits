@@ -7,7 +7,13 @@ import static org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT;
 import static org.lwjgl.glfw.GLFW.GLFW_RELEASE;
 import static org.lwjgl.opengl.GL30C.*;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.stream.Stream;
+
 import org.lwjgl.system.MemoryStack;
 
 import cd4017be.dfc.lang.BlockDef;
@@ -16,18 +22,6 @@ import cd4017be.dfc.lang.BlockRegistry;
 /**
  * @author CD4017BE */
 public class Palette implements IGuiSection {
-
-	private static final String[] DEF_LIST = {
-		"in", "out",
-		"main", "def", "#x", "call", "swt", "loop", "for",
-		"get", "set", "pack", "pre", "post", "struct", "vector", "array",
-		"count", "zero", "type", "funt",
-		"ref", "load", "store",
-		"#uw", "#us", "#ui", "#ul", "#w", "#s", "#i", "#l",
-		"#f", "#d", "add", "sub", "mul", "div", "mod", "neg",
-		"#b", "eq", "ne", "gt", "ge", "lt", "le",
-		"or", "and", "xor", "not"
-	};
 
 	private static final int SCALE = 32;
 	public final BlockIcons icons;
@@ -39,17 +33,29 @@ public class Palette implements IGuiSection {
 
 	public Palette(BlockIcons icons, BlockRegistry reg) {
 		this.icons = icons;
-		this.palette = new BlockDef[DEF_LIST.length];
-		int i = 0, w = 0, h = 0;
-		for (String name : DEF_LIST) {
-			BlockDef def = palette[i++] = reg.get(name);
-			icons.load(def, reg);
-			w = max(w, def.icon.w);
-			h = max(h, def.icon.h);
+		this.palette = Arrays.stream(reg.sourcePaths)
+		.flatMap(t -> {
+			try {
+				return Files.list(t);
+			} catch(IOException e) {
+				e.printStackTrace();
+				return Stream.empty();
+			}
+		}).filter(path -> Files.isRegularFile(path))
+		.map(path -> path.getFileName().toString())
+		.filter(name -> name.endsWith(".dfc"))
+		.map(name -> {
+			BlockDef def = reg.get(name.substring(0, name.length() - ".dfc".length()));
+			if (def != null) icons.load(def, reg);
+			return def;
+		}).filter(def -> def != null && def.icon != icons.placeholder.icon)
+		.collect(ArrayList::new, ArrayList::add, ArrayList::addAll)
+		.toArray(BlockDef[]::new);
+
+		for (BlockDef def : palette) {
+			bw = max(bw, def.icon.w);
+			bh = max(bh, def.icon.h);
 		}
-		this.bw = w;
-		this.bh = h;
-		
 		allocSelBuf(2);
 		blockVAO = genBlockVAO(blockBuf = glGenBuffers());
 		try(MemoryStack ms = MemoryStack.stackPush()) {

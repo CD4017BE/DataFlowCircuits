@@ -6,6 +6,7 @@ import org.lwjgl.system.MemoryStack;
 
 import static org.lwjgl.opengl.GL32C.*;
 
+import cd4017be.dfc.graph.Macro;
 import cd4017be.dfc.graph.Node;
 import cd4017be.dfc.lang.*;
 import cd4017be.util.IndexedSet;
@@ -150,7 +151,10 @@ public class Block extends IndexedSet.Element implements IMovable {
 	}
 
 	public Signal signal() {
-		return node == null ? null : node.out;
+		if (node == null) return null;
+		if (node.data instanceof Macro m)
+			return m.getOutput(circuit().context).out;
+		return node.out;
 	}
 
 }

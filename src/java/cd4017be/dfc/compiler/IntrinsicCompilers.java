@@ -237,13 +237,13 @@ public class IntrinsicCompilers {
 		Instruction ins = (ni = ni.evalIns(0)).after;
 		Signal bt = var(LABEL), bf = var(LABEL), end = var(LABEL);
 		//select branch
-		ins = ins.add(BR, null, cond, bt, bf);
+		ins = ins.addBr(BR, null, cond, bt, bf);
 		//evaluate true branch
 		ni = new NodeInstruction(ni, node.input(1), ins.add(bt));
-		ins = ni.after.add(bt = var(LABEL)).add(BR, null, end);
+		ins = ni.after.add(bt = var(LABEL)).addBr(BR, null, end);
 		//evaluate false branch
 		ni = new NodeInstruction(ni, node.input(2), ins.add(bf));
-		ins = ni.after.add(bf = var(LABEL)).add(BR, null, end);
+		ins = ni.after.add(bf = var(LABEL)).addBr(BR, null, end);
 		//end switch
 		ins = ins.add(end);
 		for (; r != null; r = r.parent, vt = vt.parent, vf = vf.parent)
@@ -256,14 +256,14 @@ public class IntrinsicCompilers {
 		Instruction ins = (ni = ni.evalIns(0)).after;
 		Signal loop = var(LABEL), body = var(LABEL), end = var(LABEL), start = var(LABEL);
 		//enter the loop
-		ins = ins.add(start).add(BR, null, loop);
-		Instruction phi = ins = ins.add(loop); //remember insertion point for PHI instructions
+		Instruction phi = ins = ins.add(start).addBr(BR, null, loop);
+		ins = ins.add(loop);
 		//evaluate while condition
 		ni = new NodeInstruction(ni, node.input(1), ins);
-		ins = ni.after.add(BR, null, node.input(1).out, body, end);
+		ins = ni.after.addBr(BR, null, node.input(1).out, body, end);
 		//evaluate body
 		ni = new NodeInstruction(ni, node.input(2), ins.add(body));
-		ins = ni.after.add(body = var(LABEL)).add(BR, null, loop);
+		ins = ni.after.add(body = var(LABEL)).addBr(BR, null, loop);
 		//now since we know where body ends, insert the PHI instructions
 		Instruction next = phi.next;
 		for (; out != null; out = out.parent, init = init.parent, state = state.parent)

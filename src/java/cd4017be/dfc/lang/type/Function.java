@@ -43,7 +43,7 @@ public class Function implements Type {
 			throw new IllegalArgumentException("can't sub address into function pointer");
 		if (i == 0) return img(retType);
 		Type t = parTypes[(int)i - 1];
-		if (s != CUR_FUNCTION) return img(t);
+		//if (s != CUR_FUNCTION) return img(t);
 		return new Signal(t, VAR, i - 1);
 	}
 
@@ -86,7 +86,9 @@ public class Function implements Type {
 		sb.append(retType == VOID ? "void" : retType.toString()).append('(');
 		for (Type t : parTypes) sb.append(t).append(", ");
 		if (varArg) sb.append("...)*");
-		else sb.replace(sb.length() - 2, sb.length(), ")*");
+		else if (parTypes.length > 0)
+			sb.replace(sb.length() - 2, sb.length(), ")*");
+		else sb.append(")*");
 		return sb.toString();
 	}
 

@@ -26,6 +26,7 @@ public class Pointer implements Type {
 	public Signal getElement(Signal s, long i) {
 		if (s.type != this)
 			throw new IllegalArgumentException("can't sub address into pointer");
+		if (type == null) return null;
 		if (s.hasValue())
 			return Signal.var(new Pointer(flags).to(type.getElement(s, i).type));
 		return Signal.img(type);
@@ -47,8 +48,11 @@ public class Pointer implements Type {
 	}
 
 	public Pointer to(Type type) {
-		this.type = type;
-		return unique(this);
+		if (this.type == null) {
+			this.type = type;
+			return unique(this);
+		}
+		return new Pointer(flags).to(type);
 	}
 
 	@Override
@@ -66,7 +70,7 @@ public class Pointer implements Type {
 
 	@Override
 	public String toString() {
-		return type == VOID ? "ptr" : type + "*";
+		return type == VOID ? "i8*" : type + "*";
 	}
 
 	@Override
