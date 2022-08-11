@@ -27,6 +27,7 @@ public class BlockDef {
 	public AtlasSprite icon;
 	/** documentation text */
 	public String shortDesc = "", longDesc = "";
+	public final byte addIn, addOut;
 
 	public BlockDef(String name, int out, int in, boolean arg) {
 		this.name = name;
@@ -35,6 +36,8 @@ public class BlockDef {
 		this.hasArg = arg;
 		this.pins = new byte[(out + in) * 2 + (arg ? 3 : 0)];
 		this.ioNames = new String[out + in + (arg ? 1 : 0)];
+		this.addIn = (byte)(IN_ID.equals(name) ? 1 : 0);
+		this.addOut = (byte)(OUT_ID.equals(name) ? 1 : 0);
 	}
 
 	@Override

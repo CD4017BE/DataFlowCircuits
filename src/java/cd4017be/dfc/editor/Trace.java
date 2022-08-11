@@ -144,14 +144,14 @@ public class Trace implements IMovable {
 
 	public void draw(ByteBuffer buf, boolean start) {
 		Block block = null;
+		Signal s = null;
 		for(Trace tr = from; tr != null; tr = tr.from)
-			if(tr.pin <= 0) {
+			if(tr.isOut()) {
 				block = tr.block;
+				s = block.signal(tr.pin);
 				break;
 			}
-		if (pin < 0) this.block = block;
 		bufOfs = buf.position();
-		Signal s = block == null ? null : block.signal();
 		buf.putInt(pos).putShort(
 			start ? STOP_COLOR :
 			s == null ? VOID_COLOR :

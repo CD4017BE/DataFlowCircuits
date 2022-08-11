@@ -25,7 +25,7 @@ public class CircuitFile implements Closeable {
 
 	public static final Predicate<String> FILTER = name -> name.endsWith(".dfc");
 	private static final OpenOption[] LOAD = {READ}, EDIT = {READ, WRITE, CREATE};
-	private static final int MAGIC = 'd' | 'f' << 8 | 'c' << 16 | 0 << 24;
+	private static final int MAGIC = 'd' | 'f' << 8 | 'c' << 16;
 	private static final int HEADER_SIZE = 44;
 	public static final int
 	HEADER = 0, INTERFACE = 1, CIRCUIT = 2,
@@ -33,6 +33,7 @@ public class CircuitFile implements Closeable {
 
 	private final SeekableByteChannel ch;
 	private final int[] hdr;
+	private int version = 1;
 
 	public CircuitFile(Path path, boolean write) throws IOException {
 		this.ch = Files.newByteChannel(path, write ? EDIT : LOAD);
@@ -41,7 +42,9 @@ public class CircuitFile implements Closeable {
 		try {
 			if (ch.size() >= HEADER_SIZE) {
 				ByteBuffer buf = read(HEADER);
-				if (buf.getInt() == MAGIC) {
+				int mg = buf.getInt();
+				if ((mg & 0xffffff) == MAGIC) {
+					version = mg >>> 24;
 					for (int i = 2; i < hdr.length; i++)
 						hdr[i] = buf.getInt();
 					return;
@@ -107,7 +110,8 @@ public class CircuitFile implements Closeable {
 			BlockDef def = defs[buf.getChar()];
 			int[] pins = new int[def.inCount];
 			for (int j = 0; j < pins.length; j++)
-				pins[j] = buf.getChar() - 1;
+				pins[j] = buf.getChar() - 1
+					| (version >= 1 ? buf.get() & 0xff : 0) << 16;
 			String[] arg;
 			if (def.hasArg) {
 				arg = new String[buf.get() & 0xff];
@@ -187,7 +191,7 @@ public class CircuitFile implements Closeable {
 	}
 
 	public void writeHeader() throws IOException {
-		ByteBuffer buf = alloc(HEADER_SIZE).putInt(MAGIC);
+		ByteBuffer buf = alloc(HEADER_SIZE).putInt(MAGIC | version << 24);
 		for (int i = 2; i < hdr.length; i++) buf.putInt(hdr[i]);
 		write(HEADER, buf.flip());
 		int max = 0;
@@ -212,13 +216,14 @@ public class CircuitFile implements Closeable {
 	}
 
 	public void writeCircuit(BlockInfo[] blocks) throws IOException {
+		version = Math.max(version, 1);
 		LinkedHashMap<BlockDef, Integer> defs = new LinkedHashMap<>();
 		LinkedHashMap<String, Integer> args = new LinkedHashMap<>();
 		int l = 6;
 		for (BlockInfo block : blocks) {
 			BlockDef def = block.def();
 			defs.putIfAbsent(def, defs.size());
-			l += (def.inCount + 1) * 2;
+			l += 2 + def.inCount * 3;
 			if (def.hasArg) {
 				l += block.arguments().length * 2 + 1;
 				for (String s : block.arguments())
@@ -247,8 +252,10 @@ public class CircuitFile implements Closeable {
 			BlockDef def = block.def();
 			int[] in = block.inputs();
 			buf.putShort(defs.get(def).shortValue());
-			for (int j = 0; j < def.inCount; j++)
+			for (int j = 0; j < def.inCount; j++) {
 				buf.putShort((short)(in[j] + 1));
+				buf.put((byte)(in[j] >> 16));
+			}
 			if (def.hasArg) {
 				String[] ss = block.arguments();
 				buf.put((byte)ss.length);
@@ -301,7 +308,7 @@ public class CircuitFile implements Closeable {
 						tracing = t1 != null && t1.to == tr ? tracing - 1 : 0;
 					}
 					if (tr.isOut()) {
-						in[j] = tr.block.getIdx();
+						in[j] = tr.block.getIdx() | tr.pin << 16;
 						continue inputs;
 					}
 				}

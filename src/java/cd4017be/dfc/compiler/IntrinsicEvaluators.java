@@ -27,11 +27,11 @@ public class IntrinsicEvaluators {
 	}
 
 	static void out(Node node, Context c) throws SignalError {
-		node.updateOutput(node.getInput(0, c).out, c);
+		node.updateOutput(0, node.getInput(0, c), c);
 	}
 
 	static void in(Node node, Context c) throws SignalError {
-		node.updateOutput(node.getInput(0, c).out, c);
+		node.updateOutput(0, node.getInput(0, c), c);
 	}
 
 	@FunctionalInterface
@@ -43,9 +43,9 @@ public class IntrinsicEvaluators {
 		Node node, Context c, BiOpConst op,
 		Primitive res, Predicate<Type> in
 	) throws SignalError {
-		Signal a = node.getInput(0, c).out, b = node.getInput(1, c).out;
+		Signal a = node.getInput(0, c), b = node.getInput(1, c);
 		if (a == null || b == null) {
-			node.updateOutput(null, c);
+			node.updateOutput(0, null, c);
 			return;
 		}
 		if (!a.hasValue())
@@ -82,7 +82,7 @@ public class IntrinsicEvaluators {
 		} catch (RuntimeException e) {
 			throw new SignalError(node, 0, e);
 		}
-		node.updateChngOutput(out, c);
+		node.updateChngOutput(0, out, c);
 	}
 
 	static void add(Node node, Context c) throws SignalError {
@@ -222,9 +222,9 @@ public class IntrinsicEvaluators {
 		Node node, Context c, UnOpConst op,
 		Primitive res, Predicate<Type> in
 	) throws SignalError {
-		Signal a = node.getInput(0, c).out;
+		Signal a = node.getInput(0, c);
 		if (a == null) {
-			node.updateOutput(null, c);
+			node.updateOutput(0, null, c);
 			return;
 		}
 		if (!a.hasValue())
@@ -257,7 +257,7 @@ public class IntrinsicEvaluators {
 		} catch (RuntimeException e) {
 			throw new SignalError(node, 0, e);
 		}
-		node.updateOutput(out, c);
+		node.updateOutput(0, out, c);
 	}
 
 	static void neg(Node node, Context c) throws SignalError {
@@ -279,7 +279,7 @@ public class IntrinsicEvaluators {
 	) throws SignalError {
 		String arg = node.arguments(1)[0];
 		if (arg.isBlank()) {
-			node.updateOutput(img(type), c);
+			node.updateOutput(0, img(type), c);
 			return;
 		}
 		char ch = arg.charAt(0);
@@ -324,7 +324,7 @@ public class IntrinsicEvaluators {
 				val[n++] = v;
 			}
 			if (n != val.length) val = Arrays.copyOf(val, n);
-			node.updateOutput(new Signal(Types.VECTOR(type, n, false), CONST, val), c);
+			node.updateOutput(0, new Signal(Types.VECTOR(type, n, false), CONST, val), c);
 			return;
 		}
 		int vec = ch == '[' ? 1 : ch == '(' ? 2 : 0, ofs = vec == 0 ? 0 : 1, n = 0;
@@ -363,7 +363,7 @@ public class IntrinsicEvaluators {
 			}
 			i = q;
 		}
-		node.updateOutput(
+		node.updateOutput(0,
 			vec == 0 ? cst(type, val[0])
 			: new Signal(VECTOR(type, n, vec == 2), CONST, val)
 		, c);
@@ -414,9 +414,9 @@ public class IntrinsicEvaluators {
 	}
 
 	static void _x(Node node, Context c) throws SignalError {
-		Signal t = node.getInput(0, c).out;
+		Signal t = node.getInput(0, c);
 		if (t == null) {
-			node.updateOutput(null, c);
+			node.updateOutput(0, null, c);
 			return;
 		}
 		String name = node.arguments(1)[0];
@@ -431,11 +431,11 @@ public class IntrinsicEvaluators {
 			node.data = name;
 			s.value = node;
 		}
-		node.updateChngOutput(s, c);
+		node.updateChngOutput(0, s, c);
 	}
 
 	private static Signal evalIdx(Node node, Context c, int in) throws SignalError {
-		Signal s = node.getInput(in, c).out;
+		Signal s = node.getInput(in, c);
 		if (s == null || s == NULL ||
 			s.hasValue() && s.type instanceof Primitive && !((Primitive)s.type).signed
 		) return s;
@@ -482,18 +482,18 @@ public class IntrinsicEvaluators {
 	}
 
 	static void get(Node node, Context c) throws SignalError {
-		Signal str = node.getInput(0, c).out, idx = evalIdx(node, c, 1);
+		Signal str = node.getInput(0, c), idx = evalIdx(node, c, 1);
 		if (str == null || idx == null) {
-			node.updateOutput(null, c);
+			node.updateOutput(0, null, c);
 			return;
 		}
-		node.updateOutput(parseIndices(node, str, idx, t -> null), c);
+		node.updateOutput(0, parseIndices(node, str, idx, t -> null), c);
 	}
 
 	static void set(Node node, Context c) throws SignalError {
-		Signal str = node.getInput(0, c).out, idx = evalIdx(node, c, 1), val = node.getInput(2, c).out;
+		Signal str = node.getInput(0, c), idx = evalIdx(node, c, 1), val = node.getInput(2, c);
 		if (str == null || idx == null || val == null) {
-			node.updateOutput(null, c);
+			node.updateOutput(0, null, c);
 			return;
 		}
 		if (!val.hasValue()) throw new SignalError(node, 3, "expected value");
@@ -510,28 +510,28 @@ public class IntrinsicEvaluators {
 		});
 		if (el != null && val.type != el.type)
 			throw new SignalError(node, 3, "type mismatch");
-		node.updateOutput(str, c);
+		node.updateOutput(0, str, c);
 	}
 
 	static void pack(Node node, Context c) throws SignalError {
-		Signal a = node.getInput(0, c).out, b = node.getInput(1, c).out;
+		Signal a = node.getInput(0, c), b = node.getInput(1, c);
 		if (a == null || b == null) {
-			node.updateOutput(null, c);
+			node.updateOutput(0, null, c);
 			return;
 		}
 		Bundle parent = a.type instanceof Bundle ? (Bundle)a.type : null;
 		if (parent == null && a.type != VOID)
 			throw new SignalError(node, 1, "expected bundle or void");
-		node.updateOutput(new Signal(
+		node.updateOutput(0, new Signal(
 			new Bundle(parent, b, node.arguments(1)[0]),
 			VAR, parent == null ? 1 : (int)a.value + 1
 		), c);
 	}
 
 	static void pre(Node node, Context c) throws SignalError {
-		Signal pre = node.getInput(0, c).out, val = node.getInput(1, c).out;
+		Signal pre = node.getInput(0, c), val = node.getInput(1, c);
 		if (pre == null || val == null) {
-			node.updateOutput(null, c);
+			node.updateOutput(0, null, c);
 			return;
 		}
 		if (!pre.hasValue())
@@ -539,13 +539,13 @@ public class IntrinsicEvaluators {
 		if (val == NULL) val = var(VOID);
 		else if (!val.hasValue())
 			throw new SignalError(node, 2, "can't evaluate imaginary");
-		node.updateOutput(val, c);
+		node.updateOutput(0, val, c);
 	}
 
 	static void post(Node node, Context c) throws SignalError {
-		Signal val = node.getInput(0, c).out, post = node.getInput(1, c).out;
+		Signal val = node.getInput(0, c), post = node.getInput(1, c);
 		if (val == null || post == null) {
-			node.updateOutput(null, c);
+			node.updateOutput(0, null, c);
 			return;
 		}
 		if (val == NULL) val = var(VOID);
@@ -553,7 +553,7 @@ public class IntrinsicEvaluators {
 			throw new SignalError(node, 1, "can't evaluate imaginary");
 		if (!post.hasValue())
 			throw new SignalError(node, 2, "can't evaluate imaginary");
-		node.updateOutput(val, c);
+		node.updateOutput(0, val, c);
 	}
 
 	private static Signal buildStruct(Type type, Bundle elem) {
@@ -582,7 +582,7 @@ public class IntrinsicEvaluators {
 	}
 
 	static void struct(Node node, Context c) throws SignalError {
-		Signal val = node.getInput(0, c).out;
+		Signal val = node.getInput(0, c);
 		if (val != null) {
 			int l = val.bundleSize();
 			Bundle elem = val.asBundle();
@@ -598,11 +598,11 @@ public class IntrinsicEvaluators {
 			}
 			val = buildStruct(STRUCT(types, names), elem);
 		}
-		node.updateChngOutput(val, c);
+		node.updateChngOutput(0, val, c);
 	}
 
 	static void array(Node node, Context c) throws SignalError {
-		Signal count = evalIdx(node, c, 1), val = node.getInput(0, c).out, r;
+		Signal count = evalIdx(node, c, 1), val = node.getInput(0, c), r;
 		if (count == null || val == null) r = null;
 		else if (count == NULL && val.type instanceof Bundle) {
 			int l = val.bundleSize();
@@ -618,11 +618,11 @@ public class IntrinsicEvaluators {
 		else if (count != NULL && !count.isConst())
 			throw new SignalError(node, 2, "expected constant");
 		else r = img(VECTOR(val.type, (int)count.asLong(), false));
-		node.updateChngOutput(r, c);
+		node.updateChngOutput(0, r, c);
 	}
 
 	static void vector(Node node, Context c) throws SignalError {
-		Signal count = evalIdx(node, c, 1), val = node.getInput(0, c).out, r;
+		Signal count = evalIdx(node, c, 1), val = node.getInput(0, c), r;
 		if (count == null || val == null) r = null;
 		else if (count == NULL) {
 			int l = val.bundleSize();
@@ -655,11 +655,11 @@ public class IntrinsicEvaluators {
 				r = new Signal(type, CONST, arr);
 			}
 		}
-		node.updateChngOutput(r, c);
+		node.updateChngOutput(0, r, c);
 	}
 
 	static void count(Node node, Context c) throws SignalError {
-		Signal in = node.getInput(0, c).out;
+		Signal in = node.getInput(0, c);
 		if (in != null) {
 			Type type = in.type;
 			int n;
@@ -671,11 +671,11 @@ public class IntrinsicEvaluators {
 			else n = 0;
 			in = cst(UINT, n);
 		}
-		node.updateChngOutput(in, c);
+		node.updateChngOutput(0, in, c);
 	}
 
 	static void zero(Node node, Context c) throws SignalError {
-		Signal in = node.getInput(0, c).out, r;
+		Signal in = node.getInput(0, c), r;
 		if (in == null) r = null;
 		else if (in.type instanceof Bundle) {
 			Bundle elem = in.asBundle(), res = new Bundle(null, null, null), zero = res;
@@ -687,11 +687,11 @@ public class IntrinsicEvaluators {
 			}
 			r = res.parent.toSignal(n);
 		} else r = new Signal(in.type, CONST, 0L);
-		node.updateChngOutput(r, c);
+		node.updateChngOutput(0, r, c);
 	}
 
 	static void type(Node node, Context c) throws SignalError {
-		Signal in = node.getInput(0, c).out, r;
+		Signal in = node.getInput(0, c), r;
 		if (in == null) r = null;
 		else if (in.type instanceof Bundle) {
 			Bundle elem = in.asBundle(), res = new Bundle(null, null, null), img = res;
@@ -703,13 +703,13 @@ public class IntrinsicEvaluators {
 			}
 			r = res.parent.toSignal(n);
 		} else r = img(in.type);
-		node.updateChngOutput(r, c);
+		node.updateChngOutput(0, r, c);
 	}
 
 	static void funt(Node node, Context c) throws SignalError {
-		Signal ret = node.getInput(0, c).out, par = node.getInput(1, c).out;
+		Signal ret = node.getInput(0, c), par = node.getInput(1, c);
 		if (ret == null || par == null) {
-			node.updateOutput(null, c);
+			node.updateOutput(0, null, c);
 			return;
 		}
 		Type rett = ret.type;
@@ -721,16 +721,16 @@ public class IntrinsicEvaluators {
 			types[--l] = b.signal.type;
 			names[l] = b.name;
 		}
-		node.updateChngOutput(img(FUNCTION(rett, types, names)), c);
+		node.updateChngOutput(0, img(FUNCTION(rett, types, names)), c);
 	}
 
 	static void ref(Node node, Context c) throws SignalError {
-		if (node.out == null) {
+		if (node.out[0] == null) {
 			Pointer type = new Pointer(0);
 			node.data = null;
-			node.out = new Signal(type, CONST, node);
+			node.out[0] = new Signal(type, CONST, node);
 		}
-		Signal val = node.getInput(0, c).out;
+		Signal val = node.getInput(0, c);
 		if (val == null) return;
 		if (val.type instanceof Bundle) {
 			Bundle b = (Bundle)val.type;
@@ -739,29 +739,29 @@ public class IntrinsicEvaluators {
 				throw new SignalError(node, 1, "expected single element");
 			if (!b.name.isBlank()) node.data = b.name;
 		}
-		Signal out = node.out;
+		Signal out = node.out[0];
 		Pointer type = ((Pointer)out.type).to(val.type);
 		if (val.isConst()) {
-			node.out = null;
+			node.out[0] = null;
 			if (!out.isConst() || out.type != type)
 				out = new Signal(type, CONST, node);
-			node.updateOutput(out, c);
+			node.updateOutput(0, out, c);
 			return;
 		}
-		node.updateOutput(val.hasValue() ? var(type) : img(type), c);
+		node.updateOutput(0, val.hasValue() ? var(type) : img(type), c);
 	}
 
 	static void load(Node node, Context c) throws SignalError {
-		Signal ptr = node.getInput(0, c).out, r;
+		Signal ptr = node.getInput(0, c), r;
 		if (ptr == null) r = null;
 		else if (!(ptr.hasValue() && ptr.type instanceof Pointer))
 			throw new SignalError(node, 1, "pointer value expected");
 		else r = var(((Pointer)ptr.type).type);
-		node.updateChngOutput(r, c);
+		node.updateChngOutput(0, r, c);
 	}
 
 	static void store(Node node, Context c) throws SignalError {
-		Signal ptr = node.getInput(0, c).out, val = node.getInput(1, c).out;
+		Signal ptr = node.getInput(0, c), val = node.getInput(1, c);
 		if (ptr != null && val != null) {
 			if (!(ptr.hasValue() && ptr.type instanceof Pointer))
 				throw new SignalError(node, 1, "pointer value expected");
@@ -771,13 +771,13 @@ public class IntrinsicEvaluators {
 			if (val.type != type.type)
 				throw new SignalError(node, 2, "type doesn't match pointer");
 		}
-		node.updateOutput(ptr, c);
+		node.updateOutput(0, ptr, c);
 	}
 
 	static void call(Node node, Context c) throws SignalError {
-		Signal f = node.getInput(0, c).out, par = node.getInput(1, c).out;
+		Signal f = node.getInput(0, c), par = node.getInput(1, c);
 		if (f == null || par == null) {
-			node.updateOutput(null, c);
+			node.updateOutput(0, null, c);
 			return;
 		}
 		if (!(f.hasValue() && f.type instanceof Function))
@@ -793,27 +793,27 @@ public class IntrinsicEvaluators {
 			if (--l < pl && !s.type.canAssignTo(type.parTypes[l]))
 				throw new SignalError(node, 2, "wrong type for parameter " + (l + 1));
 		}
-		node.updateChngOutput(var(type.retType), c);
+		node.updateChngOutput(0, var(type.retType), c);
 	}
 
 	static void main(Node node, Context c) throws SignalError {
-		if (node.out == null) {
+		if (node.out[0] == null) {
 			Function type = FUNCTION(INT,
 				new Type[] {UINT, ARRAYPTR(ARRAYPTR(UWORD))},
 				new String[] {"argc", "argv"}
 			);
 			node.data = "main";
-			node.updateOutput(new Signal(type, CONST, node), c);
+			node.updateOutput(0, new Signal(type, CONST, node), c);
 		}
-		Signal ret = node.getInput(0, c).out;
-		if (ret != null && ret.type != ((Function)node.out.type).retType)
+		Signal ret = node.getInput(0, c);
+		if (ret != null && ret.type != ((Function)node.out[0].type).retType)
 			throw new SignalError(node, 1, "signed int expected");
 	}
 
 	static void def(Node node, Context c) throws SignalError {
-		Signal t = node.getInput(0, c).out;
+		Signal t = node.getInput(0, c);
 		if (t == null) {
-			node.updateOutput(null, c);
+			node.updateOutput(0, null, c);
 			return;
 		}
 		String name = null;
@@ -827,12 +827,12 @@ public class IntrinsicEvaluators {
 		if (!(t.type instanceof Function))
 			throw new SignalError(node, 1, "expected function type");
 		Function f = (Function)t.type;
-		if (node.out == null || node.out.type != t) {
+		if (node.out[0] == null || node.out[0].type != t) {
 			//Signal outer = CUR_FUNCTION;
 			node.data = name;
-			node.updateOutput(/*CUR_FUNCTION = */new Signal(f, CONST, node), c);
+			node.updateOutput(0, /*CUR_FUNCTION = */new Signal(f, CONST, node), c);
 		}
-		Signal ret = node.getInput(1, c).out;
+		Signal ret = node.getInput(1, c);
 		if (ret != null) {
 			//CUR_FUNCTION = outer;
 			if (!ret.hasValue())
@@ -843,18 +843,18 @@ public class IntrinsicEvaluators {
 	}
 
 	static void swt(Node node, Context c) throws SignalError {
-		Signal con = node.getInput(0, c).out;
+		Signal con = node.getInput(0, c);
 		if (con == null) {
-			node.updateOutput(null, c);
+			node.updateOutput(0, null, c);
 			return;
 		}
 		if (!(con.hasValue() && con.type == BOOL))
 			throw new SignalError(node, 1, "expected boolean");
 		if (con.isConst()) {
-			node.updateOutput(node.getInput(con.asBool() ? 1 : 2, c).out, c);
+			node.updateOutput(0, node.getInput(con.asBool() ? 1 : 2, c), c);
 			return;
 		}
-		Signal as = node.getInput(1, c).out, bs = node.getInput(2, c).out, rs;
+		Signal as = node.getInput(1, c), bs = node.getInput(2, c), rs;
 		if (as == null || bs == null) rs = null;
 		else if (as.bundleSize() != bs.bundleSize())
 			throw new SignalError(node, 0, "branch types don't match");
@@ -875,13 +875,13 @@ public class IntrinsicEvaluators {
 		} else if (as.type != bs.type)
 			throw new SignalError(node, 0, "branch types don't match");
 		else rs = var(as.type);
-		node.updateChngOutput(rs, c);
+		node.updateChngOutput(0, rs, c);
 	}
 
 	static void loop(Node node, Context c) throws SignalError {
-		Signal init = node.getInput(0, c).out, res;
+		Signal init = node.getInput(0, c), res;
 		if (init == null) {
-			node.updateOutput(null, c);
+			node.updateOutput(0, null, c);
 			return;
 		}
 		int l = init.bundleSize();
@@ -895,8 +895,8 @@ public class IntrinsicEvaluators {
 			}
 			res = rs.parent.toSignal(l);
 		} else res = var(init.type);
-		node.updateChngOutput(res, c);
-		Signal cond = node.getInput(1, c).out, nxt = node.getInput(2, c).out;
+		node.updateChngOutput(0, res, c);
+		Signal cond = node.getInput(1, c), nxt = node.getInput(2, c);
 		if (cond == null || nxt == null) return;
 		if (!(cond.hasValue() && cond.type == BOOL))
 			throw new SignalError(node, 2, "expected boolean value");

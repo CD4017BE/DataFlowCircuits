@@ -42,12 +42,12 @@ public class IntrinsicCompilers {
 	}
 
 	static void _x(NodeInstruction ni, Compiler c) {
-		Signal s = ni.out();
+		Signal s = ni.out(0);
 		c.addGlobal(s.type instanceof Function ? DECLARE : EXTERNAL_GLOBAL, false, s);
 	}
 
 	static void get(NodeInstruction ni, Compiler c) {
-		Signal o = ni.out();
+		Signal o = ni.out(0);
 		if (ni.evalConst(o)) return;
 		Signal str = ni.in(0), idx = ni.in(1);
 		Instruction ins = ni.evalIns(0, 1).after;
@@ -106,7 +106,7 @@ public class IntrinsicCompilers {
 	}
 
 	static void set(NodeInstruction ni, Compiler c) {
-		Signal o = ni.out();
+		Signal o = ni.out(0);
 		if (ni.evalConst(o)) return;
 		long[] idxs = ni.data();
 		Signal[] arg = new Signal[idxs.length + 2];
@@ -149,19 +149,19 @@ public class IntrinsicCompilers {
 	}
 
 	static void struct(NodeInstruction ni, Compiler c) {
-		Signal o = ni.out();
+		Signal o = ni.out(0);
 		if (ni.evalConst(o)) return;
 		construct(ni.evalIns(0).after, o, ni.in(0), INSERTVALUE);
 	}
 
 	static void array(NodeInstruction ni, Compiler c) {
-		Signal o = ni.out();
+		Signal o = ni.out(0);
 		if (ni.evalConst(o)) return;
 		construct(ni.evalIns(0).after, o, ni.in(0), INSERTVALUE);
 	}
 
 	static void vector(NodeInstruction ni, Compiler c) {
-		Signal o = ni.out();
+		Signal o = ni.out(0);
 		if (ni.evalConst(o)) return;
 		Signal count = ni.in(1), val = ni.in(0);
 		if (count.type == VOID) {
@@ -178,7 +178,7 @@ public class IntrinsicCompilers {
 	}
 
 	static void ref(NodeInstruction ni, Compiler c) {
-		Signal out = ni.out(), in = ni.in(0);
+		Signal out = ni.out(0), in = ni.in(0);
 		if (out.isConst()) {
 			ni.evalConst(in);
 			c.addGlobal(PRIVATE_GLOBAL, false, out, in);
@@ -186,7 +186,7 @@ public class IntrinsicCompilers {
 	}
 
 	static void load(NodeInstruction ni, Compiler c) {
-		ni.evalIns(0).after.add(LOAD, ni.out(), ni.in(0));
+		ni.evalIns(0).after.add(LOAD, ni.out(0), ni.in(0));
 	}
 
 	static void store(NodeInstruction ni, Compiler c) {
@@ -200,12 +200,12 @@ public class IntrinsicCompilers {
 		for (Bundle b = par.asBundle(); b != null; b = b.parent)
 			arg[--l] = b.signal;
 		arg[0] = ni.in(0);
-		Signal out = ni.out();
+		Signal out = ni.out(0);
 		ni.evalIns(0, 1).after.add(CALL, out.type == VOID ? null : out, arg);
 	}
 
 	private static void defFunction(NodeInstruction ni, Compiler c, int retIn) {
-		Signal fun = ni.out();
+		Signal fun = ni.out(0);
 		Type[] pt = ((Function)fun.type).parTypes;
 		Signal[] par = new Signal[pt.length];
 		for (int i = 0; i < par.length; i++)
@@ -232,7 +232,7 @@ public class IntrinsicCompilers {
 			ni.evalIns(1, 2);
 			return;
 		}
-		Bundle vt = ni.in(1).asBundle(), vf = ni.in(2).asBundle(), r = ni.out().asBundle();
+		Bundle vt = ni.in(1).asBundle(), vf = ni.in(2).asBundle(), r = ni.out(0).asBundle();
 		Node node = ni.node;
 		Instruction ins = (ni = ni.evalIns(0)).after;
 		Signal bt = var(LABEL), bf = var(LABEL), end = var(LABEL);
@@ -251,7 +251,7 @@ public class IntrinsicCompilers {
 	}
 
 	static void loop(NodeInstruction ni, Compiler c) {
-		Bundle out = ni.out().asBundle(), init = ni.in(0).asBundle(), state = ni.in(2).asBundle();
+		Bundle out = ni.out(0).asBundle(), init = ni.in(0).asBundle(), state = ni.in(2).asBundle();
 		Node node = ni.node;
 		Instruction ins = (ni = ni.evalIns(0)).after;
 		Signal loop = var(LABEL), body = var(LABEL), end = var(LABEL), start = var(LABEL);
@@ -260,7 +260,7 @@ public class IntrinsicCompilers {
 		ins = ins.add(loop);
 		//evaluate while condition
 		ni = new NodeInstruction(ni, node.input(1), ins);
-		ins = ni.after.addBr(BR, null, node.input(1).out, body, end);
+		ins = ni.after.addBr(BR, null, node.input(1).signal(), body, end);
 		//evaluate body
 		ni = new NodeInstruction(ni, node.input(2), ins.add(body));
 		ins = ni.after.add(body = var(LABEL)).addBr(BR, null, loop);
@@ -277,7 +277,7 @@ public class IntrinsicCompilers {
 		NodeInstruction ni,
 		String sop, String uop, String fop
 	) {
-		Signal o = ni.out();
+		Signal o = ni.out(0);
 		if (ni.evalConst(o)) return;
 		Signal a = ni.in(0), b = ni.in(1);
 		String op = a.type instanceof Primitive p
@@ -343,7 +343,7 @@ public class IntrinsicCompilers {
 	}
 
 	static void neg(NodeInstruction ni, Compiler c) {
-		Signal a = ni.in(0), o = ni.out();
+		Signal a = ni.in(0), o = ni.out(0);
 		if (ni.evalConst(o)) return;
 		ni.evalIns(0).after.add(
 			((Primitive)a.type).fp ? " fneg $1t $<v\n" : " sub $1t 0, $<v\n",
@@ -352,7 +352,7 @@ public class IntrinsicCompilers {
 	}
 
 	static void not(NodeInstruction ni, Compiler c) {
-		Signal o = ni.out();
+		Signal o = ni.out(0);
 		if (ni.evalConst(o)) return;
 		ni.evalIns(0).after.add(" xor $1t -1, $<v\n", o, ni.in(0));
 	}

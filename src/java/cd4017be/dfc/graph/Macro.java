@@ -1,12 +1,13 @@
 package cd4017be.dfc.graph;
 
-
 /**
  * 
  * @author CD4017BE */
 public interface Macro {
 
-	Node getOutput(Context c);
+	record Pin(Node node, int pin) {}
+
+	Pin getOutput(int i, Context c);
 
 	/**Connect the given input of the given node according to circuit / macro expansion.
 	 * @param n the node

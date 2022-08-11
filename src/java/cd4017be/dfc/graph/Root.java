@@ -9,20 +9,20 @@ import cd4017be.dfc.lang.BlockDef;
  * @author CD4017BE */
 public class Root implements Macro {
 
-	private final BlockDef def;
+	public final Node node;
 
 	public Root(BlockDef def) {
-		this.def = def;
+		this.node = new Node(this, 0, def);
 	}
 
 	@Override
-	public Node getOutput(Context c) {
-		return new Node(this, 0, def, 1 + def.inCount);
+	public Pin getOutput(int i, Context c) {
+		return new Pin(node, i);
 	}
 
 	@Override
 	public void connectInput(Node n, int i, Context c) {
-		n.connect(i, Node.NULL, c);
+		n.connect(i + n.out.length, Node.NULL, 0, c);
 	}
 
 	@Override

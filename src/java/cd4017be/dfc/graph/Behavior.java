@@ -10,6 +10,6 @@ public interface Behavior {
 
 	void update(Node node, Context c) throws SignalError;
 
-	static Behavior NULL = (node, c) -> node.updateOutput(Signal.NULL, c);
+	static Behavior NULL = (node, c) -> {};
 
 }

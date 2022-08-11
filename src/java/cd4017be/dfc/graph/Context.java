@@ -1,5 +1,7 @@
 package cd4017be.dfc.graph;
 
+import java.util.Arrays;
+
 import cd4017be.dfc.editor.CircuitEditor;
 import cd4017be.dfc.lang.*;
 import cd4017be.dfc.lang.type.Types;
@@ -36,7 +38,7 @@ public class Context {
 				if (b == null) b = reg.load(node.def);
 				b.update(node, this);
 			} catch (SignalError e) {
-				node.updateOutput(null, this);
+				Arrays.fill(node.out, null);
 				errors.add(node.error = e);
 			}
 			if (node.macro instanceof CircuitEditor edit)

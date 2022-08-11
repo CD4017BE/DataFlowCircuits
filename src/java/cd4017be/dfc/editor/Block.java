@@ -7,6 +7,7 @@ import org.lwjgl.system.MemoryStack;
 import static org.lwjgl.opengl.GL32C.*;
 
 import cd4017be.dfc.graph.Macro;
+import cd4017be.dfc.graph.Macro.Pin;
 import cd4017be.dfc.graph.Node;
 import cd4017be.dfc.lang.*;
 import cd4017be.util.IndexedSet;
@@ -86,10 +87,10 @@ public class Block extends IndexedSet.Element implements IMovable {
 	}
 
 	public void setText(String s) {
-		if (BlockDef.OUT_ID.equals(def.name)) {
+		if (def.addOut > 0) {
 			var out = circuit().outputs;
-			out.remove(data, this);
-			out.put(s, this);
+			out.remove(data, io[0]);
+			out.put(s, io[0]);
 		}
 		data = s;
 	}
@@ -150,11 +151,13 @@ public class Block extends IndexedSet.Element implements IMovable {
 		return x < x1 && y < y1 && x + w() > x0 && y + h() > y0;
 	}
 
-	public Signal signal() {
+	public Signal signal(int i) {
 		if (node == null) return null;
-		if (node.data instanceof Macro m)
-			return m.getOutput(circuit().context).out;
-		return node.out;
+		if (node.data instanceof Macro m) {
+			Pin pin = m.getOutput(i, circuit().context);
+			return pin.node().out[pin.pin()];
+		}
+		return node.out[i];
 	}
 
 }

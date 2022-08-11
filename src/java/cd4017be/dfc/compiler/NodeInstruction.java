@@ -1,6 +1,7 @@
 package cd4017be.dfc.compiler;
 
 import cd4017be.dfc.graph.Node;
+import cd4017be.dfc.graph.Node.Vertex;
 import cd4017be.dfc.lang.Signal;
 
 /**
@@ -15,6 +16,10 @@ public class NodeInstruction {
 	/** the next queue entry */
 	NodeInstruction next;
 
+	public NodeInstruction(NodeInstruction prev, Vertex v, Instruction after) {
+		this(prev, v.src, after);
+	}
+
 	public NodeInstruction(NodeInstruction prev, Node node, Instruction after) {
 		this.node = node;
 		this.after = after;
@@ -24,12 +29,12 @@ public class NodeInstruction {
 		}
 	}
 
-	public Signal out() {
-		return node.out;
+	public Signal out(int i) {
+		return node.out[i];
 	}
 
 	public Signal in(int i) {
-		return node.input(i).out;
+		return node.input(i).signal();
 	}
 
 	public boolean evalConst(Signal s) {
@@ -41,7 +46,7 @@ public class NodeInstruction {
 	public NodeInstruction evalIns(int... ins) {
 		NodeInstruction ni = this;
 		for (int i = 0; i < ins.length; i++) {
-			Node in = node.input(ins[i]);
+			Node in = node.input(ins[i]).src;
 			if (in != null)
 				ni = new NodeInstruction(ni, in, i == 0 ? ni.after : ni.after.add(null));
 		}

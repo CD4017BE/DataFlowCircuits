@@ -3,6 +3,7 @@ package cd4017be.dfc.graph;
 import java.util.*;
 import java.util.regex.Pattern;
 
+import cd4017be.dfc.graph.Macro.Pin;
 import cd4017be.dfc.lang.BlockDef;
 import cd4017be.dfc.lang.SignalError;
 
@@ -26,28 +27,32 @@ public class Circuit implements Behavior {
 		this.blocks = blocks;
 		for (int i = 0; i < blocks.length; i++) {
 			BlockInfo info = blocks[i];
-			if (BlockDef.OUT_ID.equals(info.def().name))
-				links.put(info.arguments()[0], info.inputs()[0]);
+			for (int j = info.def().addOut - 1; j >= 0; j--)
+				links.put(info.arguments()[j], info.inputs()[j]);
 		}
 		if (def.hasArg) {
 			String[] args = SEP.split(def.ioNames[def.ioNames.length - 1]);
 			for (int i = 0; i < args.length; i++)
-				links.put(args[i], 0x20000 | i);
+				links.put(args[i], 0x2_00_0000 | i);
 			this.argRefs = new ArgUse[args.length];
 		} else this.argRefs = null;
 		for (int i = 0; i < def.inCount; i++)
-			links.put(def.ioNames[def.outCount + i], 0x10000 | i);
+			links.put(def.ioNames[def.outCount + i], 0x1_00_0000 | i);
 		for (int i = 0; i < blocks.length; i++) {
 			BlockInfo info = blocks[i]; BlockDef d = info.def();
 			String[] args = info.arguments();
 			for (int j = 0; j < args.length; j++) {
 				String arg = args[j];
 				int id = links.getOrDefault(arg, -1);
-				if (id >> 16 == 2)
+				if (id >> 24 == 2)
 					argRefs[id & 0xffff] = new ArgUse(argRefs[id & 0xffff], i, j);
 			}
-			if (BlockDef.IN_ID.equals(d.name))
-				blocks[i] = new BlockInfo(d, args, new int[] {links.getOrDefault(args[0], -1)});
+			if (d.addIn > 0) {
+				int[] ins = Arrays.copyOf(info.inputs(), d.addIn + d.inCount);
+				for (int j = 0; j < d.addIn; j++)
+					ins[j + d.inCount] = links.getOrDefault(args[j], -1);
+				blocks[i] = new BlockInfo(d, args, ins);
+			}
 		}
 		this.out = new int[def.outCount];
 		for (int i = 0; i < out.length; i++)
@@ -73,11 +78,14 @@ public class Circuit implements Behavior {
 				}
 			m.setArgs(args1);
 		} else me = new MacroExpansion(node);
-		node.replaceWith(me.getOutput(c), c);
+		for (int i = 0; i < node.out.length; i++) {
+			Pin pin = me.getOutput(i, c);
+			node.replaceOut(i, pin.node(), pin.pin(), c);
+		}
 		if ((node.updating & -2) != 0)
 			for (Node n : me.nodes)
-				if (n != null && BlockDef.IN_ID.equals(n.def.name))
-					n.connect(0, null, c);
+				if (n != null)
+					n.disconnectExtraInputs(c);
 	}
 
 	public class MacroExpansion implements Macro {
@@ -106,40 +114,43 @@ public class Circuit implements Behavior {
 			}
 		}
 
-		private Node getNode(int idx, Context c) {
-			if (idx >= 0x20000) {
+		private Pin getNode(int idx, Context c) {
+			if (idx >= 0x2_00_0000) {
 				idx = links.getOrDefault(args[idx & 0xffff], -1);
-				if (idx >= 0x20000) return Node.NULL;
+				if (idx >= 0x2_00_0000) return Node.NULL_PIN;
 			}
-			if (idx >= 0x10000) return parent.getInput(idx & 0xffff, c);
-			if (idx < 0) return Node.NULL;
-			Node n = nodes[idx];
+			if (idx >= 0x1_00_0000) return parent.connectIn(idx & 0xffff, c).srcPin();
+			if (idx < 0) return Node.NULL_PIN;
+			int ni = idx & 0xffff, pi = idx >>> 16;
+			Node n = nodes[ni];
 			if (n != null)
-				return n.data instanceof Macro m ? m.getOutput(c) : n;
-			BlockInfo block = blocks[idx];
-			n = new Node(this, idx, block.def(), block.inputs().length + 1);
-			c.updateNode(nodes[idx] = n, 0);
-			return n;
+				return n.data instanceof Macro m
+					? m.getOutput(pi, c)
+					: new Pin(n, pi);
+			BlockInfo block = blocks[ni];
+			n = new Node(this, ni, block.def());
+			c.updateNode(nodes[ni] = n, 0);
+			return new Pin(n, pi);
 		}
 
 		@Override
-		public Node getOutput(Context c) {
-			return getNode(out[0], c);
+		public Pin getOutput(int i, Context c) {
+			return getNode(out[i], c);
 		}
 
 		@Override
 		public void connectInput(Node n, int i, Context c) {
-			Node node = getNode(blocks[n.idx].inputs()[i], c);
-			if (node.data instanceof Macro m)
-				node = m.getOutput(c);
-			n.connect(i, node, c);
+			Pin pin = getNode(blocks[n.idx].inputs()[i], c);
+			if (pin.node().data instanceof Macro m)
+				pin = m.getOutput(pin.pin(), c);
+			n.connect(i + n.out.length, pin.node(), pin.pin(), c);
 		}
 
 		@Override
 		public String[] arguments(Node n, int min) {
 			String[] arr = blocks[n.idx].arguments(), res;
 			int l = arr.length, l1 = argRefs.length;
-			if (l > 0 && extraArgs > 0 && links.getOrDefault(arr[l - 1], -1) == l1 + 0x1ffff) {
+			if (l > 0 && extraArgs > 0 && links.getOrDefault(arr[l - 1], -1) == l1 + 0x1_ffffff) {
 				int m = extraArgs + l;
 				if (m >= min) res = new String[m];
 				else Arrays.fill(res = new String[min], m, min, "");
@@ -148,7 +159,7 @@ public class Circuit implements Behavior {
 			else Arrays.fill(res = new String[min], l, min, "");
 			for (int i = 0; i < l; i++) {
 				int id = links.getOrDefault(arr[i], -1);
-				res[i] = id >= 0x20000 ? args[id & 0xffff] : arr[i];
+				res[i] = id >= 0x2_00_0000 ? args[id & 0xffff] : arr[i];
 			}
 			return res;
 		}

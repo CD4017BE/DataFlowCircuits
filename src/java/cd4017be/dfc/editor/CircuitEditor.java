@@ -342,10 +342,11 @@ public class CircuitEditor implements IGuiSection, Macro {
 					text = new TextField(t -> {
 						block.setText(t);
 						block.redraw();
-						if (block.node != null)
-							if (block.def.name.equals(BlockDef.IN_ID))
-								block.node.connect(0, null, context);
-							else context.updateNode(block.node, 0);
+						Node node = block.node;
+						if (node != null) {
+							node.disconnectExtraInputs(context);
+							context.updateNode(node, 0);
+						}
 					}, tx / 4F, block.textY() / 6F);
 					text.set(block.text(), 1 + (lmx * 2 - tx >> 2));
 				}
@@ -451,9 +452,9 @@ public class CircuitEditor implements IGuiSection, Macro {
 		if (t != null && t.block != null && t.pin >= 0) {
 			sb.append(t.block.def.ioNames[t.pin]).append(": ");
 		}
-		while(t != null && t.pin > 0) t = t.from;
+		while(t != null && !t.isOut()) t = t.from;
 		if (t != null && t.block != null) {
-			Signal sg = t.block.signal();
+			Signal sg = t.block.signal(t.pin);
 			if (sg != null) sg.displayString(sb, true);
 		}
 		info = sb.toString();
@@ -552,7 +553,7 @@ public class CircuitEditor implements IGuiSection, Macro {
 		file = withSuffix(file, ".ll");
 		try {
 			Profiler t = new Profiler(System.out);
-			Compiler c = new Compiler(getOutput(context));
+			Compiler c = new Compiler(getOutput(0, context).node());
 			t.end("sequentialized");
 			c.resolveIds();
 			t.end("resolved variables");
@@ -614,7 +615,7 @@ public class CircuitEditor implements IGuiSection, Macro {
 		refresh(0);
 	}
 
-	HashMap<String, Block> outputs = new HashMap<>();
+	HashMap<String, Trace> outputs = new HashMap<>();
 	ArrayDeque<Trace> traceUpdates = new ArrayDeque<>();
 	Node parent;
 	HashMap<String, Integer> links = new HashMap<>();
@@ -622,7 +623,7 @@ public class CircuitEditor implements IGuiSection, Macro {
 	int argCount, extraArgs;
 
 	private void initGraph(BlockDef def) {
-		this.parent = new Root(def).getOutput(context);
+		this.parent = new Root(def).node;
 		links.clear();
 		if (def.hasArg) {
 			String[] args = SEP.split(def.ioNames[def.ioNames.length - 1]);
@@ -643,8 +644,9 @@ public class CircuitEditor implements IGuiSection, Macro {
 			Block block = tr.block;
 			if (block == null) continue;
 			int in = tr.pin - block.def.outCount;
-			if (in >= 0 && block.node != null)
-				block.node.connect(in, null, context);
+			Node node = block.node;
+			if (in >= 0 && node != null)
+				node.connect(in + node.out.length, null, 0, context);
 		}
 		if (context.tick(1000)) {
 			//TODO repeated frame updates
@@ -658,49 +660,46 @@ public class CircuitEditor implements IGuiSection, Macro {
 
 	public Node createNode(Block block) {
 		BlockDef def = block.def;
-		Node node = new Node(
-			this, block.getIdx(), def,
-			BlockDef.IN_ID.equals(def.name) ? 2 : 1 + def.inCount
-		);
+		Node node = new Node(this, block.getIdx(), def);
 		context.updateNode(node, 0);
 		return block.node = node;
 	}
 
-	private Node getNode(Block block) {
-		if (block == null) return Node.NULL;
-		if (block.node == null) return createNode(block);
+	private Pin getNode(Trace trace) {
+		while(trace != null && !trace.isOut())
+			trace = trace.from;
+		if (trace == null) return Node.NULL_PIN;
+		Block block = trace.block;
+		if (block.node == null)
+			return new Pin(createNode(block), trace.pin);
 		return block.node.data instanceof Macro m
-			? m.getOutput(context) : block.node;
+			? m.getOutput(trace.pin, context) : new Pin(block.node, trace.pin);
 	}
 
 	@Override
-	public Node getOutput(Context c) {
-		return getNode(outputs.get(parent.def.ioNames[0]));
+	public Pin getOutput(int i, Context c) {
+		return getNode(outputs.get(parent.def.ioNames[i]));
 	}
 
 	@Override
 	public void connectInput(Node n, int i, Context c) {
-		Node src = Node.NULL;
+		Pin src = Node.NULL_PIN;
 		Block block = blocks.get(n.idx);
-		if (block.def.name.equals(BlockDef.IN_ID)) {
+		if (block.def.addIn > 0) {
 			String name = resolveArg(block.text());
-			block = outputs.get(name);
-			if (block != null) src = getNode(block);
+			Trace trace = outputs.get(name);
+			if (trace != null) src = getNode(trace);
 			else {
 				BlockDef def = parent.def;
 				String[] names = def.ioNames;
 				for (int k = 0, j = def.outCount; k < def.inCount; j++, k++)
 					if (names[j].equals(name)) {
-						src = parent.getInput(k, c);
+						src = parent.connectIn(k, c).srcPin();
 						break;
 					}
 			}
-		} else {
-			Trace t = block.io[i + block.def.outCount];
-			while(t.from != null) t = t.from;
-			if (t.isOut()) src = getNode(t.block);
-		}
-		n.connect(i, src, c);
+		} else src = getNode(block.io[i + block.def.outCount]);
+		n.connect(i + n.out.length, src.node(), src.pin(), c);
 	}
 
 	@Override
