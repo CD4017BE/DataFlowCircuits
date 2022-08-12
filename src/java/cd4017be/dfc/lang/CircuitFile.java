@@ -305,7 +305,7 @@ public class CircuitFile implements Closeable {
 					t1 = tr.from;
 					if (tracing > 0) {
 						l += 4;
-						tracing = t1 != null && t1.to == tr ? tracing - 1 : 0;
+						tracing = t1 == null ? 0 : t1.to != tr && tracing > 1 ? 1 : tracing - 1;
 					}
 					if (tr.isOut()) {
 						in[j] = tr.block.getIdx() | tr.pin << 16;
@@ -332,7 +332,7 @@ public class CircuitFile implements Closeable {
 			Block block = layout.get(i);
 			buf.putShort(block.x).putShort(block.y);
 			for (int j = 0; j < block.io.length; j++) {
-				Trace tr = block.io[j], t0;
+				Trace tr = block.io[j], t0 = tr.to;
 				if (j < block.def.outCount) {
 					buf.putShort(tr.x()).putShort(tr.y());
 					continue;
@@ -342,8 +342,9 @@ public class CircuitFile implements Closeable {
 				do {
 					if (++n > 255) buf.position(buf.position() - 4);
 					buf.putShort(tr.x()).putShort(tr.y());
+					if (tr.to != t0) break;
 					tr = (t0 = tr).from;
-				} while(tr != null && tr.to == t0 && !t0.isOut());
+				} while(tr != null && !t0.isOut());
 				int p = buf.position();
 				buf.reset().put((byte)min(n - 1, 255)).position(p);
 			}
