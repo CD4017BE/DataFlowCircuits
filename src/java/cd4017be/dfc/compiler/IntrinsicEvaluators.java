@@ -1,6 +1,8 @@
 package cd4017be.dfc.compiler;
 
 import static cd4017be.dfc.lang.Signal.*;
+import static cd4017be.dfc.lang.type.Control.UNREACHABLE;
+import static cd4017be.dfc.lang.type.Control.control;
 import static cd4017be.dfc.lang.type.Primitive.*;
 import static cd4017be.dfc.lang.type.Types.*;
 import static java.lang.Double.*;
@@ -454,7 +456,7 @@ public class IntrinsicEvaluators {
 		if (!val.hasValue())
 			throw new SignalError(node, 0, "expected value, not imaginary");
 		Type t0 = val.type, t1 = type.type;
-		if (!t0.canAssignTo(t1, true))
+		if (t1.align() <= 0 || !t0.canAssignTo(t1, true))
 			throw new SignalError(node, 1, "illegal cast");
 		Signal out;
 		if (t0 == t1) out = val;
@@ -559,6 +561,8 @@ public class IntrinsicEvaluators {
 			node.updateOutput(0, null, c);
 			return;
 		}
+		if (b.type instanceof Control)
+			throw new SignalError(node, 2, "control flow can't be bundled");
 		Bundle parent = a.type instanceof Bundle ? (Bundle)a.type : null;
 		if (parent == null && a.type != VOID)
 			throw new SignalError(node, 1, "expected bundle or void");
@@ -726,7 +730,9 @@ public class IntrinsicEvaluators {
 				n++;
 			}
 			r = res.parent.toSignal(n);
-		} else r = new Signal(in.type, CONST, 0L);
+		} else if (in.type instanceof Control)
+			throw new SignalError(node, 1, "can't zero initialize control flow");
+		else r = new Signal(in.type, CONST, 0L);
 		node.updateChngOutput(0, r, c);
 	}
 
@@ -742,7 +748,9 @@ public class IntrinsicEvaluators {
 				n++;
 			}
 			r = res.parent.toSignal(n);
-		} else r = img(in.type);
+		} else if (in.type instanceof Control)
+			throw new SignalError(node, 1, "can't turn control flow imaginary");
+		else r = img(in.type);
 		node.updateChngOutput(0, r, c);
 	}
 
@@ -753,12 +761,16 @@ public class IntrinsicEvaluators {
 			return;
 		}
 		Type rett = ret.type;
+		if (rett.align() <= 0)
+			throw new SignalError(node, 1, "invalid type for return");
 		int l = par.bundleSize();
 		Bundle param = par.asBundle();
 		Type[] types = new Type[l];
 		String[] names = new String[l];
 		for(Bundle b = param; b != null; b = b.parent) {
-			types[--l] = b.signal.type;
+			Type pt = types[--l] = b.signal.type;
+			if (pt.align() <= 0)
+				throw new SignalError(node, 2, "invalid type for parameters");
 			names[l] = b.name;
 		}
 		node.updateChngOutput(0, img(FUNCTION(rett, types, names)), c);
@@ -779,6 +791,8 @@ public class IntrinsicEvaluators {
 				throw new SignalError(node, 1, "expected single element");
 			if (!b.name.isBlank()) node.data = b.name;
 		}
+		if (val.type.align() <= 0)
+			throw new SignalError(node, 1, "invalid type for pointer");
 		Signal out = node.out[0];
 		Pointer type = ((Pointer)out.type).to(val.type);
 		if (val.isConst()) {
@@ -874,7 +888,7 @@ public class IntrinsicEvaluators {
 			node.updateOutput(0, /*CUR_FUNCTION = */new Signal(f, CONST, node), c);
 		}
 		Signal ret = node.getInput(1, c);
-		if (ret != null) {
+		if (ret != null && ret != Control.UNREACHABLE) {
 			//CUR_FUNCTION = outer;
 			if (!ret.hasValue())
 				throw new SignalError(node, 2, "can't return imaginary");
@@ -897,6 +911,13 @@ public class IntrinsicEvaluators {
 		}
 		Signal as = node.getInput(1, c), bs = node.getInput(2, c), rs;
 		if (as == null || bs == null) rs = null;
+		else rs = union(node, as, bs);
+		node.updateChngOutput(0, rs, c);
+	}
+
+	private static Signal union(Node node, Signal as, Signal bs) throws SignalError {
+		if (as == UNREACHABLE) return bs;
+		else if (bs == UNREACHABLE) return as;
 		else if (as.bundleSize() != bs.bundleSize())
 			throw new SignalError(node, 0, "branch types don't match");
 		else if (as.type instanceof Bundle) {
@@ -912,17 +933,19 @@ public class IntrinsicEvaluators {
 					: a.name.equals(b.name) ? a.name : null;
 				r = r.parent = new Bundle(null, var(type), name);
 			}
-			rs = res.parent.toSignal(as.bundleSize());
+			return res.parent.toSignal(as.bundleSize());
+		} else if (as.type instanceof Control ac && bs.type instanceof Control bc) {
+			return control(union(node, ac.cont(), bc.cont()), union(node, ac.brk(), bc.brk()));
 		} else if (as.type != bs.type)
 			throw new SignalError(node, 0, "branch types don't match");
-		else rs = var(as.type);
-		node.updateChngOutput(0, rs, c);
+		else return var(as.type);
 	}
 
 	static void loop(Node node, Context c) throws SignalError {
 		Signal init = node.getInput(0, c), res;
 		if (init == null) {
-			node.updateOutput(0, null, c);
+			node.updateChngOutput(0, null, c);
+			node.updateChngOutput(1, null, c);
 			return;
 		}
 		int l = init.bundleSize();
@@ -931,21 +954,38 @@ public class IntrinsicEvaluators {
 			for (Bundle b = init.asBundle(); b != null; b = b.parent) {
 				Signal s = b.signal;
 				if (!s.hasValue())
-					throw new SignalError(node, 1, "initial state can't be imaginary");
+					throw new SignalError(node, 2, "initial state can't be imaginary");
 				r = r.parent = new Bundle(null, var(s.type), b.name);
 			}
 			res = rs.parent.toSignal(l);
-		} else res = var(init.type);
-		node.updateChngOutput(0, res, c);
-		Signal cond = node.getInput(1, c), nxt = node.getInput(2, c);
-		if (cond == null || nxt == null) return;
-		if (!(cond.hasValue() && cond.type == BOOL))
-			throw new SignalError(node, 2, "expected boolean value");
-		if (nxt.bundleSize() != l)
-			throw new SignalError(node, 3, "types don't match loop state");
-		for (Bundle n = nxt.asBundle(), r = res.asBundle(); r != null; n = n.parent, r = r.parent)
+		} else if (init.type instanceof Control)
+			throw new SignalError(node, 2, "initial state can't be control flow");
+		else res = var(init.type);
+		node.updateChngOutput(1, res, c);
+		Signal nxt = node.getInput(1, c);
+		if (nxt == null) {
+			node.updateChngOutput(0, null, c);
+			return;
+		}
+		if (!(nxt.type instanceof Control nc))
+			throw new SignalError(node, 3, "control flow expected");
+		Signal cont = nc.cont();
+		if (cont.bundleSize() != l)
+			throw new SignalError(node, 3, "continue types don't match loop state");
+		for (Bundle n = cont.asBundle(), r = res.asBundle(); r != null; n = n.parent, r = r.parent)
 			if (r.signal.type != n.signal.type)
-				throw new SignalError(node, 3, "types don't match loop state");
+				throw new SignalError(node, 3, "continue types don't match loop state");
+		node.updateChngOutput(0, nc.brk(), c);
+	}
+
+	static void cont(Node node, Context c) throws SignalError {
+		Signal s = node.getInput(0, c);
+		node.updateOutput(0, s == null ? null : control(s, null), c);
+	}
+
+	static void _break(Node node, Context c) throws SignalError {
+		Signal s = node.getInput(0, c);
+		node.updateOutput(0, s == null ? null : control(null, s), c);
 	}
 
 }
