@@ -90,13 +90,14 @@ public class Pointer implements Type {
 	}
 
 	@Override
-	public boolean canAssignTo(Type t) {
+	public boolean canAssignTo(Type t, boolean cast) {
 		if (t == this) return true;
-		if (!(t instanceof Pointer)) return false;
-		Pointer p = (Pointer)t;
-		return (flags & ~p.flags) == 0
-		&& (p.flags & NO_WRITE | (flags | ~p.flags) & SHARED) != 0
-		&& (type == p.type || (~p.flags & (NO_WRITE | NO_READ)) == 0);
+		if (t instanceof Pointer p)
+			return (flags & ~p.flags) == 0
+				&& (p.flags & NO_WRITE | (flags | ~p.flags) & SHARED) != 0
+				&& (type == p.type || (~p.flags & (NO_WRITE | NO_READ)) == 0
+					|| cast && type.canBitcastTo(p.type));
+		return cast && t.isInt();
 	}
 
 	public enum Access {

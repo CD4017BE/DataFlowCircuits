@@ -15,7 +15,7 @@ public interface Type {
 
 	int color(Signal s);
 
-	default boolean canAssignTo(Type t) {
+	default boolean canAssignTo(Type t, boolean cast) {
 		return t == this;
 	}
 
@@ -30,6 +30,10 @@ public interface Type {
 	}
 
 	default boolean canArithmetic() {
+		return false;
+	}
+
+	default boolean isInt() {
 		return false;
 	}
 

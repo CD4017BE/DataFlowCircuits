@@ -135,6 +135,14 @@ public class IntrinsicEvaluators {
 		);
 	}
 
+	static void bsl(Node node, Context c) throws SignalError {
+		binaryOp(node, c, (type, a, b) -> a << b, null, Type::isInt);
+	}
+
+	static void bsr(Node node, Context c) throws SignalError {
+		binaryOp(node, c, (type, a, b) -> type.signed ? a >> b : a >>> b, null, Type::isInt);
+	}
+
 	static void or(Node node, Context c) throws SignalError {
 		binaryOp(node, c, (type, a, b) -> a | b, null, Type::canLogic);
 	}
@@ -342,15 +350,18 @@ public class IntrinsicEvaluators {
 					val[n++] = doubleToRawLongBits(parseDouble(arg.substring(i, q)));
 				else {
 					int rad = 10;
-					if (ch == 'x') {
-						rad = 16;
-						i++;
-					} else if (ch == 'o') {
-						rad = 8;
-						i++;
-					} else if (ch == 'b') {
-						rad = 1;
-						i++;
+					if (ch == '0' && i + 1 < q) {
+						ch = arg.charAt(i + 1);
+						if (ch == 'x') {
+							rad = 16;
+							i+=2;
+						} else if (ch == 'o') {
+							rad = 8;
+							i+=2;
+						} else if (ch == 'b') {
+							rad = 2;
+							i+=2;
+						}
 					}
 					long v = val[n++] = type.signed
 						? Long.parseLong(arg, i, q, rad)
@@ -432,6 +443,35 @@ public class IntrinsicEvaluators {
 			s.value = node;
 		}
 		node.updateChngOutput(0, s, c);
+	}
+
+	static void cast(Node node, Context c) throws SignalError {
+		Signal val = node.getInput(0, c), type = node.getInput(1, c);
+		if (val == null || type == null) {
+			node.updateOutput(0, null, c);
+			return;
+		}
+		if (!val.hasValue())
+			throw new SignalError(node, 0, "expected value, not imaginary");
+		Type t0 = val.type, t1 = type.type;
+		if (!t0.canAssignTo(t1, true))
+			throw new SignalError(node, 1, "illegal cast");
+		Signal out;
+		if (t0 == t1) out = val;
+		else if (val.isConst() && t0 instanceof Primitive p0 && t1 instanceof Primitive p1) {
+			long v = val.asLong();
+			Number vn = switch(p0) {
+			case DOUBLE -> Double.longBitsToDouble(v);
+			case FLOAT -> Float.intBitsToFloat((int)v);
+			default -> v;
+			};
+			out = switch(p1) {
+			case DOUBLE -> cst(vn.doubleValue());
+			case FLOAT -> cst(vn.floatValue());
+			default -> cst(p1, vn.longValue());
+			};
+		} else out = var(t1);
+		node.updateChngOutput(0, out, c);
 	}
 
 	private static Signal evalIdx(Node node, Context c, int in) throws SignalError {
@@ -757,7 +797,8 @@ public class IntrinsicEvaluators {
 		else if (!(ptr.hasValue() && ptr.type instanceof Pointer))
 			throw new SignalError(node, 1, "pointer value expected");
 		else r = var(((Pointer)ptr.type).type);
-		node.updateChngOutput(0, r, c);
+		node.updateChngOutput(0, ptr, c);
+		node.updateChngOutput(1, r, c);
 	}
 
 	static void store(Node node, Context c) throws SignalError {
@@ -790,7 +831,7 @@ public class IntrinsicEvaluators {
 			Signal s = b.signal;
 			if (!s.hasValue())
 				throw new SignalError(node, 2, "can't pass imaginary parameters");
-			if (--l < pl && !s.type.canAssignTo(type.parTypes[l]))
+			if (--l < pl && !s.type.canAssignTo(type.parTypes[l], false))
 				throw new SignalError(node, 2, "wrong type for parameter " + (l + 1));
 		}
 		node.updateChngOutput(0, var(type.retType), c);

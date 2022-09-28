@@ -66,16 +66,23 @@ public enum Primitive implements Type {
 	}
 
 	@Override
-	public boolean canAssignTo(Type t) {
+	public boolean canAssignTo(Type t, boolean cast) {
 		if (t == this) return true;
-		if (!(t instanceof Primitive)) return false;
-		Primitive p = (Primitive)t;
-		return p.fp || bits <= p.bits && (!signed || p.signed);
+		if (t instanceof Primitive p)
+			return cast || p.fp || bits <= p.bits && (!signed || p.signed);
+		if (t instanceof Pointer p)
+			return (~p.flags & (Pointer.NO_WRITE | Pointer.NO_READ)) == 0;
+		return false;
+	}
+
+	@Override
+	public boolean isInt() {
+		return bits > 1 && !fp;
 	}
 
 	@Override
 	public boolean canArithmetic() {
-		return this != BOOL;
+		return bits > 1;
 	}
 
 	@Override

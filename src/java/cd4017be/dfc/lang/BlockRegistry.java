@@ -72,6 +72,7 @@ public class BlockRegistry {
 				}
 			} catch(IOException e) {
 				e.printStackTrace();
+				loaded.behavior = Behavior.NULL;
 			}
 		}
 		return loaded.copyTo(def).behavior;

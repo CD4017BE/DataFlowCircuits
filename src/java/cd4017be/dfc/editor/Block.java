@@ -27,6 +27,7 @@ public class Block extends IndexedSet.Element implements IMovable {
 		this.io = new Trace[def.ios()];
 		for (int i = 0; i < io.length; i++)
 			io[i] = new Trace(cc, this, i);
+		cc.icons.load(def, cc.reg);
 		cc.blocks.add(this);
 		cc.fullRedraw();
 	}

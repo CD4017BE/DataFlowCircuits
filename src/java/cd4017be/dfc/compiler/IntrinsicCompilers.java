@@ -26,6 +26,17 @@ public class IntrinsicCompilers {
 	INSERTELEMENT = " insertelement $1t $<v, $t $v, $t $v\n",
 	GETELEMENTPTR = " getelementptr $1e, $<.$($t $<v$)\n",
 	BITCAST = " bitcast $1t $<v to $0t\n",
+	TRUNC = " trunc $1t $<v to $0t\n",
+	ZEXT = " zext $1t $<v to $0t\n",
+	SEXT = " sext $1t $<v to $0t\n",
+	FPTRUNC = " fptrunc $1t $<v to $0t\n",
+	FPEXT = " fpext $1t $<v to $0t\n",
+	FPTOSI = " fptosi $1t $<v to $0t\n",
+	FPTOUI = " fptoui $1t $<v to $0t\n",
+	SITOFP = " sitofp $1t $<v to $0t\n",
+	UITOFP = " uitofp $1t $<v to $0t\n",
+	INTTOPTR = " inttoptr $1t $<v to $0t\n",
+	PTRTOINT = " ptrtoint $1t $<v to $0t\n",
 	ALLOCA = " alloca $e\n",
 	CALL = " call $1e $<v($($t $<v$))\n",
 	BR = " br $1.$($t $<v$)\n",
@@ -124,6 +135,42 @@ public class IntrinsicCompilers {
 		);
 	}
 
+	static void cast(NodeInstruction ni, Compiler c) throws CompileError {
+		Signal v = ni.in(0), o = ni.out(0);
+		if (ni.evalConst(o)) return;
+		Instruction ins = ni.evalIns(0).after;
+		Type t0 = v.type, t1 = o.type;
+		String op;
+		if (t0 instanceof Primitive p0)
+			if (t1 instanceof Primitive p1)
+				op = p0.fp ?
+						p1.fp ?
+							p0.bits < p1.bits ? FPEXT
+							: p0.bits > p1.bits ? FPTRUNC
+							: BITCAST
+						: p1.signed ? FPTOSI
+						: FPTOUI
+					: p1.fp ?
+						p0.signed ? SITOFP
+						: UITOFP
+					: p0.bits < p1.bits ?
+						p0.signed ? SEXT
+						: ZEXT
+					: p0.bits > p1.bits ? TRUNC
+					: BITCAST;
+			else if (t1 instanceof Pointer p1)
+				op = INTTOPTR;
+			else throw new CompileError(ni.node, "invalid cast type");
+		else if (t0 instanceof Pointer p0)
+			if (t1 instanceof Primitive)
+				op = PTRTOINT;
+			else if (t1 instanceof Pointer)
+				op = BITCAST;
+			else throw new CompileError(ni.node, "invalid cast type");
+		else throw new CompileError(ni.node, "invalid cast type");
+		ins.add(op, o, v);
+	}
+
 	static void pack(NodeInstruction ni, Compiler c) {
 		ni.evalIns(0, 1);
 	}
@@ -186,7 +233,7 @@ public class IntrinsicCompilers {
 	}
 
 	static void load(NodeInstruction ni, Compiler c) {
-		ni.evalIns(0).after.add(LOAD, ni.out(0), ni.in(0));
+		ni.evalIns(0).after.add(LOAD, ni.out(1), ni.out(0));
 	}
 
 	static void store(NodeInstruction ni, Compiler c) {
@@ -304,6 +351,14 @@ public class IntrinsicCompilers {
 
 	static void mod(NodeInstruction ni, Compiler c) {
 		vec2(ni, "srem", "urem", "frem");
+	}
+
+	static void bsl(NodeInstruction ni, Compiler c) {
+		vec2(ni, "shl", "shl", null);
+	}
+
+	static void bsr(NodeInstruction ni, Compiler c) {
+		vec2(ni, "ashr", "lshr", null);
 	}
 
 	static void or(NodeInstruction ni, Compiler c) {

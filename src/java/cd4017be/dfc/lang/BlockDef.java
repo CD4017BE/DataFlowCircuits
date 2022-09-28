@@ -80,8 +80,13 @@ public class BlockDef {
 			System.arraycopy(pins, ios() * 2, def.pins, def.ios() * 2, 3);
 			def.ioNames[def.ios()] = ioNames[ios()];
 		}
-		def.compiler = compiler;
-		def.behavior = behavior;
+		if (def.outCount != outCount || def.inCount != inCount) {
+			def.compiler = NodeCompiler.NULL;
+			def.behavior = (node, c) -> {throw new SignalError(node, 0, "outdated API");};
+		} else {
+			def.compiler = compiler;
+			def.behavior =  behavior;
+		}
 		def.icon = icon;
 		def.shortDesc = shortDesc;
 		def.longDesc = longDesc;

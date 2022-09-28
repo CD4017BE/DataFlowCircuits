@@ -95,12 +95,12 @@ public class Vector implements Type {
 	}
 
 	@Override
-	public boolean canAssignTo(Type t) {
+	public boolean canAssignTo(Type t, boolean cast) {
 		if (t == this) return true;
 		return element.canSimd()
-		&& t instanceof Vector
-		&& count == ((Vector)t).count
-		&& element.canAssignTo(((Vector)t).element);
+		&& t instanceof Vector v
+		&& count == v.count
+		&& element.canAssignTo(v.element, cast);
 	}
 
 	@Override
