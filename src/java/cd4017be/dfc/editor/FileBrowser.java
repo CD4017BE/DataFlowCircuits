@@ -20,7 +20,7 @@ public class FileBrowser implements IGuiSection {
 	final Consumer<File> result;
 	final String title;
 	final ArrayList<String> names = new ArrayList<>(), filtered = new ArrayList<>();
-	final TextField text = new TextField(this::filter, 0, 0);
+	final TextField text = new TextField(this::filter);
 	final Predicate<String> filter;
 	File dir;
 	int sel;
@@ -35,7 +35,6 @@ public class FileBrowser implements IGuiSection {
 		if (!isdir) text.set(dir.getName(), -1);
 		Main.GUI.add(this);
 		Main.lockFocus(this);
-		allocSelBuf(3);
 		Main.refresh(0);
 	}
 
@@ -95,23 +94,20 @@ public class FileBrowser implements IGuiSection {
 
 	@Override
 	public void redraw() {
+		addSel(0, 0, 64, 3, FG_WHITE | BG_GRAY_D);
+		addSel(0, 3, 64, 61, FG_WHITE | BG_GRAY_D);
+		addSel(0, sel * 2 + 5, 64, 2, FG_GREEN_L | BG_GRAY_D);
+		text.redraw(2, 13, 4, 6, FG_YELLOW_L | BG_TRANSP);
+		print(title + dir, FG_YELLOW_L | BG_TRANSP, 2, 3, 4, 6);
+		int y = 13;
+		for (String name : filtered)
+			print(name, (isDir(name) ? FG_BLUE_L : FG_WHITE) | BG_TRANSP, 2, y += 8, 4, 6);
+		
 		float scaleX = 1F / 64F;
 		float scaleY = scaleX * (float)WIDTH / (float)HEIGHT;
-		float ofsY = scaleY * 32F;
-		addSel(0, 0, 64, 3, 0xffffffff);
-		addSel(0, 3, 64, 61, 0xffffffff);
-		addSel(0, sel * 2 + 5, 64, 2, 0xff80ff80);
-		drawSel(-0.5F, ofsY, scaleX, -scaleY, 0F, 0.25F, 0xff202020);
-		
-		scaleY *= -1.5F;
-		float dy = scaleY * 4F/3F;
-		ofsY += dy * 1.625F;
-		float ofsX = scaleX * 0.5F - 0.5F;
-		text.redraw(ofsX, ofsY, scaleX, scaleY, 256, 0xffffff80, 0x00000000, 0xffff8080);
-		
-		print(title + dir, 256, 0xffffff80, 0x00000000, ofsX, ofsY - dy * 1.25F, scaleX, scaleY);
-		for (String name : filtered)
-			print(name, 256, isDir(name) ? 0xff8080ff : 0xffffffff, 0x00000000, ofsX, ofsY += dy, scaleX, scaleY);
+		float ofsX = -0.5F, ofsY = scaleY * 32F;
+		drawSel(ofsX, ofsY, scaleX, -scaleY, 0F, 0.25F);
+		drawText(ofsX, ofsY, scaleX * 0.25F, scaleY * -0.25F);
 	}
 
 	@Override

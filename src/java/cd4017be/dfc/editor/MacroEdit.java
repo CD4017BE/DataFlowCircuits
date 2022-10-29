@@ -4,10 +4,10 @@ import static cd4017be.dfc.editor.CircuitEditor.FILE;
 import static cd4017be.dfc.editor.CircuitEditor.withSuffix;
 import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
-import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.lwjgl.glfw.GLFW.*;
+import static org.lwjgl.opengl.GL20C.*;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -18,12 +18,11 @@ import java.util.function.IntConsumer;
 
 import org.lwjgl.system.MemoryStack;
 
-import static org.lwjgl.opengl.GL32C.*;
-
 import cd4017be.dfc.compiler.IntrinsicEvaluators;
 import cd4017be.dfc.lang.*;
 import cd4017be.util.AtlasSprite;
 import cd4017be.util.GLUtils;
+import cd4017be.util.VertexArray;
 
 /**
  * @author CD4017BE */
@@ -49,8 +48,8 @@ public class MacroEdit implements IGuiSection {
 
 	final ArrayList<Box> boxes = new ArrayList<>();
 	final BlockIcons icons;
-	final TextField edit = new TextField(this::editText, 0, 0);
-	final int traceVAO, blockVAO, traceBuf, blockBuf;
+	final TextField edit = new TextField(this::editText);
+	VertexArray traceVAO, blockVAO;
 	final int boxDesc, boxArg, boxPos, boxLen, boxN;
 	int mx, my, sel = -1;
 	boolean selText = false;
@@ -66,40 +65,39 @@ public class MacroEdit implements IGuiSection {
 
 	public MacroEdit(BlockIcons icons) {
 		this.icons = icons;
-		this.traceVAO = genTraceVAO(traceBuf = glGenBuffers());
+		this.traceVAO = genTraceVAO(16);
 		glBufferData(GL_ARRAY_BUFFER, 26 * TRACE_STRIDE, GL_STREAM_DRAW);
 		glUseProgram(traceP);
 		glUniform2f(trace_lineSize, 0.125F, 0.5F);
 		checkGLErrors();
-		this.blockVAO = genBlockVAO(blockBuf = glGenBuffers());
+		this.blockVAO = genBlockVAO(1);
 		glBufferData(GL_ARRAY_BUFFER, BLOCK_STRIDE, GL_STATIC_DRAW);
 		Main.GUI.add(this);
 		Main.lockFocus(this);
 		Main.refresh(0);
-		boxes.add(new Box(1, 61, 14, 2).text("Open Block", 0xffffffff).click(this::open, 0xffc0c040, 0xffffff80));
-		boxes.add(new Box(17, 61, 14, 2).text("New Block", 0xffffffff).click(this::newBlock, 0xffc0c040, 0xffffff80));
-		boxes.add(new Box(33, 61, 14, 2).text("Edit Circuit", 0xffffffff).click(this::editCircuit, 0xffc0c040, 0xffffff80));
-		boxes.add(new Box(49, 61, 14, 2).text("Save Block", 0xffffffff).click(this::save, 0xff40c040, 0xff80ff80));
-		boxes.add(new Box(1, 1, 12, 2).text("Description:", 0xffffffff));
+		boxes.add(new Box(1, 61, 14, 2).text("Open Block", FG_WHITE).click(this::open, FG_YELLOW_SL, FG_YELLOW_L));
+		boxes.add(new Box(17, 61, 14, 2).text("New Block", FG_WHITE).click(this::newBlock, FG_YELLOW_SL, FG_YELLOW_L));
+		boxes.add(new Box(33, 61, 14, 2).text("Edit Circuit", FG_WHITE).click(this::editCircuit, FG_YELLOW_SL, FG_YELLOW_L));
+		boxes.add(new Box(49, 61, 14, 2).text("Save Block", FG_WHITE).click(this::save, FG_GREEN_SL, FG_GREEN_L));
+		boxes.add(new Box(1, 1, 12, 2).text("Description:", FG_WHITE));
 		boxDesc = boxes.size();
-		boxes.add(new Box(1, 3, 62, 2).text("", 0xffffff80).click(clickSel(true), 0xffc0c0c0, 0xffffffff));
-		boxes.add(new Box(42, 1, 21, 2).text("Edit documentation", 0xffffffff).click(this::editDoc, 0xffc0c040, 0xffffff80));
-		boxes.add(new Box(26, 11, 12, 2).text("Edit icon", 0xffffffff).click(this::editIcon, 0xffc0c040, 0xffffff80));
-		boxes.add(new Box(1, 6, 16, 2).text("Argument macros:", 0xffffffff));
+		boxes.add(new Box(1, 3, 62, 2).text("", FG_YELLOW_L).click(clickSel(true), FG_GRAY_L, FG_WHITE));
+		boxes.add(new Box(42, 1, 21, 2).text("Edit documentation", FG_WHITE).click(this::editDoc, FG_YELLOW_SL, FG_YELLOW_L));
+		boxes.add(new Box(26, 11, 12, 2).text("Edit icon", FG_WHITE).click(this::editIcon, FG_YELLOW_SL, FG_YELLOW_L));
+		boxes.add(new Box(1, 6, 16, 2).text("Argument macros:", FG_WHITE));
 		boxLen = boxes.size();
-		boxes.add(new Box(42, 6, 10, 2).text("", 0xffffff80).click(clickSel(true), 0xffc0c0c0, 0xffffffff));
+		boxes.add(new Box(42, 6, 10, 2).text("", FG_YELLOW_L).click(clickSel(true), FG_GRAY_L, FG_WHITE));
 		boxPos = boxes.size();
-		boxes.add(new Box(53, 6, 10, 2).text("position", 0xffffff80).click(clickSel(false), 0xff4040ff, 0xffc0c0ff));
+		boxes.add(new Box(53, 6, 10, 2).text("position", FG_YELLOW_L).click(clickSel(false), FG_BLUE_SL, FG_BLUE_XL));
 		boxArg = boxes.size();
-		boxes.add(new Box(1, 8, 62, 2).text("", 0xffffff80).click(clickSel(true), 0xffc0c0c0, 0xffffffff));
-		boxes.add(new Box(48, 11, 7, 2).text("Output:", 0xffffffff));
-		boxes.add(new Box(59, 11, 2, 2).click(this::addOut, 0xff80ff80, 0xffc0ffc0).text("+", 0xff80ff80));
-		boxes.add(new Box(61, 11, 2, 2).click(this::remOut, 0xffff4040, 0xffffc0c0).text("-", 0xffff8080));
-		boxes.add(new Box(1, 11, 7, 2).text("Inputs:", 0xffffffff));
-		boxes.add(new Box(12, 11, 2, 2).click(this::addIn, 0xff80ff80, 0xffc0ffc0).text("+", 0xff80ff80));
-		boxes.add(new Box(14, 11, 2, 2).click(this::remIn, 0xffff4040, 0xffffc0c0).text("-", 0xffff8080));
+		boxes.add(new Box(1, 8, 62, 2).text("", FG_YELLOW_L).click(clickSel(true), FG_GRAY_L, FG_WHITE));
+		boxes.add(new Box(48, 11, 7, 2).text("Output:", FG_WHITE));
+		boxes.add(new Box(59, 11, 2, 2).click(this::addOut, FG_GREEN_L, FG_GREEN_XL).text("+", FG_GREEN_L));
+		boxes.add(new Box(61, 11, 2, 2).click(this::remOut, FG_RED_SL, FG_RED_XL).text("-", FG_RED_L));
+		boxes.add(new Box(1, 11, 7, 2).text("Inputs:", FG_WHITE));
+		boxes.add(new Box(12, 11, 2, 2).click(this::addIn, FG_GREEN_L, FG_GREEN_XL).text("+", FG_GREEN_L));
+		boxes.add(new Box(14, 11, 2, 2).click(this::remIn, FG_RED_SL, FG_RED_XL).text("-", FG_RED_L));
 		boxN = boxes.size();
-		allocSelBuf(boxN);
 		setDef(icons.placeholder);
 	}
 
@@ -122,8 +120,12 @@ public class MacroEdit implements IGuiSection {
 			addPinName(def.ioNames[i], i < outCount);
 			updateTrace(i * 2);
 		}
-		glBindBuffer(GL_ARRAY_BUFFER, blockBuf);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, new short[] {0, 0, 0, (short)def.icon.id});
+		try (MemoryStack ms = MemoryStack.stackPush()){
+			blockVAO.clear();
+			blockVAO.append(drawBlock(ms.malloc(BLOCK_STRIDE * 4),
+				0, 0, def.icon.w, def.icon.h, 0, 0, def.icon.id
+			).flip());
+		}
 		longDesc = def.longDesc;
 		mod = 0;
 		editDoc = editIcon = 0;
@@ -146,14 +148,13 @@ public class MacroEdit implements IGuiSection {
 		i = i * 2 + 13;
 		boxes.add(j,
 			new Box(out ? 48 : 1, i, 15, 2)
-			.click(clickSel(true), 0xffc0c0c0, 0xffffffff)
-			.text(name, 0xffffff80)
+			.click(clickSel(true), FG_GRAY_L, FG_WHITE)
+			.text(name, FG_YELLOW_L)
 		);
 		boxes.add(j + 1,
 			new Box(out ? 45 : 17, i, 2, 2)
-			.click(clickSel(false), 0xff4040ff, 0xffc0c0ff)
+			.click(clickSel(false), FG_BLUE_SL, FG_BLUE_XL)
 		);
-		allocSelBuf(boxes.size());
 	}
 
 	@Override
@@ -170,42 +171,34 @@ public class MacroEdit implements IGuiSection {
 		//drawSel(ofsX, ofsY, scaleX, -scaleY, 0F, 0.25F, 0xff202020);
 		
 		float[] mat = new float[] {
-			scaleX * 2F,  0, 0, 0,
-			0, scaleY * -2F, 0, 0,
-			ofsX + scaleX * 20, ofsY - scaleY * 13, 0, 1F
+			scaleX * 2F,  0, 0,
+			0, scaleY * -2F, 0,
+			ofsX + scaleX * 20, ofsY - scaleY * 13, 0
 		};
-		icons.update();
 		icons.bind();
-		glUseProgram(blockP);
-		glUniformMatrix3x4fv(block_transform, false, mat);
-		glBindVertexArray(blockVAO);
-		glDrawArrays(GL_POINTS, 0, 1);
-		checkGLErrors();
-		mat[0] = scaleX; mat[5] = -scaleY;
+		glUniformMatrix3fv(block_transform, false, mat);
+		blockVAO.draw();
+		mat[0] = scaleX; mat[4] = -scaleY;
 		glUseProgram(traceP);
-		glUniformMatrix3x4fv(trace_transform, false, mat);
-		glUniform2f(trace_lineSize, 0.125F, 0.5F);
-		glBindVertexArray(traceVAO);
-		glDrawArrays(GL_LINES, 0, pins.length);
-		checkGLErrors();
+		glUniformMatrix3fv(trace_transform, false, mat);
+		glUniform2f(trace_lineSize, 0.25F, 0.5F);
+		traceVAO.count = pins.length * 4;
+		traceVAO.draw();
 		if (hasArg)
-			addSel(textX + 20, textY + 13, textL == 0 ? 1 : textL << 1, 4, 0xffffff80);
+			addSel(textX + 20, textY + 13, textL == 0 ? 1 : textL << 1, 4, FG_YELLOW_L);
 		for(Box box : boxes)
-			box.drawFrame(mx, my);
-		drawSel(ofsX, ofsY, scaleX, -scaleY, 0F, 0.5F, 0x00000000);
-		startText();
-		for(Box box : boxes)
-			box.drawText(ofsX, ofsY, scaleX, scaleY);
+			box.draw(mx, my);
 		if (selText && sel >= 0 && sel < boxes.size()) {
 			Box box = boxes.get(sel);
 			int w = box.x1 - box.x0, h = box.y1 - box.y0, l = box.text.length();
 			edit.redraw(
-				ofsX + scaleX * (box.x0 + max((w - l) * 0.5F, 0)),
-				ofsY - scaleY * (box.y0 + max(h * 0.5F - ((l-1)/w + 1) * 0.75F, 0)),
-				scaleX, scaleY * -1.5F,
-				w, box.tc, box.tc, 0xffff8080
+				box.x0 * 4 +(w - l) * 2,
+				box.y0 * 4 + h * 2 - 3,
+				4, 6, 0
 			);
 		}
+		drawSel(ofsX, ofsY, scaleX, -scaleY, 0F, 0.5F);
+		drawText(ofsX, ofsY, scaleX * 0.25F, scaleY * -0.25F);
 	}
 
 	@Override
@@ -233,10 +226,8 @@ public class MacroEdit implements IGuiSection {
 		Main.GUI.remove(Main.GUI.size() - 1);
 		Main.lockFocus(null);
 		Main.refresh(0);
-		glDeleteVertexArrays(blockVAO);
-		glDeleteVertexArrays(traceVAO);
-		glDeleteBuffers(blockBuf);
-		glDeleteBuffers(traceBuf);
+		glDeleteBuffers(blockVAO.buffer);
+		glDeleteBuffers(traceVAO.buffer);
 	}
 
 	@Override
@@ -308,11 +299,9 @@ public class MacroEdit implements IGuiSection {
 		if (y < 0) y += def.icon.h + 1;
 		boolean out = i < outCount * 2;
 		int y0 = (out ? i : i - outCount * 2) + 1;
-		glBindBuffer(GL_ARRAY_BUFFER, traceBuf);
-		glBufferSubData(GL_ARRAY_BUFFER, i * TRACE_STRIDE, new short[] {
-			(short)(out ? 26 : -2), (short)y0, 12,
-			(short)(x * 2), (short)(y * 2), 12
-		});
+		try(MemoryStack ms = MemoryStack.stackPush()) {
+			traceVAO.set(i * 4, drawTrace(ms.malloc(TRACE_STRIDE * 4), out ? 26 : -2, y0, x * 2, y * 2, 48).flip());
+		}
 	}
 
 	private void addOut(int button) {
@@ -428,7 +417,8 @@ public class MacroEdit implements IGuiSection {
 				def.icon = null;
 			int id = icons.load(img, def).id;
 			mod |= 4;
-			glBindBuffer(GL_ARRAY_BUFFER, blockBuf);
+			blockVAO.bind();
+			//TODO format
 			glBufferSubData(GL_ARRAY_BUFFER, 0, new short[] {0, 0, 0, (short)id});
 		} catch(IOException e) {
 			e.printStackTrace();

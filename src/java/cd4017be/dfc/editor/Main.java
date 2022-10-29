@@ -7,7 +7,7 @@ import static org.lwjgl.system.MemoryUtil.NULL;
 import java.util.ArrayList;
 
 import org.lwjgl.opengl.GL;
-import org.lwjgl.opengl.GL11C;
+import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.system.MemoryUtil;
 
 /**
@@ -19,20 +19,29 @@ public class Main {
 	public static void main(String[] args) {
 		glfwSetErrorCallback((err, desc)-> System.out.format("GLFW Error %d: %s\n", err, MemoryUtil.memASCII(desc)));
 		if(!glfwInit()) throw new RuntimeException("can't init GLFW");
-		//API settings
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-		glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_NATIVE_CONTEXT_API);
 		//create window and GL context
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 		long window = glfwCreateWindow(1536, 1024, TITLE, NULL, NULL);
 		try {
 			if(window == NULL) throw new RuntimeException("can't create window");
 			glfwMakeContextCurrent(window);
-			GL.createCapabilities();
+			System.out.printf("OpenGl %d.%d rev%d%s%s\n",
+				glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MAJOR),
+				glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MINOR),
+				glfwGetWindowAttrib(window, GLFW_CONTEXT_REVISION),
+				switch(glfwGetWindowAttrib(window, GLFW_OPENGL_PROFILE)) {
+					case GLFW_OPENGL_COMPAT_PROFILE -> " compat";
+					case GLFW_OPENGL_CORE_PROFILE -> " core";
+					default -> "";
+				},
+				switch(glfwGetWindowAttrib(window, GLFW_OPENGL_FORWARD_COMPAT)) {
+					case GLFW_TRUE -> " forwardcompat";
+					default -> "";
+				}
+			);
+			GLCapabilities caps = GL.createCapabilities();
+			if (!caps.OpenGL20)
+				throw new RuntimeException("OpenGL drivers are outdated! (version 2.0 or above required)");
 			//init rendering
 			glfwSwapInterval(1);
 			init(window);
@@ -110,7 +119,7 @@ public class Main {
 	}
 
 	private static void onResize(long window, int w, int h) {
-		GL11C.glViewport(0, 0, w, h);
+		glViewport(0, 0, w, h);
 		for (IGuiSection gs : GUI) gs.onResize(w, h);
 		WIDTH = w; HEIGHT = h;
 		refresh(window);
@@ -149,13 +158,17 @@ public class Main {
 	};
 
 	public static void checkGLErrors() {
-		for (int err; (err = GL11C.glGetError()) != GL11C.GL_NO_ERROR; ) {
-			int i = err - GL11C.GL_INVALID_ENUM;
+		checkGLErrors(1);
+	}
+
+	public static void checkGLErrors(int depth) {
+		for (int err; (err = glGetError()) != GL_NO_ERROR; ) {
+			int i = err - GL_INVALID_ENUM;
 			String msg = i >= 0 && i < ERROR_MSG.length ? ERROR_MSG[i] : null;
 			System.out.format(
 				msg != null ? "OpenGL Error 0x%X: %s @ %s\n"
 					: "unknown OpenGL Error code: %X @ %s\n",
-				err, msg, Thread.currentThread().getStackTrace()[2]
+				err, msg, Thread.currentThread().getStackTrace()[depth + 2]
 			);
 		}
 	}

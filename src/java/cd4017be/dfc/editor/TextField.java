@@ -1,7 +1,8 @@
 package cd4017be.dfc.editor;
 
+import static cd4017be.dfc.editor.Shaders.CURSOR_COLOR;
+import static cd4017be.dfc.editor.Shaders.HIGHLIGHT_COLOR;
 import static cd4017be.dfc.editor.Shaders.print;
-import static cd4017be.dfc.editor.Shaders.startText;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static org.lwjgl.glfw.GLFW.*;
@@ -15,12 +16,9 @@ public class TextField {
 	private final Consumer<String> receiver;
 	private String text = "";
 	private int cur0, cur1;
-	private float ox, oy;
 
-	public TextField(Consumer<String> receiver, float ox, float oy) {
+	public TextField(Consumer<String> receiver) {
 		this.receiver = receiver;
-		this.ox = ox;
-		this.oy = oy;
 	}
 
 	public void set(String text, int c) {
@@ -33,19 +31,14 @@ public class TextField {
 	}
 
 	public void redraw(
-		float x, float y, float sx, float sy,
-		int l, int fg, int bg, int c
+		int x, int y, int sx, int sy, int c
 	) {
-		x += ox * sx;
-		y += oy * sy;
-		if (bg != fg) {
-			startText();
-			print(text, l, fg, bg, x, y, sx, sy);
-		}
+		if (c != 0)
+			print(text, c, x, y, sx, sy);
 		if (cur0 != cur1) {
 			int i0 = min(cur0, cur1), i1 = max(cur0, cur1);
-			print(text.subSequence(i0, i1), l - i0, fg, c, x + (float)i0 * sx, y, sx, sy);
-		} else print("|", l, c, 0, x + ((float)(cur1 % l) - 0.5F) * sx, y + (float)(cur1 / l) * sy, sx, sy);
+			print(text.subSequence(i0, i1), HIGHLIGHT_COLOR, x + i0 * sx, y, sx, sy);
+		} else print("|", CURSOR_COLOR, x + cur1 * sx - sx / 2, y, sx, sy);
 	}
 
 	public boolean onKeyInput(int key, int mods) {

@@ -5,7 +5,7 @@ import static cd4017be.dfc.editor.Shaders.*;
 import static java.lang.Math.*;
 import static org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT;
 import static org.lwjgl.glfw.GLFW.GLFW_RELEASE;
-import static org.lwjgl.opengl.GL30C.*;
+import static org.lwjgl.opengl.GL20C.*;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -18,6 +18,7 @@ import org.lwjgl.system.MemoryStack;
 
 import cd4017be.dfc.lang.BlockDef;
 import cd4017be.dfc.lang.BlockRegistry;
+import cd4017be.util.VertexArray;
 
 /**
  * @author CD4017BE */
@@ -28,7 +29,8 @@ public class Palette implements IGuiSection {
 	public BlockDef[] palette;
 	public int idx;
 	int bw, bh, nw, scroll;
-	int blockBuf, blockVAO;
+	int blockBuf;
+	VertexArray blockVAO;
 	CircuitEditor circuit;
 
 	public Palette(BlockIcons icons, BlockRegistry reg) {
@@ -56,18 +58,19 @@ public class Palette implements IGuiSection {
 			bw = max(bw, def.icon.w);
 			bh = max(bh, def.icon.h);
 		}
-		allocSelBuf(2);
-		blockVAO = genBlockVAO(blockBuf = glGenBuffers());
+		int x = 0, y = 0, l = palette.length;
+		blockVAO = genBlockVAO(l);
 		try(MemoryStack ms = MemoryStack.stackPush()) {
-			int x = 0, y = 0, l = palette.length;
-			ByteBuffer buf = ms.malloc(l * BLOCK_STRIDE);
+			ByteBuffer buf = ms.malloc(l * BLOCK_STRIDE * 4);
 			for (BlockDef def : palette) {
-				buf.putShort((short)(x + (bw - def.icon.w >> 1)))
-				.putShort((short)(y + (bh - def.icon.h >> 1)))
-				.putShort((short)0).putShort((short)def.icon.id);
+				drawBlock(buf,
+					x + (bw - def.icon.w >> 1),
+					y + (bh - def.icon.h >> 1),
+					def.icon.w, def.icon.h, 0, 0, def.icon.id
+				);
 				x += bw;
 			}
-			glBufferData(GL_ARRAY_BUFFER, buf.flip(), GL_STATIC_DRAW);
+			blockVAO.append(buf.flip());
 		}
 		idx = -1;
 	}
@@ -84,22 +87,18 @@ public class Palette implements IGuiSection {
 		float scaleY = SCALE / (float)HEIGHT;
 		float ofsX = scaleX * bw * scroll;
 		
-		addSel(0, 0, palette.length * bw, bh, 0x80ffffff);
-		if (idx >= 0) addSel(idx * bw, 0, bw, bh, 0xff80ff80);
-		drawSel(-ofsX, 1F, scaleX, -scaleY, 0F, 0.5F, 0x80000000);
+		addSel(0, 0, palette.length * bw, bh, FG_WHITE_T | BG_BLACK_T);
+		if (idx >= 0) addSel(idx * bw, 0, bw, bh, FG_GREEN_L);
+		drawSel(-ofsX, 1F, scaleX, -scaleY, 0F, 0.5F);
 		
 		glUseProgram(blockP);
-		glUniformMatrix3x4fv(block_transform, false, new float[] {
-			scaleX, 0, 0, 0,
-			0, -scaleY, 0, 0,
-			-ofsX, 1F, 0, 1F
+		glUniformMatrix3fv(block_transform, false, new float[] {
+			scaleX, 0, 0,
+			0, -scaleY, 0,
+			-ofsX, 1F, 0,
 		});
 		icons.bind();
-		glBindVertexArray(blockVAO);
-		glDrawArrays(GL_POINTS, 0, palette.length);
-		checkGLErrors();
-		
-		glBindVertexArray(0);
+		blockVAO.draw();
 	}
 
 	@Override

@@ -1,11 +1,11 @@
-#version 150 core
+#version 110
 uniform sampler2D font;
-uniform vec4 fgColor, bgColor;
-in vec2 uv;
-out vec4 outColor;
+
+varying vec2 fontUV;
+varying vec4 fgColor, bgColor;
 
 void main() {
-	float x = texture(font, uv).r;
+	float x = texture2D(font, fontUV).r;
 	float y = clamp(x + fgColor.a - bgColor.a, 0.0, 1.0);
-	outColor = mix(bgColor, fgColor, vec4(y, y, y, x));
+	gl_FragColor = mix(bgColor, fgColor, vec4(y, y, y, x));
 }

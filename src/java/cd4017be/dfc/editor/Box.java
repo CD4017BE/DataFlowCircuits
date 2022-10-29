@@ -2,8 +2,6 @@ package cd4017be.dfc.editor;
 
 import static cd4017be.dfc.editor.Shaders.addSel;
 import static cd4017be.dfc.editor.Shaders.print;
-import static java.lang.Math.max;
-
 import java.util.function.IntConsumer;
 
 /**
@@ -40,20 +38,13 @@ public class Box {
 		return onClick != null && x >= x0 && x < x1 && y >= y0 && y < y1;
 	}
 
-	public void drawFrame(int mx, int my) {
-		if (fc == 0) return;
-		addSel(x0, y0, x1 - x0, y1 - y0, pointInside(mx, my) ? hc : fc);
-	}
-
-	public void drawText(float ofsX, float ofsY, float scaleX, float scaleY) {
-		if (text == null) return;
-		int w = x1 - x0, h = y1 - y0, l = text.length();
-		print(
-			text, w, tc, 0,
-			ofsX + scaleX * (x0 + max((w - l) * 0.5F, 0)),
-			ofsY - scaleY * (y0 + max(h * 0.5F - ((l-1)/w + 1) * 0.75F, 0)),
-			scaleX, scaleY * -1.5F
-		);
+	public void draw(int mx, int my) {
+		if (fc != 0)
+			addSel(x0, y0, x1 - x0, y1 - y0, pointInside(mx, my) ? hc : fc);
+		if (text != null) {
+			int w = x1 - x0, h = y1 - y0, l = text.length();
+			print(text, tc, x0 * 4 + (w - l) * 2, y0 * 4 + h * 2 - 3, 4, 6);
+		}
 	}
 
 }

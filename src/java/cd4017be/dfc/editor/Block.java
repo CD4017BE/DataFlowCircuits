@@ -1,10 +1,8 @@
 package cd4017be.dfc.editor;
 
 import static cd4017be.dfc.editor.Shaders.BLOCK_STRIDE;
-import java.nio.ByteBuffer;
+import static cd4017be.dfc.editor.Shaders.drawBlock;
 import org.lwjgl.system.MemoryStack;
-
-import static org.lwjgl.opengl.GL32C.*;
 
 import cd4017be.dfc.graph.Macro;
 import cd4017be.dfc.graph.Macro.Pin;
@@ -98,12 +96,10 @@ public class Block extends IndexedSet.Element implements IMovable {
 
 	public void redraw() {
 		try(MemoryStack ms = MemoryStack.stackPush()) {
-			ByteBuffer buf = ms.malloc(BLOCK_STRIDE);
-			buf.putShort(x).putShort(y)
-			.put((byte)def.stretch(data))
-			.put((byte)0).putShort((short)def.icon.id);
-			glBindBuffer(GL_ARRAY_BUFFER, circuit().blockBuf);
-			glBufferSubData(GL_ARRAY_BUFFER, getIdx() * BLOCK_STRIDE, buf.flip());
+			int sx = def.stretch(data);
+			circuit().blockVAO.set(getIdx() * BLOCK_STRIDE * 4, drawBlock(ms.malloc(BLOCK_STRIDE * 4),
+				x, y, def.icon.w + sx, def.icon.h, sx, 0, def.icon.id
+			).flip());
 		}
 		Main.refresh(0);
 	}

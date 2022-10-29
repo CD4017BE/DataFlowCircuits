@@ -1,11 +1,9 @@
-#version 150 core
+#version 110
 uniform vec2 edgeRange;
-uniform vec4 bgColor;
-in vec4 fcolor;
-in vec4 edges;
-out vec4 outColor;
+
+varying vec4 fgColor, bgColor, edges;
 
 void main() {
 	vec2 v = min(edges.xy, edges.zw);
-	outColor = mix(fcolor, bgColor, smoothstep(edgeRange.x, edgeRange.y, min(v.x, v.y)));
+	gl_FragColor = mix(fgColor, bgColor, smoothstep(edgeRange.x, edgeRange.y, min(v.x, v.y)));
 }
