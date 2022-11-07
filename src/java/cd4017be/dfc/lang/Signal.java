@@ -109,13 +109,13 @@ public class Signal {
 	}
 
 	public Bundle asBundle() {
-		if (type == VOID) return null;
-		if (type instanceof Bundle) return (Bundle)type;
+		if (type == VOID || type instanceof Control) return null;
+		if (type instanceof Bundle b) return b;
 		return new Bundle(null, this, null);
 	}
 
 	public int bundleSize() {
-		return type == VOID ? 0 : type instanceof Bundle ? (int)value : 1;
+		return type == VOID || type instanceof Control ? 0 : type instanceof Bundle ? (int)value : 1;
 	}
 
 	@Override

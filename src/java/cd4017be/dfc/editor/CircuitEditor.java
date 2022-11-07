@@ -134,8 +134,13 @@ public class CircuitEditor implements IGuiSection, Macro {
 		ArrayList<SignalError> errors = new ArrayList<>();
 		for (SignalError e = context.errors.next; e != null; e = e.next) {
 			Node node = e.node;
-			if (node != null && node.macro == this && node.idx >= 0 && node.idx < blocks.size())
-				errors.add(e);
+			int io = e.io;
+			while (node != null && node.macro != this) {
+				node = node.macro != null ? node.macro.parent() : null;
+				io = -1;
+			}
+			if (node != null && node.idx >= 0 && node.idx < blocks.size())
+				errors.add(node == e.node ? e : new SignalError(node, io, e.getMessage()));
 		}
 		allocSelBuf(3 + errors.size());
 		Node node = context.firstUpdate;
@@ -143,16 +148,11 @@ public class CircuitEditor implements IGuiSection, Macro {
 			Block block = blocks.get(node.idx);
 			addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, 0xff00ff00);
 		}
-		errors: for (SignalError e : errors) {
+		for (SignalError e : errors) {
 			node = e.node;
 			int io = e.io;
-			while (node.macro != this) {
-				if (node.macro == null || (node = node.macro.parent()) == null)
-					continue errors;
-				io = Integer.MAX_VALUE;
-			}
 			Block block = blocks.get(node.idx);
-			if (io < block.io.length) {
+			if (io >= 0 && io < block.io.length) {
 				Trace tr = block.io[io];
 				addSel(tr.x() * 2 - 1, tr.y() * 2 - 1, 2, 2, 0xffff0000);
 			} else addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, 0xffff0000);
@@ -368,7 +368,7 @@ public class CircuitEditor implements IGuiSection, Macro {
 			int x = mx >> 1, y = my >> 1;
 			for (Block block : blocks)
 				if (block.isInside(x, y)) {
-					addBlock(block.def);
+					addBlock(reg.get(block.def.name));
 					break;
 				}
 			break;
@@ -522,12 +522,15 @@ public class CircuitEditor implements IGuiSection, Macro {
 	private void cleanUpTraces() {
 		ArrayList<Trace> toRemove = new ArrayList<>();
 		for (Trace tr : traces.values())
-			if (tr.pin < 0 && (tr.block == null || tr.to == null))
+			if (tr.pin < 0 && (tr.to == null || tr.from == null))
 				toRemove.add(tr);
 		int n = 0;
 		while(!toRemove.isEmpty()) {
 			n++;
 			Trace tr = toRemove.remove(toRemove.size() - 1);
+			for (Trace t = tr.to; t != null; t = t.adj)
+				if (t.pin < 0)
+					toRemove.add(t);
 			Trace f = tr.from;
 			tr.remove();
 			if (f != null && f.pin < 0 && f.to == null)
@@ -684,21 +687,23 @@ public class CircuitEditor implements IGuiSection, Macro {
 	@Override
 	public void connectInput(Node n, int i, Context c) {
 		Pin src = Node.NULL_PIN;
-		Block block = blocks.get(n.idx);
-		if (block.def.addIn > 0) {
-			String name = resolveArg(block.text());
-			Trace trace = outputs.get(name);
-			if (trace != null) src = getNode(trace);
-			else {
-				BlockDef def = parent.def;
-				String[] names = def.ioNames;
-				for (int k = 0, j = def.outCount; k < def.inCount; j++, k++)
-					if (names[j].equals(name)) {
-						src = parent.connectIn(k, c).srcPin();
-						break;
-					}
-			}
-		} else src = getNode(block.io[i + block.def.outCount]);
+		if (n.idx >= 0) {
+			Block block = blocks.get(n.idx);
+			if (block.def.addIn > 0) {
+				String name = resolveArg(block.text());
+				Trace trace = outputs.get(name);
+				if (trace != null) src = getNode(trace);
+				else {
+					BlockDef def = parent.def;
+					String[] names = def.ioNames;
+					for (int k = 0, j = def.outCount; k < def.inCount; j++, k++)
+						if (names[j].equals(name)) {
+							src = parent.connectIn(k, c).srcPin();
+							break;
+						}
+				}
+			} else src = getNode(block.io[i + block.def.outCount]);
+		}
 		n.connect(i + n.out.length, src.node(), src.pin(), c);
 	}
 

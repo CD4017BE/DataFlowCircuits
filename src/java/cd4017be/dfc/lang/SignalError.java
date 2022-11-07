@@ -1,7 +1,5 @@
 package cd4017be.dfc.lang;
 
-import java.util.Objects;
-
 import cd4017be.dfc.graph.Node;
 
 /**
@@ -16,14 +14,12 @@ public class SignalError extends Exception {
 
 	public SignalError(Node node, int io, Throwable cause) {
 		super(cause.getLocalizedMessage(), cause);
-		Objects.checkIndex(io, node.def.ioNames.length);
 		this.node = node;
 		this.io = io;
 	}
 
 	public SignalError(Node node, int io, String message) {
 		super(message);
-		Objects.checkIndex(io, node.def.ioNames.length);
 		this.node = node;
 		this.io = io;
 	}
@@ -31,7 +27,9 @@ public class SignalError extends Exception {
 	@Override
 	public String getLocalizedMessage() {
 		BlockDef def = node.def;
-		return "%s:%s: %s".formatted(def, def.ioNames[io], getMessage());
+		return io >= 0 && io < def.ioNames.length 
+			? "%s:%s: %s".formatted(def, def.ioNames[io], getMessage())
+			: "within %s: %s".formatted(def, getMessage());
 	}
 
 	public void remove() {

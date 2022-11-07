@@ -22,7 +22,7 @@ public class Struct implements Type {
 		this.names = names;
 		this.nameIdx = Types.nameIndex(names);
 		this.id = id;
-		int size = 0, align = 0;
+		int size = 0, align = 1;
 		boolean dyn = false;
 		for (Type t : elements) {
 			align = Math.max(align, t.align());

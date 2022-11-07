@@ -316,7 +316,7 @@ public class MacroEdit implements IGuiSection {
 	}
 
 	private void addOut(int button) {
-		if (outCount >= 1) return;
+		//if (outCount >= 1) return;
 		addPinName(null, true);
 		byte[] arr = new byte[pins.length + 2];
 		int n = outCount++ << 1;

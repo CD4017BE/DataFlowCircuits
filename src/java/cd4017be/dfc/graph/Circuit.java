@@ -64,19 +64,21 @@ public class Circuit implements Behavior {
 		MacroExpansion me;
 		if (node.data instanceof MacroExpansion m) {
 			me = m;
-			String[] args0 = m.args, args1 = node.arguments(argRefs.length);
-			int l = argRefs.length - 1;
-			for (int i = 0; i < l; i++)
-				if (!args0[i].equals(args1[i]))
-					m.updateArgRefs(i, c);
-			if (args0.length != args1.length)
-				m.updateArgRefs(l, c);
-			else for (int i = l; i < args0.length; i++)
-				if (!args0[i].equals(args1[i])) {
+			if (argRefs != null) {
+				String[] args0 = m.args, args1 = node.arguments(argRefs.length);
+				int l = argRefs.length - 1;
+				for (int i = 0; i < l; i++)
+					if (!args0[i].equals(args1[i]))
+						m.updateArgRefs(i, c);
+				if (args0.length != args1.length)
 					m.updateArgRefs(l, c);
-					break;
-				}
-			m.setArgs(args1);
+				else for (int i = l; i < args0.length; i++)
+					if (!args0[i].equals(args1[i])) {
+						m.updateArgRefs(l, c);
+						break;
+					}
+				m.setArgs(args1);
+			}
 		} else me = new MacroExpansion(node);
 		for (int i = 0; i < node.out.length; i++) {
 			Pin pin = me.getOutput(i, c);
@@ -99,7 +101,8 @@ public class Circuit implements Behavior {
 			this.nodes = new Node[blocks.length];
 			this.parent = parent;
 			parent.data = this;
-			this.setArgs(parent.arguments(argRefs.length));
+			if (argRefs != null)
+				this.setArgs(parent.arguments(argRefs.length));
 		}
 
 		private void setArgs(String[] args) {
@@ -149,7 +152,7 @@ public class Circuit implements Behavior {
 		@Override
 		public String[] arguments(Node n, int min) {
 			String[] arr = blocks[n.idx].arguments(), res;
-			int l = arr.length, l1 = argRefs.length;
+			int l = arr.length, l1 = argRefs == null ? 0 : argRefs.length;
 			if (l > 0 && extraArgs > 0 && links.getOrDefault(arr[l - 1], -1) == l1 + 0x1_ffffff) {
 				int m = extraArgs + l;
 				if (m >= min) res = new String[m];
