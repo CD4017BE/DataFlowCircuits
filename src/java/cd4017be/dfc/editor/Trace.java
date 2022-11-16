@@ -15,6 +15,7 @@ public class Trace implements IMovable {
 	public Trace from, to, adj;
 	/**-1: trace, 0: output, 1..: input */
 	public final int pin;
+	private int node;
 	private int pos, bufOfs;
 	public boolean placed;
 
@@ -30,6 +31,10 @@ public class Trace implements IMovable {
 
 	public boolean isOut() {
 		return pin >= 0 && pin < block.def.outCount;
+	}
+
+	public int node() {
+		return node;
 	}
 
 	@Override
@@ -133,6 +138,22 @@ public class Trace implements IMovable {
 			tr.to = this;
 		}
 		cc.traceUpdates.add(this);
+	}
+
+	public void setNode(int node) {
+		if (node == this.node) return;
+		this.node = node;
+		if (block != null) {
+			int in = pin - block.def.outCount;
+			if (in >= 0)
+				cc.macro.connect(node, block.nodesIn[in]);
+		}
+		for (Trace to = this.to; to != null; to = to.adj)
+			cc.traceUpdates.add(to);
+	}
+
+	public void update() {
+		if (!isOut()) setNode(from == null ? -1 : from.node);
 	}
 
 	@Override

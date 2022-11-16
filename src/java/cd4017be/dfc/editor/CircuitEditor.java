@@ -5,10 +5,10 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import org.lwjgl.system.MemoryStack;
 
+import cd4017be.compiler.Context;
+import cd4017be.compiler.MutableMacro;
 import cd4017be.dfc.compiler.CompileError;
 import cd4017be.dfc.compiler.Compiler;
-import cd4017be.dfc.graph.*;
-import cd4017be.dfc.graph.Node;
 import cd4017be.dfc.lang.*;
 import cd4017be.util.*;
 
@@ -22,7 +22,7 @@ import static org.lwjgl.opengl.GL32C.*;
 
 /**Implements the circuit editor user interface.
  * @author CD4017BE */
-public class CircuitEditor implements IGuiSection, Macro {
+public class CircuitEditor implements IGuiSection {
 
 	/**Editing modes */
 	private static final byte M_IDLE = 0, M_BLOCK_SEL = 1, M_TRACE_SEL = 2, M_TRACE_MV = 3, M_TRACE_DRAW = 4,
@@ -54,6 +54,7 @@ public class CircuitEditor implements IGuiSection, Macro {
 	TextField text;
 	String info = "";
 	final Context context;
+	final MutableMacro macro;
 
 	public CircuitEditor(MacroEdit edit, Palette pal, BlockRegistry reg) {
 		this.blockVAO = genBlockVAO(blockBuf = glGenBuffers());
@@ -67,7 +68,7 @@ public class CircuitEditor implements IGuiSection, Macro {
 		this.reg = reg;
 		this.edit = edit;
 		pal.circuit = this;
-		initGraph(edit.getDef());
+		this.macro = new MutableMacro(edit.getDef());
 		
 		fullRedraw();
 		glUseProgram(traceP);
@@ -247,8 +248,8 @@ public class CircuitEditor implements IGuiSection, Macro {
 			for (Block block : blocks)
 				if (block.isInside(x >> 1, y >> 1)) {
 					selBlock = block;
-					if (block.node != null && block.node.error != null)
-						info = block.node.error.getLocalizedMessage();
+					//if (block.node != null && block.node.error != null)
+					//	info = block.node.error.getLocalizedMessage();
 					break;
 				}
 			if (selBlock != old) refresh(0);
@@ -342,11 +343,7 @@ public class CircuitEditor implements IGuiSection, Macro {
 					text = new TextField(t -> {
 						block.setText(t);
 						block.redraw();
-						Node node = block.node;
-						if (node != null) {
-							node.disconnectExtraInputs(context);
-							context.updateNode(node, 0);
-						}
+						//TODO text edit
 					}, tx / 4F, block.textY() / 6F);
 					text.set(block.text(), 1 + (lmx * 2 - tx >> 2));
 				}
@@ -411,8 +408,6 @@ public class CircuitEditor implements IGuiSection, Macro {
 		case GLFW_KEY_H:
 			if (!ctrl || edit.curFile == null) break;
 			context.clear();
-			for (Block block : blocks)
-				createNode(block);
 			try {
 				info = loadHeader(edit.curFile, !shift)
 					? "refreshed external declarations!"
@@ -556,7 +551,7 @@ public class CircuitEditor implements IGuiSection, Macro {
 		file = withSuffix(file, ".ll");
 		try {
 			Profiler t = new Profiler(System.out);
-			Compiler c = new Compiler(getOutput(0, context).node());
+			Compiler c = new Compiler(null);
 			t.end("sequentialized");
 			c.resolveIds();
 			t.end("resolved variables");
@@ -618,121 +613,14 @@ public class CircuitEditor implements IGuiSection, Macro {
 		refresh(0);
 	}
 
-	HashMap<String, Trace> outputs = new HashMap<>();
 	ArrayDeque<Trace> traceUpdates = new ArrayDeque<>();
-	Node parent;
-	HashMap<String, Integer> links = new HashMap<>();
-	String[] args;
-	int argCount, extraArgs;
-
-	private void initGraph(BlockDef def) {
-		this.parent = new Root(def).node;
-		links.clear();
-		if (def.hasArg) {
-			String[] args = SEP.split(def.ioNames[def.ioNames.length - 1]);
-			for (int i = 0; i < args.length; i++)
-				links.put(args[i], i);
-			this.argCount = args.length;
-		} else this.argCount = 0;
-		this.args = parent.arguments(argCount);
-		this.extraArgs = args.length - argCount;
-		parent.data = this;
-	}
 
 	private void updateTypeCheck() {
-		while(!traceUpdates.isEmpty()) {
-			Trace tr = traceUpdates.remove();
-			for (Trace to = tr.to; to != null; to = to.adj)
-				traceUpdates.add(to);
-			Block block = tr.block;
-			if (block == null) continue;
-			int in = tr.pin - block.def.outCount;
-			Node node = block.node;
-			if (in >= 0 && node != null)
-				node.connect(in + node.out.length, null, 0, context);
-		}
+		while(!traceUpdates.isEmpty())
+			traceUpdates.remove().update();
 		if (context.tick(1000)) {
 			//TODO repeated frame updates
 		}
-	}
-
-	private String resolveArg(String arg) {
-		int idx = links.getOrDefault(arg, -1);
-		return idx < 0 ? arg : args[idx];
-	}
-
-	public Node createNode(Block block) {
-		BlockDef def = block.def;
-		Node node = new Node(this, block.getIdx(), def);
-		context.updateNode(node, 0);
-		return block.node = node;
-	}
-
-	private Pin getNode(Trace trace) {
-		while(trace != null && !trace.isOut())
-			trace = trace.from;
-		if (trace == null) return Node.NULL_PIN;
-		Block block = trace.block;
-		if (block.node == null)
-			return new Pin(createNode(block), trace.pin);
-		return block.node.data instanceof Macro m
-			? m.getOutput(trace.pin, context) : new Pin(block.node, trace.pin);
-	}
-
-	@Override
-	public Pin getOutput(int i, Context c) {
-		return getNode(outputs.get(parent.def.ioNames[i]));
-	}
-
-	@Override
-	public void connectInput(Node n, int i, Context c) {
-		Pin src = Node.NULL_PIN;
-		if (n.idx >= 0) {
-			Block block = blocks.get(n.idx);
-			if (block.def.addIn > 0) {
-				String name = resolveArg(block.text());
-				Trace trace = outputs.get(name);
-				if (trace != null) src = getNode(trace);
-				else {
-					BlockDef def = parent.def;
-					String[] names = def.ioNames;
-					for (int k = 0, j = def.outCount; k < def.inCount; j++, k++)
-						if (names[j].equals(name)) {
-							src = parent.connectIn(k, c).srcPin();
-							break;
-						}
-				}
-			} else src = getNode(block.io[i + block.def.outCount]);
-		}
-		n.connect(i + n.out.length, src.node(), src.pin(), c);
-	}
-
-	@Override
-	public String[] arguments(Node node, int min) {
-		String s = blocks.get(node.idx).text();
-		int[] argbuf = new int[254];
-		int n = CircuitFile.parseArgument(s, argbuf);
-		String last = s.substring(n == 0 ? 0 : argbuf[n - 1] + 1).trim();
-		String[] res;
-		int l = n + 1;
-		if (l > 0 && extraArgs > 0 && links.getOrDefault(last, -1) == argCount - 1) {
-			int m = extraArgs + l;
-			if (m >= min) res = new String[m];
-			else Arrays.fill(res = new String[min], m, min, "");
-			System.arraycopy(args, argCount, res, l, extraArgs);
-		} else if (l >= min) res = new String[l];
-		else Arrays.fill(res = new String[min], l, min, "");
-		for (int i = 0, p = 0; i < l; i++, p++) {
-			String arg = i == n ? last : s.substring(p, p = argbuf[i]).trim();
-			int id = links.getOrDefault(arg, -1);
-			res[i] = id >= 0 ? args[id] : arg;
-		}
-		return res;
-	}
-
-	@Override
-	public Node parent() {
-		return parent;
 	}
 
 }

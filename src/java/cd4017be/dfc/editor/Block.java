@@ -6,9 +6,6 @@ import org.lwjgl.system.MemoryStack;
 
 import static org.lwjgl.opengl.GL32C.*;
 
-import cd4017be.dfc.graph.Macro;
-import cd4017be.dfc.graph.Macro.Pin;
-import cd4017be.dfc.graph.Node;
 import cd4017be.dfc.lang.*;
 import cd4017be.util.IndexedSet;
 
@@ -18,13 +15,14 @@ public class Block extends IndexedSet.Element implements IMovable {
 
 	public final BlockDef def;
 	public final Trace[] io;
+	public final int[] nodesIn;
 	private String data = "";
-	public Node node;
 	public short x, y;
 
 	public Block(BlockDef def, CircuitEditor cc) {
 		this.def = def;
 		this.io = new Trace[def.ios()];
+		this.nodesIn = new int[def.inCount];
 		for (int i = 0; i < io.length; i++)
 			io[i] = new Trace(cc, this, i);
 		cc.icons.load(def, cc.reg);
@@ -88,12 +86,8 @@ public class Block extends IndexedSet.Element implements IMovable {
 	}
 
 	public void setText(String s) {
-		if (def.addOut > 0) {
-			var out = circuit().outputs;
-			out.remove(data, io[0]);
-			out.put(s, io[0]);
-		}
 		data = s;
+		//TODO recreate block
 	}
 
 	public void redraw() {
@@ -110,17 +104,17 @@ public class Block extends IndexedSet.Element implements IMovable {
 
 	@Override
 	public void setIdx(int idx) {
-		super.setIdx(idx);
 		CircuitEditor cc = circuit();
 		if (idx < 0) { // disconnect all Wires on removal
 			for (Trace tr : io) tr.remove();
+			cc.macro.removeBlock(this);
 			cc.fullRedraw();
-			if (node != null) node.remove(cc.context);
 		} else {
+			if (getIdx() < 0)
+				cc.macro.addBlock(this);
 			redraw();
-			if (node != null) node.idx = idx;
-			else cc.createNode(this);
 		}
+		super.setIdx(idx);
 	}
 
 	@Override
@@ -153,12 +147,8 @@ public class Block extends IndexedSet.Element implements IMovable {
 	}
 
 	public Signal signal(int i) {
-		if (node == null) return null;
-		if (node.data instanceof Macro m) {
-			Pin pin = m.getOutput(i, circuit().context);
-			return pin.node().out[pin.pin()];
-		}
-		return node.out[i];
+		return null;
+		//TODO
 	}
 
 }

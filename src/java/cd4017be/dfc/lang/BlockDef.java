@@ -3,6 +3,7 @@ package cd4017be.dfc.lang;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 
+import cd4017be.compiler.NodeAssembler;
 import cd4017be.dfc.compiler.NodeCompiler;
 import cd4017be.dfc.graph.Behavior;
 import cd4017be.util.AtlasSprite;
@@ -19,6 +20,8 @@ public class BlockDef {
 	public final byte[] pins;
 	/** I/O pin names */
 	public final String[] ioNames;
+	/** */
+	public NodeAssembler content;
 	/** compiles this block */
 	public NodeCompiler compiler;
 	/** performs compile time type evaluation */
