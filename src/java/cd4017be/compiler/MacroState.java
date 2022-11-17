@@ -7,7 +7,7 @@ public class MacroState {
 	public final NodeState parent;
 	public final Context context;
 	public final Macro macro;
-	NodeState[] states;
+	public NodeState[] states;
 	public NodeState first;
 	NodeState last;
 	public SignalError errors;

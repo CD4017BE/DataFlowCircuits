@@ -1,11 +1,7 @@
-#version 150 core
-uniform sampler2D tex;
-in vec4 uv;
-flat in vec2 mid;
-out vec4 outColor;
-
-const vec2 ZERO2 = vec2(0, 0);
+#version 110
+uniform sampler2D texture;
+varying vec2 tex0, tex1, f;
 
 void main() {
-	outColor = texture(tex, mid + min(uv.pq, ZERO2) + max(uv.st, ZERO2));
+	gl_FragColor = texture2D(texture, mix(tex0, tex1, clamp(f, 0.0, 1.0)));
 }

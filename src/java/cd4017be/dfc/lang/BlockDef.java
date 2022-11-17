@@ -7,10 +7,11 @@ import cd4017be.compiler.NodeAssembler;
 import cd4017be.dfc.compiler.NodeCompiler;
 import cd4017be.dfc.graph.Behavior;
 import cd4017be.util.AtlasSprite;
+import cd4017be.util.IconAtlas.IconHolder;
 
 /**Definitions of intrinsic blocks.
  * @author CD4017BE */
-public class BlockDef {
+public class BlockDef implements IconHolder {
 	/** unique name */
 	public final String name;
 	/** I/O pin counts */
@@ -98,5 +99,15 @@ public class BlockDef {
 
 	/**Name of the final program end block. */
 	public static final String OUT_ID = "out", IN_ID = "in";
+
+	@Override
+	public AtlasSprite icon() {
+		return icon;
+	}
+
+	@Override
+	public void icon(AtlasSprite icon) {
+		this.icon = icon;
+	}
 
 }

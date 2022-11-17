@@ -1,14 +1,10 @@
 package cd4017be.dfc.editor;
 
 import java.io.*;
-import java.nio.ByteBuffer;
 import java.util.*;
-import org.lwjgl.system.MemoryStack;
-
 import cd4017be.compiler.Context;
 import cd4017be.compiler.MacroState;
 import cd4017be.compiler.MutableMacro;
-import cd4017be.compiler.Node;
 import cd4017be.compiler.NodeState;
 import cd4017be.compiler.Signal;
 import cd4017be.compiler.SignalError;
@@ -17,16 +13,14 @@ import cd4017be.dfc.compiler.Compiler;
 import cd4017be.dfc.lang.BlockDef;
 import cd4017be.dfc.lang.BlockRegistry;
 import cd4017be.dfc.lang.CircuitFile;
-import cd4017be.dfc.lang.HeaderParser;
 import cd4017be.util.*;
 
 import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
-import static cd4017be.dfc.graph.Circuit.SEP;
 import static java.lang.Math.*;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.opengl.GL32C.*;
+import static org.lwjgl.opengl.GL20C.*;
 
 /**Implements the circuit editor user interface.
  * @author CD4017BE */
@@ -43,11 +37,7 @@ public class CircuitEditor implements IGuiSection {
 	final BlockRegistry reg;
 	final MacroEdit edit;
 	/** GL vertex arrays */
-	final int blockVAO, traceVAO;
-	/** GL buffers */
-	final int blockBuf, traceBuf;
-	/** draw counters */
-	int traceCount;
+	final VertexArray blockVAO, traceVAO;
 	/** mouse grid offset and zoom */
 	int ofsX, ofsY, zoom = 16;
 	boolean panning = false;
@@ -65,10 +55,8 @@ public class CircuitEditor implements IGuiSection {
 	final MutableMacro macro;
 
 	public CircuitEditor(MacroEdit edit, Palette pal, BlockRegistry reg) {
-		this.blockVAO = genBlockVAO(blockBuf = glGenBuffers());
-		glBufferData(GL_ARRAY_BUFFER, 256 * BLOCK_STRIDE, GL_DYNAMIC_DRAW);
-		this.traceVAO = genTraceVAO(traceBuf = glGenBuffers());
-		allocSelBuf(2);
+		this.blockVAO = genBlockVAO(64);
+		this.traceVAO = genTraceVAO(64);
 		this.blocks = new IndexedSet<>(new Block[16]);
 		this.traces = new HashMap<>();
 		this.context = new Context(reg);
@@ -99,15 +87,6 @@ public class CircuitEditor implements IGuiSection {
 		}
 	}
 
-	public void reserveBlockBuf(int size) {
-		size *= BLOCK_STRIDE;
-		glBindBuffer(GL_ARRAY_BUFFER, blockBuf);
-		int l = glGetBufferParameteri(GL_ARRAY_BUFFER, GL_BUFFER_SIZE);
-		if (l >= size) return;
-		glBufferData(GL_ARRAY_BUFFER, max(size, l << 1), GL_DYNAMIC_DRAW);
-		for (Block block : blocks) block.redraw();
-	}
-
 	@Override
 	public void onResize(int w, int h) {
 	}
@@ -115,7 +94,7 @@ public class CircuitEditor implements IGuiSection {
 	@Override
 	public void redraw() {
 		updateTypeCheck();
-		if (icons.update() || redraw < 0) redrawTraces();
+		if (redraw < 0) redrawTraces();
 		redraw = 0;
 		//draw frame
 		float scaleX = (float)(zoom * 2) / (float)WIDTH;
@@ -123,86 +102,58 @@ public class CircuitEditor implements IGuiSection {
 		float ofsX = (float)this.ofsX * scaleX * 0.5F;
 		float ofsY = (float)this.ofsY * scaleY * 0.5F;
 		float[] mat = new float[] {
-			scaleX,   0, 0, 0,
-			0, -scaleY, 0, 0,
-			ofsX,-ofsY, 0, 1F
+			scaleX,  0, 0,
+			0, -scaleY, 0,
+			ofsX,-ofsY, 0,
 		};
-		icons.bind();
 		glUseProgram(traceP);
-		glUniformMatrix3x4fv(trace_transform, false, mat);
-		glBindVertexArray(traceVAO);
-		glDrawArrays(GL_LINE_STRIP, 0, traceCount);
+		glUniformMatrix3fv(trace_transform, false, mat);
+		traceVAO.draw();
 		checkGLErrors();
 		
-		glUseProgram(blockP);
-		glUniformMatrix3x4fv(block_transform, false, mat);
-		glBindVertexArray(blockVAO);
-		glDrawArrays(GL_POINTS, 0, blocks.size());
+		icons.bind();
+		glUniformMatrix3fv(block_transform, false, mat);
+		blockVAO.count = blocks.size() * 4;
+		blockVAO.draw();
 		checkGLErrors();
 		
-		allocSelBuf(256);
 		MacroState ms = macro.state;
 		if (ms != null) {
 			for (SignalError e = ms.errors; e != null; e = e.next) {
 				Block block = macro.blocks[e.nodeId];
 				if (block != null)
-					addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, 0xffff0000);
+					addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, FG_RED);
 			}
 			for (NodeState ns = ms.first; ns != null; ns = ns.next) {
 				Block block = macro.blocks[ns.node.idx];
 				if (block != null)
-					addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, 0xff00ff00);
+					addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, FG_GREEN);
 			}
 		}
 		if (mode == M_MULTI_SEL || mode == M_MULTI_MOVE)
-			addSel(min(lmx, mx), min(lmy, my), abs(mx - lmx), abs(my - lmy), 0xff80ff80);
+			addSel(min(lmx, mx), min(lmy, my), abs(mx - lmx), abs(my - lmy), FG_GREEN_L);
 		if (selBlock != null)
-			addSel(selBlock.x * 2, selBlock.y * 2, selBlock.w() * 2, selBlock.h() * 2, 0xff8080ff);
+			addSel(selBlock.x * 2, selBlock.y * 2, selBlock.w() * 2, selBlock.h() * 2, FG_BLUE_L);
 		if (selTr != null)
-			addSel(selTr.x() * 2 - 1, selTr.y() * 2 - 1, 2, 2, 0xffff8080);
-		drawSel(ofsX, -ofsY, 0.5F * scaleX, -0.5F * scaleY, 0F, 1F, 0x00000000);
+			addSel(selTr.x() * 2 - 1, selTr.y() * 2 - 1, 2, 2, FG_RED_L);
+		drawSel(ofsX, -ofsY, 0.5F * scaleX, -0.5F * scaleY, 0F, 1F);
 		
-		startText();
-		float sx = scaleX, sy = -1.5F * scaleY;
-		if (text != null)
-			text.redraw(
-				ofsX, -ofsY, sx, sy, 256,
-				0xffffff80, 0xffffff80, 0xffff8080
-			);
+		if (text != null && selBlock != null)
+			text.redraw(selBlock.textX(), selBlock.textY(), 4, 6, 0);
 		for (Block block : blocks) {
 			if (block.text().isBlank()) continue;
-			print(
-				block.text(), 256, 0xffffff80, 0x00000000,
-				block.textX() / 4F * sx + ofsX,
-				block.textY() / 6F * sy - ofsY,
-				sx, sy
-			);
+			print(block.text(), FG_YELLOW_L, block.textX(), block.textY(), 4, 6);
 		}
-		sx = 32F / (float)WIDTH;
-		sy = -48F / (float)HEIGHT;
-		print(info, 256, 0xffffff80, 0x00000000, -1F, -1F - sy, sx, sy);
-		
-		glBindVertexArray(0);
+		drawText(ofsX, -ofsY, scaleX * 0.25F, scaleY * -0.25F);
+		print(info, FG_YELLOW_L, 0, -1, 1, 1);
+		drawText(-1F, -1F, 32F / (float)WIDTH, -48F / (float)HEIGHT);
 	}
 
 	private void redrawTraces() {
-		try(MemoryStack ms = MemoryStack.stackPush()) {
-			ByteBuffer buf = ms.malloc(traces.size() * 2 * TRACE_STRIDE);
-			for (Trace t : traces.values()) {
-				Trace t0 = t.from;
-				if (t0 == null) {
-					t0 = t; t = t.to;
-					if (t == null) continue;
-				} else if (t0.to == t && (t0.placed || t0.from != null))
-					continue;
-				t0.draw(buf, true);
-				for (t0 = t; t0 != null; t0 = t0.to)
-					t0.draw(buf, false);
-			}
-			traceCount = buf.position() / TRACE_STRIDE;
-			glBindBuffer(GL_ARRAY_BUFFER, traceBuf);
-			glBufferData(GL_ARRAY_BUFFER, buf.flip(), GL_DYNAMIC_DRAW);
-		}
+		MacroState ms = macro.state;
+		traceVAO.clear();
+		for (Trace t : traces.values())
+			t.draw(traceVAO, ms, true);
 		checkGLErrors();
 	}
 
@@ -335,13 +286,12 @@ public class CircuitEditor implements IGuiSection {
 				Block block = selBlock;
 				block.place();
 				if (block.def.hasArg) {
-					int tx = block.textX();
 					text = new TextField(t -> {
 						block.setText(t);
 						block.redraw();
 						//TODO text edit
-					}, tx / 4F, block.textY() / 6F);
-					text.set(block.text(), 1 + (lmx * 2 - tx >> 2));
+					});
+					text.set(block.text(), 1 + (lmx * 2 - block.textX() >> 2));
 				}
 				moving.clear();
 				mode = M_IDLE;
@@ -446,7 +396,7 @@ public class CircuitEditor implements IGuiSection {
 		while(t != null && !t.isOut()) t = t.from;
 		if (t != null && t.block != null) {
 			Signal sg = t.block.signal(t.pin);
-			if (sg != null) sg.displayString(sb, true);
+			if (sg != null) sb.append(sg.toString());
 		}
 		info = sb.toString();
 		refresh(0);
@@ -460,7 +410,6 @@ public class CircuitEditor implements IGuiSection {
 
 	public void addBlock(BlockDef type) {
 		text = null;
-		reserveBlockBuf(blocks.size() + 1);
 		lmx = mx; lmy = my;
 		selBlock = new Block(type, this)
 		.pos(mx + 1 - type.icon.w >> 1, my + 1 - type.icon.h >> 1);
@@ -472,18 +421,12 @@ public class CircuitEditor implements IGuiSection {
 	}
 
 	/**Modify coordinates of a trace in its vertex buffer.
-	 * @param ofs byte offset in vertex buffer
-	 * @param x
-	 * @param y */
-	public void updatePos(int ofs, int x, int y) {
+	 * @param tr */
+	public void updatePos(Trace tr) {
 		if (redraw < 0) return;
 		Main.refresh(0);
 		redraw |= 1;
-		try(MemoryStack ms = MemoryStack.stackPush()) {
-			glBindBuffer(GL_ARRAY_BUFFER, traceBuf);
-			glBufferSubData(GL_ARRAY_BUFFER, ofs, ms.shorts((short)x, (short)y));
-			checkGLErrors();
-		}
+		tr.draw(traceVAO, macro.state, false);
 	}
 
 	public void redrawSignal(int idx) {
@@ -498,10 +441,8 @@ public class CircuitEditor implements IGuiSection {
 
 	@Override
 	public void close() {
-		glDeleteVertexArrays(blockVAO);
-		glDeleteVertexArrays(traceVAO);
-		glDeleteBuffers(blockBuf);
-		glDeleteBuffers(traceBuf);
+		glDeleteBuffers(blockVAO.buffer);
+		glDeleteBuffers(traceVAO.buffer);
 	}
 
 	private void clear() {
@@ -532,14 +473,14 @@ public class CircuitEditor implements IGuiSection {
 	}
 
 	private boolean loadHeader(File file, boolean cpp) throws IOException {
-		File h = withSuffix(file, ".c");
-		if (!h.exists()) return false;
-		Profiler t = new Profiler(System.out);
-		HeaderParser hp = new HeaderParser();
-		hp.processHeader(h, cpp);
-		t.end("header preprocessed");
-		hp.getDeclarations(context.extDef);
-		t.end("header parsed");
+//		File h = withSuffix(file, ".c");
+//		if (!h.exists()) return false;
+//		Profiler t = new Profiler(System.out);
+//		HeaderParser hp = new HeaderParser();
+//		hp.processHeader(h, cpp);
+//		t.end("header preprocessed");
+//		hp.getDeclarations(context.extDef);
+//		t.end("header parsed");
 		return true;
 	}
 

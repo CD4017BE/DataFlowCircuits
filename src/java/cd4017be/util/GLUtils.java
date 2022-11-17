@@ -1,9 +1,7 @@
 package cd4017be.util;
 
 import static java.lang.Math.min;
-import static org.lwjgl.opengl.GL11C.GL_UNSIGNED_BYTE;
-import static org.lwjgl.opengl.GL12C.*;
-import static org.lwjgl.opengl.GL32C.*;
+import static org.lwjgl.opengl.GL20C.*;
 
 import java.awt.image.BufferedImage;
 import java.io.*;
@@ -15,7 +13,6 @@ import javax.imageio.ImageIO;
 
 import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL20C;
-import org.lwjgl.opengl.GL32C;
 import org.lwjgl.system.MemoryStack;
 
 /**Static helper methods for OpenGL rendering.
@@ -38,8 +35,7 @@ public class GLUtils {
 
 	/**Loads a GLSL shader.
 	 * @param type one of {@link GL20C#GL_VERTEX_SHADER GL_VERTEX_SHADER},
-	 * {@link GL20C#GL_FRAGMENT_SHADER GL_FRAGMENT_SHADER},
-	 * {@link GL32C#GL_GEOMETRY_SHADER GL_GEOMETRY_SHADER}
+	 * {@link GL20C#GL_FRAGMENT_SHADER GL_FRAGMENT_SHADER}
 	 * @param is source to load from
 	 * @return new GL shader id
 	 * @throws IOException on error reading is
@@ -133,17 +129,12 @@ public class GLUtils {
 	}
 
 	/**@param vert vertex shader id
-	 * @param geom geometry shader id
 	 * @param frag fragment shader id
-	 * @param out output color variables in fragment shader
 	 * @return new shader program id */
-	public static int program(int vert, int geom, int frag, String... out) {
+	public static int program(int vert, int frag) {
 		int p = glCreateProgram();
 		if (vert >= 0) glAttachShader(p, vert);
-		if (geom >= 0) glAttachShader(p, geom);
 		if (frag >= 0) glAttachShader(p, frag);
-		for (int i = 0; i < out.length; i++)
-			glBindFragDataLocation(p, i, out[i]);
 		glLinkProgram(p);
 		System.out.println(glGetProgramInfoLog(p));
 		return p;
@@ -187,17 +178,6 @@ public class GLUtils {
 		);
 	}
 
-	/**Draw a vertex array with a given shader.
-	 * @param shaderProg shader program id
-	 * @param vertArr vertex array id
-	 * @param mode polygon mode
-	 * @param count number of vertices to draw */
-	public static void draw(int shaderProg, int vertArr, int mode, int count) {
-		glUseProgram(shaderProg);
-		glBindVertexArray(vertArr);
-		glDrawArrays(mode, 0, count);
-	}
-
 	/**@param path local texture path
 	 * @return image data: {S w, S h, US gl_format, US gl_type, (w * h * T) pixel data}
 	 * allocated from {@link MemoryStack} or null if can't load */
@@ -230,13 +210,13 @@ public class GLUtils {
 		GL_ALPHA | GL_UNSIGNED_INT << 16,
 		GL_ALPHA | GL_DOUBLE << 16,
 		0,
-		GL_RG | GL_UNSIGNED_BYTE << 16,
-		GL_RG | GL_UNSIGNED_SHORT << 16,
-		GL_RG | GL_UNSIGNED_INT << 16,
+		0, //GL_RG | GL_UNSIGNED_BYTE << 16,
+		0, //GL_RG | GL_UNSIGNED_SHORT << 16,
+		0, //GL_RG | GL_UNSIGNED_INT << 16,
 		GL_BGR | GL_UNSIGNED_BYTE_2_3_3_REV << 16,
 		GL_BGR | GL_UNSIGNED_SHORT_5_6_5_REV << 16,
-		GL_RG | GL_UNSIGNED_INT_24_8 << 16,
-		GL_RG | GL_FLOAT << 16,
+		0, //GL_RG | GL_UNSIGNED_INT_24_8 << 16,
+		0, //GL_RG | GL_FLOAT << 16,
 		0,
 		GL_BGRA | GL_UNSIGNED_SHORT_4_4_4_4_REV << 16,
 		GL_BGRA | GL_UNSIGNED_INT_8_8_8_8_REV << 16,
@@ -244,7 +224,7 @@ public class GLUtils {
 		0,
 		GL_BGRA | GL_UNSIGNED_SHORT_1_5_5_5_REV << 16,
 		GL_BGRA | GL_UNSIGNED_INT_2_10_10_10_REV << 16,
-		GL_BGRA | GL_HALF_FLOAT << 16,
+		0, //GL_BGRA | GL_HALF_FLOAT << 16,
 	};
 
 	/**Loads an image encoded in a custom format.

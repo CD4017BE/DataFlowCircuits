@@ -1,13 +1,21 @@
-#version 150 core
-uniform mat3x4 transform;
+#version 110
+uniform mat3 transform;
 uniform vec4 tileSize;
-uniform uint tileStride;
-uniform uint lineWrap;
-in uint charCode;
-out vec2 uv0;
+uniform sampler1D palette;
+
+attribute vec2 pos;
+attribute float char, color, corner;
+
+varying vec2 fontUV;
+varying vec4 fgColor, bgColor;
 
 void main() {
-	uint i = uint(gl_VertexID);
-	gl_Position = transform * vec3(i % lineWrap, i / lineWrap, 1.0);
-	uv0 = vec2(charCode % tileStride, charCode / tileStride) * tileSize.st + tileSize.pq;
+	gl_Position = vec4(transform * vec3(pos, 1.0), 1.0);
+	float tileStride = ceil(1.0 / tileSize.x);
+	float v = floor(char / tileStride), u = char - v * tileStride;
+	float cy = floor(corner / 2.0), cx = corner - cy * 2.0;
+	fontUV = vec2(u + cx, v + cy) * tileSize.xy + tileSize.zw;
+	float bgi = floor(color / 32.0), fgi = floor(color - bgi * 32.0);
+	fgColor = texture1D(palette, fgi / 32.0);
+	bgColor = texture1D(palette, bgi / 32.0);
 }

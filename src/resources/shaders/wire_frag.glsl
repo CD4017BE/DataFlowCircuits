@@ -1,18 +1,12 @@
-#version 150 core
+#version 110
 uniform sampler2D tex;
-in vec2 uv;
-flat in int t;
-flat in float l;
-out vec4 outColor;
+uniform vec2 texScale;
+varying vec2 uv;
+varying float t, l;
 
 void main() {
-	ivec2 pos = ivec2(floor(uv));
-	pos.x &= 7;
-	if (pos.y >= 0 && pos.y < 2)
-		pos += ivec2((t & 48) >> 1, (t & 15) << 1);
-	else {
-		pos.y &= 1;
-		if (uv.x < 0 || uv.x >= l) pos.x += 16;
-	}
-	outColor = texelFetch(tex, pos, 0);
+	float ofs;
+	if (uv.y >= 0.0 && uv.y < 1.0) ofs = t;
+	else ofs = (uv.x < 0.0 || uv.x >= l ? 2.0 : 0.0) - floor(uv.y);
+	gl_FragColor = texture2D(tex, (uv + vec2(0.0, ofs)) * texScale);
 }

@@ -1,10 +1,14 @@
 package cd4017be.dfc.editor;
 
+import static cd4017be.dfc.editor.Shaders.TRACE_STRIDE;
+import static cd4017be.dfc.editor.Shaders.drawTrace;
 import static java.lang.Math.min;
 
-import java.nio.ByteBuffer;
-
-import cd4017be.dfc.lang.Signal;
+import org.lwjgl.system.MemoryStack;
+import cd4017be.compiler.MacroState;
+import cd4017be.compiler.NodeState;
+import cd4017be.compiler.Signal;
+import cd4017be.util.VertexArray;
 
 /**Represents a data trace node.
  * @author CD4017BE */
@@ -52,10 +56,9 @@ public class Trace implements IMovable {
 		if (placed) throw new IllegalStateException("must pickup before move");
 		pos = key(x, y);
 		if (from != null || to != null)
-			cc.updatePos(bufOfs, x, y);
-		if (to != null)
-			for (Trace t0 = to, t = t0.adj; t != null; t0 = t, t = t.adj)
-				cc.updatePos(t0.bufOfs - Shaders.TRACE_STRIDE, x, y);
+			cc.updatePos(this);
+		for (Trace t = to; t != null; t = t.adj)
+				cc.updatePos(this);
 		return this;
 	}
 
@@ -163,21 +166,14 @@ public class Trace implements IMovable {
 		connect(null);
 	}
 
-	public void draw(ByteBuffer buf, boolean start) {
-		Block block = null;
-		Signal s = null;
-		for(Trace tr = from; tr != null; tr = tr.from)
-			if(tr.isOut()) {
-				block = tr.block;
-				s = block.signal(tr.pin);
-				break;
-			}
-		bufOfs = buf.position();
-		buf.putInt(pos).putShort(
-			start ? STOP_COLOR :
-			s == null ? VOID_COLOR :
-			(short)s.type.color(s)
-		);
+	public void draw(VertexArray va, MacroState ms, boolean re) {
+		if (from == null) return;
+		if (re || bufOfs < 0) bufOfs = va.count;
+		NodeState ns = ms != null && node >= 0 ? ms.states[node] : null;
+		Signal s = ns != null ? ns.signal : null;
+		try (MemoryStack mem = MemoryStack.stackPush()) {
+			va.set(bufOfs, drawTrace(mem.malloc(TRACE_STRIDE * 4), from.x(), from.y(), x(), y(), s == null ? VOID_COLOR : s.type.n));
+		}
 	}
 
 	public static final short VOID_COLOR = 47, STOP_COLOR = 0;

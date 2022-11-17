@@ -4,7 +4,7 @@ import static java.lang.Math.max;
 
 /**
  * @author CD4017BE */
-public class AtlasSprite {
+public class AtlasSprite implements IRect {
 
 	public static final AtlasSprite NULL = new AtlasSprite(0, 0, 0, 0);
 
@@ -51,6 +51,26 @@ public class AtlasSprite {
 
 	public int A() {
 		return w * h;
+	}
+
+	@Override
+	public int x() {
+		return x;
+	}
+
+	@Override
+	public int y() {
+		return y;
+	}
+
+	@Override
+	public int w() {
+		return w;
+	}
+
+	@Override
+	public int h() {
+		return h;
 	}
 
 }
