@@ -10,6 +10,7 @@ public final class NodeState {
 	public NodeState next;
 	public Scope scope;
 	public Signal signal;
+	public SignalError error;
 	/** bits[0..62]: missing inputs, bit[63]: missing scope */
 	long update;
 
@@ -31,7 +32,12 @@ public final class NodeState {
 		return i < 0 ? Signal.DISCONNECTED : state.states[i].signal;
 	}
 
-	public void outVal(Signal val) {
+	public void updateIn(int i) {
+		if (scope != null && (update &= ~(1L << i)) == 0)
+			schedule();
+	}
+
+	public SignalError outVal(Signal val) {
 		boolean chng = signal != val;
 		signal = val;
 		int[] outs = node.outs;
@@ -39,10 +45,25 @@ public final class NodeState {
 		for(int i = node.usedOuts - 1; i >= 0; i--) {
 			int j = outs[i];
 			NodeState ns = states[j & 0xffffff];
-			if (ns == null || ns.scope == null) continue;
-			if ((chng || ns.update != 0) && (ns.update &= ~(1L << (j >> 24))) == 0)
-				ns.schedule();
+			if (ns != null && (chng || ns.update != 0))
+				ns.updateIn(j >> 24);
 		}
+		return null;
+	}
+
+	public boolean scope(Scope s, long ins) {
+		if (scope == s) return false;
+		scope = s;
+		signal = null;
+		int n = node.ins.length;
+		update = (1L << n) - 1L & ins;
+		for (int i = 0; i < n; i++) {
+			if ((ins >>> i & 1) == 0) continue;
+			int j = node.ins[i];
+			if (j < 0) update ^= 1L << i;
+			else state.updateScope(j);
+		}
+		return true;
 	}
 
 	public void update() {
@@ -55,25 +76,21 @@ public final class NodeState {
 				NodeState ns = states[outs[i] & 0xffffff];
 				s = Scope.union(s, ns == null ? null : ns.scope);
 			}
-			if (node.op instanceof ScopedNodeOperator sno)
-				s = sno.compScope(this, s);
-			if (scope != s) {
-				scope = s;
-				signal = null;
-				int n = node.ins.length;
-				update = (1L << n) - 1L;
-				for (int i = 0; i < n; i++) {
-					int j = node.ins[i];
-					if (j < 0) update ^= 1L << i;
-					else state.updateScope(j);
-				}
-			} else if (signal != null) {
+			if (node.op instanceof NodeOperator.Scoped sno)
+				sno.compScope(this, s);
+			else scope(s, -1L);
+			if (signal != null) {
 				outVal(signal);
 				return;
 			}
 		}
-		if (update == 0 && scope != null)
-			node.op.compValue(this);
+		if (update != 0 || scope == null) return;
+		try {
+			SignalError error = node.op.compValue(this);
+			if (error != null) error.record(this);
+		} catch (Throwable e) {
+			new SignalError(e).record(this);
+		}
 	}
 
 	public void schedule() {
@@ -83,6 +100,13 @@ public final class NodeState {
 		if (ns != null) ns.next = this;
 		else state.first = this;
 		state.last = this;
+		if (error != null) error.clear(this);
+	}
+
+	public void remove() {
+		update = Long.MAX_VALUE;
+		if (error != null) error.clear(this);
+		state.states[node.idx] = null;
 	}
 
 }

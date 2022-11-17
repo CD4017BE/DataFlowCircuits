@@ -1,7 +1,6 @@
 package cd4017be.compiler;
 
-import static cd4017be.compiler.ops.StandardOps.*;
-
+import static cd4017be.compiler.NodeOperator.*;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -30,14 +29,14 @@ public class Macro implements NodeAssembler, VirtualMethod {
 		links.clear();
 	}
 
-	protected int nextId() {
-		return nodeCount++;
-	}
-
 	public Node addNode(NodeOperator op, Object data, int ins) {
-		int i = nextId();
+		int i = nodeCount++;
 		if (i >= nodes.length) nodes = Arrays.copyOf(nodes, i * 2);
 		return nodes[i] = new Node(op, data, ins, i);
+	}
+
+	public Node addIONode(String name) {
+		return links.computeIfAbsent(name, n -> addNode(PASS, n, 1));
 	}
 
 	public int ins() {
@@ -139,8 +138,9 @@ public class Macro implements NodeAssembler, VirtualMethod {
 	}
 
 	@Override
-	public void run(Signal a, NodeState state) {
+	public SignalError run(Signal a, NodeState state) {
 		new MacroState(state, this);
+		return null;
 	}
 
 }

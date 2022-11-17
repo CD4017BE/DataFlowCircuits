@@ -2,9 +2,7 @@ package cd4017be.compiler;
 
 import java.util.*;
 
-import cd4017be.compiler.ops.StandardOps;
 import cd4017be.dfc.editor.Block;
-import cd4017be.dfc.editor.Trace;
 import cd4017be.dfc.lang.BlockDef;
 
 /**
@@ -13,24 +11,42 @@ import cd4017be.dfc.lang.BlockDef;
 public class MutableMacro extends Macro {
 
 	public MacroState state;
+	public Block[] blocks;
+	Block curBlock;
 	int[] free;
 	int freeCount;
 
 	public MutableMacro(BlockDef def) { 
 		super(def);
+		this.blocks = new Block[nodes.length];
 		this.free = new int[16];
 	}
 
 	@Override
-	protected int nextId() {
-		if (freeCount > 0) return free[--freeCount];
-		int i = super.nextId();
-		if (state != null) {
-			NodeState[] states = state.states;
-			if (i >= states.length)
-				state.states = Arrays.copyOf(states, states.length * 2);
+	public Node addNode(NodeOperator op, Object data, int ins) {
+		int i;
+		if (freeCount > 0) i = free[--freeCount];
+		else {
+			i = nodeCount++;
+			if (i >= nodes.length) {
+				nodes = Arrays.copyOf(nodes, i * 2);
+				blocks = Arrays.copyOf(blocks, i * 2);
+			}
+			if (state != null) {
+				NodeState[] states = state.states;
+				if (i >= states.length)
+					state.states = Arrays.copyOf(states, states.length * 2);
+			}
 		}
-		return i;
+		blocks[i] = curBlock;
+		return nodes[i] = new Node(op, data, ins, i);
+	}
+
+	@Override
+	public Node addIONode(String name) {
+		Node n = super.addIONode(name);
+		blocks[n.idx] = null;
+		return n;
 	}
 
 	public void connect(int src, int dst) {
@@ -40,61 +56,62 @@ public class MutableMacro extends Macro {
 		if (i == src) return;
 		if (i >= 0) nodes[i].remOut(dst);
 		dstN.ins[dst >>> 24] = src;
-		if (src >= 0) nodes[src].addOut(dst);
-		//TODO updates
-	}
-
-	public void removeNode(Node node) {
-		int i = node.idx;
-		if (freeCount >= free.length) free = Arrays.copyOf(free, free.length * 2);
-		free[freeCount++] = i;
-		nodes[i] = null;
-		if (state != null) {
-			NodeState ns = state.states[i];
-			state.states[i] = null;
-			if (ns != null) ns.update = 1; //prevent scheduled updates
+		if (src >= 0) {
+			nodes[src].addOut(dst);
+			if (state != null) {
+				NodeState ns = state.states[dst & 0xffffff];
+				if (ns != null && ns.scope != null) {
+					ns.update |= 1L << (dst >>> 24);
+					state.updateScope(src);
+				}
+			}
+		} else if (state != null) {
+			NodeState ns = state.states[dst & 0xffffff];
+			if (ns != null) ns.updateIn(dst >> 24);
 		}
 	}
 
 	public void addBlock(Block block) {
+		curBlock = block;
 		int[] io = block.def.content.assemble(this, block.text());
 		for (int i = block.def.outCount - 1; i >= 0; i--)
 			block.io[i].setNode(io[i]);
 		for (int i = block.def.inCount - 1, j = i + block.def.outCount; i >= 0; i--, j--)
 			block.nodesIn[i] = io[j];
+		curBlock = null;
 	}
 
 	public void removeBlock(Block block) {
-		int n = block.def.outCount;
-		for (int i = block.def.inCount - 1; i >= 0; i--) {
-			connect(-1, block.nodesIn[i]);
-			block.nodesIn[i] = -1;
-		}
-		int[] erase = new int[n];
-		for (int i = 0; i < n; i++) {
-			Trace t = block.io[i];
-			int j = t.node();
-			t.setNode(-1);
-			if (j >= 0) {
-				Node node = nodes[j];
-				if (
-					node.op == StandardOps.INPUT && in((int)node.data) == node
-					|| node.op == StandardOps.PASS && links.get(node.data) == node
-				) j = -1;
-			}
-			erase[i] = j;
-		}
-		while (--n >= 0) {
-			int e = erase[n];
-			if (e < 0) continue;
-			Node node = nodes[e];
+		Arrays.fill(block.nodesIn, -1);
+		for (int i = 0; i < block.def.outCount; i++)
+			block.io[i].setNode(-1);
+		for (int i = 0; i < nodeCount; i++) {
+			if (blocks[i] != block) continue;
+			Node node = nodes[i];
 			if (node == null) continue;
-			removeNode(node);
-			int l = node.ins.length;
-			if (n + l > erase.length)
-				erase = Arrays.copyOf(erase, Math.max(n + l, l * 2));
-			System.arraycopy(node.ins, 0, erase, n, l);
-			n += l;
+			for (int j = node.ins.length - 1; j >= 0; j--) {
+				int k = node.ins[j];
+				if (k < 0 || blocks[k] == block) continue;
+				nodes[k].remOut(i | j << 24);
+			}
+			for (int j = node.usedOuts - 1; j >= 0; j--) {
+				int k = node.outs[j];
+				nodes[k & 0xffffff].ins[k >>> 24] = -1;
+			}
+			if (state != null) {
+				NodeState[] states = state.states;
+				NodeState ns = states[i];
+				if (ns != null) ns.remove();
+				for (int j = node.usedOuts - 1; j >= 0; j--) {
+					int k = node.outs[j], k1 = k & 0xffffff;
+					if (blocks[k1] != block && (ns = states[k1]) != null)
+						ns.updateIn(k >> 24);
+				}
+			}
+			if (freeCount >= free.length) free = Arrays.copyOf(free, free.length * 2);
+			free[freeCount++] = i;
+			nodes[i] = null;
+			blocks[i] = null;
 		}
 	}
 

@@ -6,10 +6,18 @@ import java.util.*;
 import org.lwjgl.system.MemoryStack;
 
 import cd4017be.compiler.Context;
+import cd4017be.compiler.MacroState;
 import cd4017be.compiler.MutableMacro;
+import cd4017be.compiler.Node;
+import cd4017be.compiler.NodeState;
+import cd4017be.compiler.Signal;
+import cd4017be.compiler.SignalError;
 import cd4017be.dfc.compiler.CompileError;
 import cd4017be.dfc.compiler.Compiler;
-import cd4017be.dfc.lang.*;
+import cd4017be.dfc.lang.BlockDef;
+import cd4017be.dfc.lang.BlockRegistry;
+import cd4017be.dfc.lang.CircuitFile;
+import cd4017be.dfc.lang.HeaderParser;
 import cd4017be.util.*;
 
 import static cd4017be.dfc.editor.Main.*;
@@ -132,31 +140,19 @@ public class CircuitEditor implements IGuiSection {
 		glDrawArrays(GL_POINTS, 0, blocks.size());
 		checkGLErrors();
 		
-		ArrayList<SignalError> errors = new ArrayList<>();
-		for (SignalError e = context.errors.next; e != null; e = e.next) {
-			Node node = e.node;
-			int io = e.io;
-			while (node != null && node.macro != this) {
-				node = node.macro != null ? node.macro.parent() : null;
-				io = -1;
+		allocSelBuf(256);
+		MacroState ms = macro.state;
+		if (ms != null) {
+			for (SignalError e = ms.errors; e != null; e = e.next) {
+				Block block = macro.blocks[e.nodeId];
+				if (block != null)
+					addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, 0xffff0000);
 			}
-			if (node != null && node.idx >= 0 && node.idx < blocks.size())
-				errors.add(node == e.node ? e : new SignalError(node, io, e.getMessage()));
-		}
-		allocSelBuf(3 + errors.size());
-		Node node = context.firstUpdate;
-		if (node != null && node.idx >= 0 && node.idx < blocks.size()) {
-			Block block = blocks.get(node.idx);
-			addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, 0xff00ff00);
-		}
-		for (SignalError e : errors) {
-			node = e.node;
-			int io = e.io;
-			Block block = blocks.get(node.idx);
-			if (io >= 0 && io < block.io.length) {
-				Trace tr = block.io[io];
-				addSel(tr.x() * 2 - 1, tr.y() * 2 - 1, 2, 2, 0xffff0000);
-			} else addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, 0xffff0000);
+			for (NodeState ns = ms.first; ns != null; ns = ns.next) {
+				Block block = macro.blocks[ns.node.idx];
+				if (block != null)
+					addSel(block.x * 2, block.y * 2, block.w() * 2, block.h() * 2, 0xff00ff00);
+			}
 		}
 		if (mode == M_MULTI_SEL || mode == M_MULTI_MOVE)
 			addSel(min(lmx, mx), min(lmy, my), abs(mx - lmx), abs(my - lmy), 0xff80ff80);

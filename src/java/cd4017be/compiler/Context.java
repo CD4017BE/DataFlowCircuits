@@ -9,7 +9,10 @@ public class Context {
 
 	public final BlockRegistry reg;
 	public MacroState stackFrame;
+	public Scope scope = Scope.ROOT;
 	public Signal result;
+	public Signal[] inputs;
+	public SignalError error;
 
 	public Context(BlockRegistry reg) {
 		this.reg = reg;

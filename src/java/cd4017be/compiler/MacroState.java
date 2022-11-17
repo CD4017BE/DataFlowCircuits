@@ -8,7 +8,9 @@ public class MacroState {
 	public final Context context;
 	public final Macro macro;
 	NodeState[] states;
-	NodeState first, last;
+	public NodeState first;
+	NodeState last;
+	public SignalError errors;
 
 	/**@param context
 	 * @param macro root macro to run */
@@ -41,22 +43,41 @@ public class MacroState {
 
 	public void tick() {
 		NodeState ns = first;
-		if (ns == null) pop(null);
-		else {
+		if (ns != null) {
 			ns.update();
 			if ((first = ns.next) == null)
 				last = null;
 			else ns.next = null;
+		} else popError();
+	}
+
+	private void popError() {
+		SignalError err = new SignalError("stalled", errors);
+		if (parent == null) {
+			context.stackFrame = null;
+			context.error = err;
+		} else {
+			context.stackFrame = parent.state;
+			err.record(parent);
 		}
 	}
 
-	public void pop(Signal val) {
+	public Scope scope() {
+		return parent != null ? parent.scope : context.scope;
+	}
+
+	public Signal inVal(int i) {
+		return parent != null ? parent.inVal(i) : context.inputs[i];
+	}
+
+	public SignalError pop(Signal val) {
 		if (parent == null) {
 			context.stackFrame = null;
 			context.result = val;
+			return null;
 		} else {
 			context.stackFrame = parent.state;
-			parent.outVal(val);
+			return parent.outVal(val);
 		}
 	}
 

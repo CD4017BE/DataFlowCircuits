@@ -5,7 +5,7 @@ import java.nio.ByteBuffer;
 import org.lwjgl.system.MemoryStack;
 
 import static org.lwjgl.opengl.GL32C.*;
-
+import cd4017be.compiler.Signal;
 import cd4017be.dfc.lang.*;
 import cd4017be.util.IndexedSet;
 
