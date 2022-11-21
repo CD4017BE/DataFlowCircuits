@@ -5,8 +5,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 
-import cd4017be.dfc.graph.BlockInfo;
-import cd4017be.dfc.lang.*;
+import cd4017be.util.ExtInputStream;
 
 /**
  * @author CD4017BE */
@@ -20,7 +19,7 @@ public class Macro implements NodeAssembler, VirtualMethod {
 
 	public Macro(BlockDef def) {
 		this.def = def;
-		this.nodes = new Node[Integer.highestOneBit(def.ios() - 1 << 1)];
+		this.nodes = new Node[Integer.highestOneBit(def.ins.length + def.outs.length - 1 << 1)];
 		this.links = new HashMap<>();
 	}
 
@@ -40,7 +39,7 @@ public class Macro implements NodeAssembler, VirtualMethod {
 	}
 
 	public int ins() {
-		return def.inCount;
+		return def.ins.length;
 	}
 
 	public Node in(int i) {
@@ -52,8 +51,7 @@ public class Macro implements NodeAssembler, VirtualMethod {
 	}
 
 	@Override
-	public int[] assemble(Macro macro, String arg) {
-		int ins = def.inCount, outs = def.outCount;
+	public int[] assemble(Macro macro, BlockDef def, int outs, int ins, String[] args) {
 		int[] io = new int[ins + outs];
 		Node in = macro.addNode(MACRO, this, ins);
 		if (outs == 1) io[0] = in.idx;
@@ -71,41 +69,42 @@ public class Macro implements NodeAssembler, VirtualMethod {
 	}
 
 	public Macro ensureLoaded(Context context) {
-		if (!loaded) load(context.reg);
+		if (!loaded) load();
 		return this;
 	}
 
-	public void load(BlockRegistry reg) {
+	public void load() {
 		//load data
 		BlockInfo[] blocks;
-		try (CircuitFile file = reg.openFile(def.name, false)) {
-			blocks = file.readCircuit(reg);
+		try (ExtInputStream is = CircuitFile.readBlock(def)) {
+			blocks = CircuitFile.readCircuit(is, def.module);
 		} catch(IOException e) {
 			e.printStackTrace();
 			return;
 		}
 		clear();
 		//create output and input nodes
-		Node out = addNode(OUTPUT, null, def.outCount);
-		for (int i = 0, j = def.outCount; i < def.inCount; i++, j++)
-			links.put(def.ioNames[j], addNode(INPUT, i, 0));
+		int outs = def.outs.length;
+		Node out = addNode(OUTPUT, null, outs);
+		for (int i = 0; i < ins(); i++)
+			links.put(def.ins[i], addNode(INPUT, i, 0));
 		//assemble block nodes
 		int[][] arr = new int[blocks.length][];
 		for (int i = 0; i < blocks.length; i++) {
 			BlockInfo info = blocks[i];
-			arr[i] = info.def().content.assemble(this, info.arguments()[0]);
+			arr[i] = info.def.assembler.assemble(this, info.def, info.outs, info.ins.length, info.args);
 		}
 		//connect macro outputs
-		for (int i = 0; i < def.outCount; i++) {
-			Node n = links.get(def.ioNames[i]);
+		for (int i = 0; i < outs; i++) {
+			Node n = links.get(def.outs[i]);
 			out.ins[i] = n == null ? -1 : n.idx;
 		}
 		//connect blocks
 		for (int i = 0; i < blocks.length; i++) {
 			BlockInfo info = blocks[i];
-			int o = info.def().outCount;
+			int o = info.outs;
 			int[] idxs = arr[i];
-			int[] ins = info.inputs();
+			int[] ins = info.ins;
 			for (int j = 0; j < ins.length; j++) {
 				int k = ins[j], l = k < 0 ? -1 : arr[k & 0xffff][k >> 16];
 				int m = idxs[o + j];
@@ -138,7 +137,7 @@ public class Macro implements NodeAssembler, VirtualMethod {
 	}
 
 	@Override
-	public SignalError run(Signal a, NodeState state) {
+	public SignalError run(NodeState a, NodeState state) {
 		new MacroState(state, this);
 		return null;
 	}

@@ -9,13 +9,18 @@ import java.util.*;
 public class ConfigFile {
 
 	public static Object[] parse(Reader r) throws IOException {
-		return parseList(r, new ArrayDeque<>(), new StringBuilder(), -1);
+		try {
+			return parseList(r, new ArrayDeque<>(), new StringBuilder(), -1);
+		} finally {
+			r.close();
+		}
 	}
 
 	private static Object[] parseList(Reader r, ArrayDeque<Object> stack, StringBuilder sb, int end) throws IOException {
-		int i = stack.size(), c;
-		while((c = parse(r, r.read(), stack, sb)) == ',');
-		if (c != end) throw new IOException("expected " + name(end) + " got " + name(c));
+		int i = stack.size(), c = r.read();
+		while((c = parse(r, c, stack, sb)) != end) {
+			if (c == ',') c = r.read();
+		}
 		Object[] arr = new Object[stack.size() - i];
 		for (i = arr.length - 1; i >= 0; i--)
 			arr[i] = stack.pop();

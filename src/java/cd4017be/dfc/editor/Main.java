@@ -82,7 +82,7 @@ public class Main {
 		//Palette pal = new Palette();
 		//GUI.add(new Circuit(pal));
 		//GUI.add(pal);
-		new MacroEdit(new BlockIcons());
+		new MacroEdit();
 	}
 
 	private static void run(long window) {

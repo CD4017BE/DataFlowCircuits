@@ -44,4 +44,14 @@ public final class Node {
 				outs[i] = outs[--usedOuts];
 	}
 
+	public int[] makeLinks() {
+		int n = ins.length;
+		int[] ios = new int[n + 1];
+		ios[0] = idx;
+		for (int i = 0; i < n; i++) {
+			ios[i + 1] = idx | i << 24;
+		}
+		return ios;
+	}
+
 }

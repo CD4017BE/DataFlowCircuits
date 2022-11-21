@@ -3,13 +3,19 @@ package cd4017be.compiler;
 /**Used to schedule scope and signal updates on nodes.
  * @author CD4017BE */
 public final class NodeState {
+
+	public static final NodeState DISCONNECTED = new NodeState(null, null);
+	static {
+		DISCONNECTED.value = Value.VOID;
+	}
 	/** the state where the update is running in */
 	public final MacroState state;
 	/** the node being updated */
 	public final Node node;
 	public NodeState next;
 	public Scope scope;
-	public Signal signal;
+	public Value value;
+	public SideEffects se;
 	public SignalError error;
 	/** bits[0..62]: missing inputs, bit[63]: missing scope */
 	long update;
@@ -27,9 +33,9 @@ public final class NodeState {
 		return node.ins.length;
 	}
 
-	public Signal inVal(int i) {
+	public NodeState in(int i) {
 		i = node.ins[i];
-		return i < 0 ? Signal.DISCONNECTED : state.states[i].signal;
+		return i < 0 ? DISCONNECTED : state.states[i];
 	}
 
 	public void updateIn(int i) {
@@ -37,9 +43,14 @@ public final class NodeState {
 			schedule();
 	}
 
-	public SignalError outVal(Signal val) {
-		boolean chng = signal != val;
-		signal = val;
+	public SignalError out(NodeState ns) {
+		return out(ns.value, ns.se);
+	}
+
+	public SignalError out(Value value, SideEffects se) {
+		boolean chng = this.value != value || this.se != se;
+		this.value = value;
+		this.se = se;
 		int[] outs = node.outs;
 		NodeState[] states = state.states;
 		for(int i = node.usedOuts - 1; i >= 0; i--) {
@@ -54,7 +65,8 @@ public final class NodeState {
 	public boolean scope(Scope s, long ins) {
 		if (scope == s) return false;
 		scope = s;
-		signal = null;
+		value = null;
+		se = null;
 		int n = node.ins.length;
 		update = (1L << n) - 1L & ins;
 		for (int i = 0; i < n; i++) {
@@ -79,8 +91,8 @@ public final class NodeState {
 			if (node.op instanceof NodeOperator.Scoped sno)
 				sno.compScope(this, s);
 			else scope(s, -1L);
-			if (signal != null) {
-				outVal(signal);
+			if (value != null) {
+				out(value, se);
 				return;
 			}
 		}

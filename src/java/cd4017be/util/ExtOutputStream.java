@@ -6,24 +6,54 @@ import java.io.*;
 import java.util.*;
 import java.util.function.Function;
 
-/**A {@link DataOutputStream} with additional utility functions.
+/**An {@link OutputStream} with additional utility functions.
  * @author CD4017BE */
-public class ExtOutputStream extends DataOutputStream {
+public class ExtOutputStream extends FilterOutputStream {
 
 	public ExtOutputStream(OutputStream out) {
 		super(out);
 	}
 
+	public void write8(int v) throws IOException {
+		out.write(v);
+	}
+
+	public void write16(int v) throws IOException {
+		out.write(v);
+		out.write(v >> 8);
+	}
+
+	public void write32(int v) throws IOException {
+		out.write(v);
+		out.write(v >> 8);
+		out.write(v >> 16);
+		out.write(v >> 24);
+	}
+
 	/**@return the String to write. It must not be larger than 255 bytes after UTF-8 encoding!
 	 * @throws IOException on I/O error */
 	public void writeSmallUTF(String s) throws IOException {
-		if (s == null) {
+		if (s == null || s.isEmpty()) {
 			write(0);
 			return;
 		}
 		byte[] data = s.getBytes(UTF_8);
 		if (data.length > 255) throw new IllegalArgumentException("String too long");
 		out.write(data.length);
+		out.write(data);
+	}
+
+
+	/**@return the String to write. It must not be larger than 65535 bytes after UTF-8 encoding!
+	 * @throws IOException on I/O error */
+	public void writeUTF(String s) throws IOException {
+		if (s == null || s.isEmpty()) {
+			write(0);
+			return;
+		}
+		byte[] data = s.getBytes(UTF_8);
+		if (data.length > 65535) throw new IllegalArgumentException("String too long");
+		write16(data.length);
 		out.write(data);
 	}
 

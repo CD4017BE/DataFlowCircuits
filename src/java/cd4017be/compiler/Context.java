@@ -1,22 +1,16 @@
 package cd4017be.compiler;
 
-import cd4017be.dfc.lang.BlockRegistry;
-
 /**
  * 
  * @author CD4017BE */
 public class Context {
 
-	public final BlockRegistry reg;
 	public MacroState stackFrame;
 	public Scope scope = Scope.ROOT;
-	public Signal result;
-	public Signal[] inputs;
+	public Value outVal;
+	public SideEffects outSE;
+	public NodeState[] inputs;
 	public SignalError error;
-
-	public Context(BlockRegistry reg) {
-		this.reg = reg;
-	}
 
 	/**@param l maximum number of steps to run (must be >= 0)
 	 * @return whether computation is finished */
@@ -28,7 +22,9 @@ public class Context {
 
 	public void clear() {
 		stackFrame = null;
-		result = null;
+		outVal = null;
+		outSE = null;
+		error = null;
 	}
 
 }

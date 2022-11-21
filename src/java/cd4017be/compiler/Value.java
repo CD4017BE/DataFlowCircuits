@@ -1,29 +1,24 @@
 package cd4017be.compiler;
 
-
 /**
  * 
  * @author CD4017BE */
 public class Value {
 
-	public final Signal decl;
-	/** dynamic: id >= 0, const: id < 0 */
-	public int id;
+	public static final Value VOID = new Value(Type.VOID, null);
 
-	public Value(Signal decl) {
-		this.decl = decl;
+	public final Type type;
+	public Object op;
+	public Value[] args;
+
+	public Value(Type type, Object op, Value... args) {
+		this.type = type;
+		this.op = op;
+		this.args = args;
 	}
 
-	public Signal with(Signal... args) {
-		boolean se = false;
-		for (Signal s : args) se |= s.sideeffect;
-		return se ? new Signal(this, args) : decl;
-	}
-
-	public static boolean isConst(Signal... args) {
-		for (Signal s : args)
-			if (s.value.id >= 0) return false;
-		return true;
+	public SideEffects effect(SideEffects... args) {
+		return new SideEffects(SideEffects.combine(args), null, this);
 	}
 
 }

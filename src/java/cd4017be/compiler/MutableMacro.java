@@ -3,7 +3,6 @@ package cd4017be.compiler;
 import java.util.*;
 
 import cd4017be.dfc.editor.Block;
-import cd4017be.dfc.lang.BlockDef;
 
 /**
  * 
@@ -73,17 +72,17 @@ public class MutableMacro extends Macro {
 
 	public void addBlock(Block block) {
 		curBlock = block;
-		int[] io = block.def.content.assemble(this, block.text());
-		for (int i = block.def.outCount - 1; i >= 0; i--)
+		int[] io = block.def.assembler.assemble(this, block.def, block.outs, block.ins(), block.args);
+		for (int i = block.outs - 1; i >= 0; i--)
 			block.io[i].setNode(io[i]);
-		for (int i = block.def.inCount - 1, j = i + block.def.outCount; i >= 0; i--, j--)
+		for (int j = block.io.length - 1, i = j - block.outs; i >= 0; i--, j--)
 			block.nodesIn[i] = io[j];
 		curBlock = null;
 	}
 
 	public void removeBlock(Block block) {
 		Arrays.fill(block.nodesIn, -1);
-		for (int i = 0; i < block.def.outCount; i++)
+		for (int i = 0; i < block.outs; i++)
 			block.io[i].setNode(-1);
 		for (int i = 0; i < nodeCount; i++) {
 			if (blocks[i] != block) continue;

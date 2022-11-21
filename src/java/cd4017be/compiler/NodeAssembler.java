@@ -14,8 +14,11 @@ public interface NodeAssembler {
 	 * @param info the block to assemble
 	 * @return [0..def.outCount-1] = output_node_index,
 	 * [def.outCount..def.ios()-1] = input_node_index | input_node_pin << 24 */
-	int[] assemble(Macro macro, String arg);
+	int[] assemble(Macro macro, BlockDef def, int outs, int ins, String[] args);
 
-	NodeAssembler IO = (macro, arg) -> new int[] {macro.addIONode(arg).idx};
+	NodeAssembler IO = (macro, def, outs, ins, args) ->
+		new int[] {macro.addIONode(args[0]).idx};
+	NodeAssembler VIRTUAL = (macro, def, outs, ins, args) ->
+		macro.addNode(NodeOperator.VIRTUAL, def.id, ins).makeLinks();
 
 }

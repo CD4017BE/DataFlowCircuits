@@ -66,18 +66,19 @@ public class MacroState {
 		return parent != null ? parent.scope : context.scope;
 	}
 
-	public Signal inVal(int i) {
-		return parent != null ? parent.inVal(i) : context.inputs[i];
+	public NodeState inVal(int i) {
+		return parent != null ? parent.in(i) : context.inputs[i];
 	}
 
-	public SignalError pop(Signal val) {
+	public SignalError pop(Value value, SideEffects se) {
 		if (parent == null) {
 			context.stackFrame = null;
-			context.result = val;
+			context.outVal = value;
+			context.outSE = se;
 			return null;
 		} else {
 			context.stackFrame = parent.state;
-			return parent.outVal(val);
+			return parent.out(value, se);
 		}
 	}
 

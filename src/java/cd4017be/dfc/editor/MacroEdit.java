@@ -63,7 +63,7 @@ public class MacroEdit implements IGuiSection {
 	byte[] pins = new byte[0];
 	long editDoc, editIcon;
 
-	public MacroEdit(BlockIcons icons) {
+	public MacroEdit() {
 		this.icons = icons;
 		this.traceVAO = genTraceVAO(16);
 		glBufferData(GL_ARRAY_BUFFER, 26 * TRACE_STRIDE, GL_STREAM_DRAW);
@@ -123,7 +123,7 @@ public class MacroEdit implements IGuiSection {
 		try (MemoryStack ms = MemoryStack.stackPush()){
 			blockVAO.clear();
 			blockVAO.append(drawBlock(ms.malloc(BLOCK_STRIDE * 4),
-				0, 0, def.icon.w, def.icon.h, 0, 0, def.icon.id
+				0, 0, def.icon.w, def.icon.h, def.icon
 			).flip());
 		}
 		longDesc = def.longDesc;
@@ -460,7 +460,6 @@ public class MacroEdit implements IGuiSection {
 		setTitle(name);
 		try (CircuitFile cf = new CircuitFile(file.toPath(), false)) {
 			BlockDef def = cf.readInterface(name.substring(0, name.length() - 4));
-			cf.readDescription(def);
 			icons.load(cf.readIcon(), def);
 			setDef(def);
 		} catch(IOException e) {
@@ -508,13 +507,22 @@ public class MacroEdit implements IGuiSection {
 					cf.writeIcon(buf, scan, icon.w << 2, icon.h << 2);
 				}
 			if ((mod & 1) != 0) cf.writeInterface(def);
-			if ((mod & 2) != 0) cf.writeDescription(def);
 			cf.writeHeader();
 			mod = 0;
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 		refresh(0);
+	}
+
+	public static final File FILE = new File("./test");
+
+	public static File withSuffix(File file, String sfx) {
+		String name = file.getName();
+		if (name.endsWith(sfx)) return file;
+		int i = name.lastIndexOf(sfx.charAt(0));
+		name = (i < 0 ? name : name.substring(0, i)).concat(sfx);
+		return new File(file.getParent(), name);
 	}
 
 }

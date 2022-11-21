@@ -5,6 +5,8 @@ import static cd4017be.util.GLUtils.*;
 import static org.lwjgl.opengl.GL20C.*;
 import java.nio.ByteBuffer;
 import org.lwjgl.system.MemoryStack;
+
+import cd4017be.util.AtlasSprite;
 import cd4017be.util.VertexArray;
 import cd4017be.util.VertexArray.Attribute;
 
@@ -159,11 +161,11 @@ public class Shaders {
 	 * @param sx horizontal stretch
 	 * @param sy vertical stretch
 	 * @param icon icon index */
-	public static ByteBuffer drawBlock(ByteBuffer buf, int x, int y, int w, int h, int sx, int sy, int icon) {
+	public static ByteBuffer drawBlock(ByteBuffer buf, int x, int y, int w, int h, AtlasSprite icon) {
 		short x0 = (short)x, x1 = (short)(x + w);
 		short y0 = (short)y, y1 = (short)(y + h);
-		short i = (short)icon;
-		int s = sx & 0xffff | sy << 16;
+		short i = (short)icon.id;
+		int s = w - icon.w & 0xffff | h - icon.h << 16;
 		buf.putShort(x0).putShort(y0).putInt(s).putShort(i).putShort(X0Y0);
 		buf.putShort(x1).putShort(y0).putInt(s).putShort(i).putShort(X1Y0);
 		buf.putShort(x1).putShort(y1).putInt(s).putShort(i).putShort(X1Y1);

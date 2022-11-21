@@ -5,14 +5,14 @@ import static cd4017be.dfc.editor.Shaders.drawTrace;
 import static java.lang.Math.min;
 
 import org.lwjgl.system.MemoryStack;
-import cd4017be.compiler.MacroState;
-import cd4017be.compiler.NodeState;
-import cd4017be.compiler.Signal;
+
+import cd4017be.compiler.*;
+import cd4017be.util.IndexedSet;
 import cd4017be.util.VertexArray;
 
 /**Represents a data trace node.
  * @author CD4017BE */
-public class Trace implements IMovable {
+public class Trace extends IndexedSet.Element implements IMovable {
 
 	public final CircuitEditor cc;
 	public Block block;
@@ -34,7 +34,7 @@ public class Trace implements IMovable {
 	}
 
 	public boolean isOut() {
-		return pin >= 0 && pin < block.def.outCount;
+		return pin >= 0 && pin < block.outs;
 	}
 
 	public int node() {
@@ -51,6 +51,18 @@ public class Trace implements IMovable {
 		return (short)(pos >> 16);
 	}
 
+	public void movePin(int i, byte[] pins, int x, int y, int w, int h) {
+		int o = (i *= 2) - pins.length + 2;
+		if (o > 0) {
+			y += o;
+			i -= o;
+		}
+		int dx = pins[i], dy = pins[i+1];
+		if (dx < 0) dx += w + 1;
+		if (dy < 0) dy += h + 1;
+		pos(x + dx, y + dy);
+	}
+
 	@Override
 	public Trace pos(int x, int y) {
 		if (placed) throw new IllegalStateException("must pickup before move");
@@ -65,7 +77,7 @@ public class Trace implements IMovable {
 	@Override
 	public Trace pickup() {
 		if (!placed) return this;
-		cc.traces.remove(pos, this);
+		cc.traceLookup.remove(pos, this);
 		placed = false;
 		if (pin >= 0)
 			for (Trace t = to; t != null; t = t.adj)
@@ -78,7 +90,7 @@ public class Trace implements IMovable {
 		if (placed) return this;
 		try {
 			placed = true;
-			return cc.traces.merge(pos, this, Trace::merge);
+			return cc.traceLookup.merge(pos, this, Trace::merge);
 		} catch (MergeConflict e) {
 			placed = false;
 			Trace[] io0 = e.conflict.block.io, io1 = block.io;
@@ -147,7 +159,7 @@ public class Trace implements IMovable {
 		if (node == this.node) return;
 		this.node = node;
 		if (block != null) {
-			int in = pin - block.def.outCount;
+			int in = pin - block.outs;
 			if (in >= 0)
 				cc.macro.connect(node, block.nodesIn[in]);
 		}
@@ -169,8 +181,7 @@ public class Trace implements IMovable {
 	public void draw(VertexArray va, MacroState ms, boolean re) {
 		if (from == null) return;
 		if (re || bufOfs < 0) bufOfs = va.count;
-		NodeState ns = ms != null && node >= 0 ? ms.states[node] : null;
-		Signal s = ns != null ? ns.signal : null;
+		Value s = value(ms);
 		try (MemoryStack mem = MemoryStack.stackPush()) {
 			va.set(bufOfs, drawTrace(mem.malloc(TRACE_STRIDE * 4), from.x(), from.y(), x(), y(), s == null ? VOID_COLOR : s.type.n));
 		}
@@ -186,6 +197,12 @@ public class Trace implements IMovable {
 	public boolean inRange(int x0, int y0, int x1, int y1) { 
 		int x = x(), y = y();
 		return x < x1 && y < y1 && x > x0 && y > y0;
+	}
+
+	public Value value(MacroState ms) {
+		if (node < 0 || ms == null) return null;
+		NodeState ns = ms.states[node];
+		return ns == null ? null : ns.value;
 	}
 
 }

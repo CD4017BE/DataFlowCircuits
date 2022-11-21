@@ -66,7 +66,7 @@ public class Palette implements IGuiSection {
 				drawBlock(buf,
 					x + (bw - def.icon.w >> 1),
 					y + (bh - def.icon.h >> 1),
-					def.icon.w, def.icon.h, 0, 0, def.icon.id
+					def.icon.w, def.icon.h, def.icon
 				);
 				x += bw;
 			}
