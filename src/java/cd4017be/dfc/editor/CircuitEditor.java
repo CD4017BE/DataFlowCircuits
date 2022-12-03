@@ -4,6 +4,7 @@ import java.io.*;
 import java.util.*;
 
 import cd4017be.compiler.*;
+import cd4017be.compiler.NodeAssembler.TextAutoComplete;
 import cd4017be.util.*;
 
 import static cd4017be.dfc.editor.Main.*;
@@ -22,12 +23,14 @@ public class CircuitEditor implements IGuiSection {
 
 	public final IndexedSet<Block> blocks;
 	public final IndexedSet<Trace> traces;
-	public final HashMap<Integer, Trace> traceLookup;
-	final ArrayList<IMovable> moving = new ArrayList<>();
+	final ArrayList<CircuitObject> moving = new ArrayList<>();
 	final ArrayDeque<Trace> traceUpdates = new ArrayDeque<>();
 	final IconAtlas icons;
+	final Palette palette;
 	/** GL vertex arrays */
 	final VertexArray blockVAO, traceVAO;
+	final TextField text = new TextField(this::setText);
+	final ArrayList<String> autoComplete = new ArrayList<>();
 	/** mouse grid offset and zoom */
 	int ofsX, ofsY, zoom = 16;
 	boolean panning = false;
@@ -38,47 +41,59 @@ public class CircuitEditor implements IGuiSection {
 	/** mouse positions */
 	int mx = -1, my = -1, lmx, lmy;
 	Trace selTr;
-	Block selBlock;
-	TextField text;
+	Block selBlock, editing;
+	int editArg;
 	String info = "";
 	final Context context;
-	final MutableMacro macro;
+	MutableMacro macro;
 
-	public CircuitEditor(BlockDef def) {
+	public CircuitEditor(LoadingCache cache) {
 		this.blockVAO = genBlockVAO(64);
 		this.traceVAO = genTraceVAO(64);
-		this.blocks = new IndexedSet<>(new Block[16]);
-		this.traces = new IndexedSet<>(new Trace[16]);
-		this.traceLookup = new HashMap<>();
+		this.blocks = new IndexedSet<>(new Block[64]);
+		this.traces = new IndexedSet<>(new Trace[64]);
 		this.context = new Context();
-		this.icons = def.module.cache.icons;
-		this.macro = new MutableMacro(def);
+		this.icons = cache.icons;
+		this.palette = new Palette(this);
+		Main.GUI.add(this);
+		Main.GUI.add(palette);
 		
 		fullRedraw();
 		glUseProgram(traceP);
-		glUniform2f(trace_lineSize, 0.25F, 1F);
+		glUniform2f(trace_lineSize, 1F, 1F);
 		checkGLErrors();
-		
+	}
+
+	public void open(BlockDef def) {
+		clear();
+		palette.setModule(def.module);
+		macro = new MutableMacro(def);
 		try {
-			CircuitFile.readLayout(CircuitFile.readBlock(def), null, this);
-		} catch(IOException e) {}
+			CircuitFile.readLayout(CircuitFile.readBlock(def), def.module, this);
+		} catch(IOException e) {
+			e.printStackTrace();
+		}
 		if (blocks.isEmpty()) {
 			BlockDef io = def.module.findIO("out");
 			if (io != null) {
 				int i = 0;
 				for (String s : def.outs) {
-					Block block = new Block(io, 1, this);
-					block.setText(s);
-					block.pos(2, i * 4).place();
+					Block block = new Block(io, 1);
+					block.args[0] = s;
+					block.updateSize();
+					block.pos(2, i * 4, this).add(this);
+					i++;
 				}
 			}
 			io = def.module.findIO("in");
 			if (io != null) {
 				int i = 0;
 				for (String s : def.ins) {
-					Block block = new Block(io, 1, this);
-					block.setText(s);
-					block.pos(-2 - block.w, i * 4).place();
+					Block block = new Block(io, 1);
+					block.args[0] = s;
+					block.updateSize();
+					block.pos(-2 - block.w, i * 4, this).add(this);
+					i++;
 				}
 			}
 		}
@@ -91,7 +106,7 @@ public class CircuitEditor implements IGuiSection {
 	@Override
 	public void redraw() {
 		updateTypeCheck();
-		if (redraw < 0) redrawTraces();
+		if (redraw < 0) updateTraceColors();
 		redraw = 0;
 		//draw frame
 		float scaleX = (float)(zoom * 2) / (float)WIDTH;
@@ -105,6 +120,7 @@ public class CircuitEditor implements IGuiSection {
 		};
 		glUseProgram(traceP);
 		glUniformMatrix3fv(trace_transform, false, mat);
+		traceVAO.count = traces.size() * 4;
 		traceVAO.draw();
 		checkGLErrors();
 		
@@ -133,22 +149,75 @@ public class CircuitEditor implements IGuiSection {
 			addSel(selBlock.x * 2, selBlock.y * 2, selBlock.w * 2, selBlock.h * 2, FG_BLUE_L);
 		if (selTr != null)
 			addSel(selTr.x() * 2 - 1, selTr.y() * 2 - 1, 2, 2, FG_RED_L);
+		int ac0 = 0, ac1 = 0, x = 0, y = 0;
+		if (editing != null && editArg >= 0) {
+			String s = text.get();
+			int l = s.length();
+			x = editing.textX() - l;
+			y = editing.textY() + editArg * 4;
+			text.redraw(x, y, 2, 3, 0);
+			addSel(x, y, l * 2, 4, FG_YELLOW_L);
+			s = s.substring(0, Math.min(text.cursor(), s.length()));
+			ac0 = Collections.binarySearch(autoComplete, s);
+			ac1 = Collections.binarySearch(autoComplete, s + '\uffff');
+			if (ac0 < 0) ac0 ^= -1;
+			if (ac1 < 0) ac1 ^= -1;
+		}
 		drawSel(ofsX, -ofsY, 0.5F * scaleX, -0.5F * scaleY, 0F, 1F);
-		
-		if (text != null && selBlock != null)
-			text.redraw(selBlock.textX(), selBlock.textY(), 2, 3, 0);
 		for (Block block : blocks) block.printText();
-		drawText(ofsX, -ofsY, scaleX * 0.25F, scaleY * -0.25F);
+		drawText(ofsX, scaleY * -.25F - ofsY, scaleX * 0.5F, scaleY * -0.5F);
+		if (ac1 > ac0) {
+			y += 4;
+			int l = 0;
+			for (int i = ac0, j = 0; i < ac1; i++, j++) {
+				String s = autoComplete.get(i);
+				print(s, FG_GRAY_L, x, y + j * 3, 2, 3);
+				l = Math.max(l, s.length());
+			}
+			addSel(x, y, l * 2, 1 + 3 * (ac1 - ac0), BG_BLACK_T | FG_GRAY_D);
+			drawSel(ofsX, -ofsY, 0.5F * scaleX, -0.5F * scaleY, 0F, 1F);
+			drawText(ofsX, scaleY * -.25F - ofsY, scaleX * 0.5F, scaleY * -0.5F);
+		}
 		print(info, FG_YELLOW_L, 0, -1, 1, 1);
-		drawText(-1F, -1F, 32F / (float)WIDTH, -48F / (float)HEIGHT);
+		drawText(-1F, -1F, 16F / (float)WIDTH, -24F / (float)HEIGHT);
 	}
 
-	private void redrawTraces() {
+	private void updateTraceColors() {
 		MacroState ms = macro.state;
-		traceVAO.clear();
-		for (Trace t : traceLookup.values())
-			t.draw(traceVAO, ms, true);
-		checkGLErrors();
+		for (Trace t : traces)
+			t.updateColor(ms);
+	}
+
+	private void setText(String text) {
+		editing.args[editArg] = text;
+		editing.updateSize();
+	}
+
+	private void editText(Block block, int row, int col) {
+		if (block == null || row < 0 || row >= block.args.length) {
+			if (editing != null) {
+				editing.updateArg(editArg);
+				refresh(0);
+			}
+			editing = null;
+			editArg = -1;
+			text.set("", 0);
+			autoComplete.clear();
+		} else {
+			if (block != editing || row != editArg) {
+				if (editing != null)
+					editing.updateArg(editArg);
+				editing = block;
+				editArg = row;
+				autoComplete.clear();
+				if (block.def.assembler instanceof TextAutoComplete tac) {
+					tac.getAutoCompletions(macro, block.def, editArg, autoComplete);
+					Collections.sort(autoComplete);
+				}
+				refresh(0);
+			}
+			text.set(block.args[row], col);
+		}
 	}
 
 	@Override
@@ -182,22 +251,34 @@ public class CircuitEditor implements IGuiSection {
 		}
 		mx = x; my = y;
 		switch(mode) {
-		case M_IDLE:
-			selTrace(traceLookup.get(Trace.key(x + 1 >> 1, y + 1 >> 1)));
+		case M_IDLE: {
+			int gx = x + 1 >> 1, gy = y + 1 >> 1;
+			Trace sel = null;
 			Block old = selBlock;
 			selBlock = null;
-			for (Block block : blocks)
+			for (Block block : blocks) {
 				if (block.isInside(x >> 1, y >> 1)) {
 					selBlock = block;
-					//if (block.node != null && block.node.error != null)
-					//	info = block.node.error.getLocalizedMessage();
 					break;
 				}
+				for (int i = 0; sel == null && i < block.outs; i++) {
+					Trace t = block.io[i];
+					if (t.x() == gx && t.y() == gy) sel = t;
+				}
+			}
+			if (sel == null)
+				for (Trace t : traces)
+					if (t.x() == gx && t.y() == gy) {
+						sel = t;
+						break;
+					}
+			selTrace(sel);
 			if (selBlock != old) refresh(0);
 			return;
+		}
 		case M_TRACE_SEL:
 			if (selTr.pin < 0) {
-				selTr.pickup();
+				selTr.pickup(this);
 				mode = M_TRACE_MV;
 			} else {
 				selBlock = selTr.block;
@@ -207,20 +288,20 @@ public class CircuitEditor implements IGuiSection {
 				return;
 			}
 		case M_TRACE_MV, M_TRACE_DRAW:
-			selTr.pos(x + 1 >> 1, y + 1 >> 1);
+			selTr.pos(x + 1 >> 1, y + 1 >> 1, this);
 			return;
 		case M_MULTI_SEL:
 			refresh(0);
 		default: return;
 		case M_BLOCK_SEL:
 			if (moving.isEmpty())
-				moving.add(selBlock.pickup());
+				moving.add(selBlock.pickup(this));
 		case M_MULTI_MOVE:
 		}
 		int dx = x - lmx >> 1, dy = y - lmy >> 1;
 		if (dx == 0 && dy == 0) return;
-		for (IMovable m : moving)
-			m.pos(m.x() + dx, m.y() + dy);
+		for (CircuitObject m : moving)
+			m.pos(m.x() + dx, m.y() + dy, this);
 		lmx += dx << 1;
 		lmy += dy << 1;
 	}
@@ -235,7 +316,6 @@ public class CircuitEditor implements IGuiSection {
 			panning = false;
 			break;
 		case GLFW_PRESS | GLFW_MOUSE_BUTTON_LEFT<<1:
-			text = null;
 			if (selTr == null) {
 				if (mode != M_IDLE) break;
 				lmx = mx;
@@ -243,61 +323,60 @@ public class CircuitEditor implements IGuiSection {
 				mode = selBlock == null ? M_MULTI_SEL : M_BLOCK_SEL;
 				refresh(0);
 			} else if (mode == M_TRACE_DRAW) {
-				Trace t = selTr.place();
+				Trace t = selTr.place(this);
 				if (selTrace(t)) mode = M_IDLE;
 				else mode = M_TRACE_SEL;
 			} else if (mode == M_IDLE)
 				mode = M_TRACE_SEL;
 			else if (mode == M_BLOCK_SEL) {
-				selBlock.place();
+				selBlock.place(this);
 				moving.clear();
 				mode = M_IDLE;
 			}
 			break;
 		case GLFW_RELEASE | GLFW_MOUSE_BUTTON_LEFT<<1:
+			if (mode != M_BLOCK_SEL)
+				editText(null, -1, 0);
 			if (mode == M_MULTI_SEL) {
 				int x0 = min(lmx, mx) >> 1, x1 = max(lmx, mx) + 1 >> 1,
 				    y0 = min(lmy, my) >> 1, y1 = max(lmy, my) + 1 >> 1;
-				for (Trace trace : traceLookup.values())
+				for (Trace trace : traces)
 					if (trace.pin < 0 && trace.inRange(x0, y0, x1, y1))
 						moving.add(trace);
 				for (Block block : blocks)
 					if (block.inRange(x0, y0, x1, y1))
 						moving.add(block);
-				for (IMovable m : moving) m.pickup();
-				for (IMovable m : moving) m.pickup();
+				for (CircuitObject m : moving) m.pickup(this);
+				for (CircuitObject m : moving) m.pickup(this);
 				lmx = mx;
 				lmy = my;
 				mode = moving.isEmpty() ? M_IDLE : M_MULTI_MOVE;
 				refresh(0);
 			} else if (mode == M_MULTI_MOVE) {
-				for (IMovable m : moving)
-					m.place();
+				for (CircuitObject m : moving)
+					m.place(this);
 				moving.clear();
 				mode = M_IDLE;
 				fullRedraw();
 			} else if (mode == M_BLOCK_SEL) {
 				Block block = selBlock;
-				block.place();
-				if (block.args.length > 0) {
-					text = new TextField(t -> {
-						block.setText(t);
-						block.redraw();
-						//TODO text edit
-					});
-					text.set(block.text(), 1 + (lmx * 2 - block.textX() >> 2));
-				}
+				block.place(this);
 				moving.clear();
 				mode = M_IDLE;
+				int row = lmy - block.textY() >> 2;
+				int col = row >= 0 && row < block.args.length ?
+					(lmx - block.textX() + block.args[row].length() + 1 >> 1) : 0;
+				editText(block, row, col);
 				refresh(0);
 			} else if (mode == M_TRACE_MV) {
-				selTr.place();
+				selTr.place(this);
 				mode = M_IDLE;
 			} else if (mode == M_TRACE_SEL)
 				if (!selTr.isOut()) {
 					mode = M_TRACE_DRAW;
-					Trace t = new Trace(this).pos(mx + 1 >> 1, my + 1 >> 1);
-					selTr.connect(t);
+					Trace t = new Trace().pos(mx + 1 >> 1, my + 1 >> 1, this);
+					t.add(this);
+					selTr.connect(t, this);
 					selTrace(t);
 				} else mode = M_IDLE;
 			break;
@@ -316,16 +395,28 @@ public class CircuitEditor implements IGuiSection {
 	@Override
 	public void onKeyInput(int key, int scancode, int action, int mods) {
 		if (action == GLFW_RELEASE) return;
-		if (text != null && text.onKeyInput(key, mods)) return;
+		if (editing != null && text.onKeyInput(key, mods)) return;
 		boolean ctrl = (mods & GLFW_MOD_CONTROL) != 0;
 		boolean shift = (mods & GLFW_MOD_SHIFT) != 0;
 		switch(key) {
+		case GLFW_KEY_UP:
+			if (editing != null)
+				editText(editing, editArg - 1, text.cursor());
+			break;
+		case GLFW_KEY_DOWN:
+			if (editing != null)
+				editText(editing, editArg + 1, text.cursor());
+			break;
+		case GLFW_KEY_ENTER:
+			if (editing != null)
+				editText(null, -1, 0);
+			break;
 		case GLFW_KEY_DELETE:
 			if (selBlock != null)
-				selBlock.remove();
+				selBlock.remove(this);
 			if (selTr != null && selTr.pin < 0)
-				selTr.remove();
-			for (IMovable m : moving) m.remove();
+				selTr.remove(this);
+			for (CircuitObject m : moving) m.remove(this);
 			selBlock = null;
 			selTr = null;
 			moving.clear();
@@ -368,10 +459,9 @@ public class CircuitEditor implements IGuiSection {
 			int i = t.isOut() ? t.pin : t.pin - t.block.outs;
 			sb.append(names[Math.min(i, names.length - 1)]).append(": ");
 		}
-		while(t != null && !t.isOut()) t = t.from;
-		if (t != null && t.block != null) {
-			Value sg = t.value(macro.state);
-			if (sg != null) sb.append(sg.toString());
+		if (t != null) {
+			Value v = t.value(macro.state);
+			if (v != null) sb.append(v.toString());
 		}
 		info = sb.toString();
 		refresh(0);
@@ -380,28 +470,20 @@ public class CircuitEditor implements IGuiSection {
 
 	@Override
 	public void onCharInput(int cp) {
-		if (text != null) text.onCharInput(cp);
+		if (editing != null) text.onCharInput(cp);
 	}
 
 	public void addBlock(BlockDef type) {
-		text = null;
+		editText(null, -1, 0);
 		lmx = mx; lmy = my;
-		selBlock = new Block(type, 1, this)
-		.pos(mx + 1 - selBlock.w >> 1, my + 1 - selBlock.h >> 1);
+		selBlock = new Block(type, 1);
+		selBlock.pos(mx + 1 - selBlock.w >> 1, my + 1 - selBlock.h >> 1, this);
+		selBlock.add(this);
 		Trace t = selBlock.io[0];
 		if (selTr != null && t.isOut())
-			(selTr.pin >= 0 ? selTr : selTr.to).connect(t);
+			(selTr.pin >= 0 ? selTr : selTr.to).connect(t, this);
 		selTrace(t);
 		mode = M_BLOCK_SEL;
-	}
-
-	/**Modify coordinates of a trace in its vertex buffer.
-	 * @param tr */
-	public void updatePos(Trace tr) {
-		if (redraw < 0) return;
-		Main.refresh(0);
-		redraw |= 1;
-		tr.draw(traceVAO, macro.state, false);
 	}
 
 	public void redrawSignal(int idx) {
@@ -421,15 +503,21 @@ public class CircuitEditor implements IGuiSection {
 	}
 
 	private void clear() {
+		editText(null, -1, 0);
+		traceUpdates.clear();
+		moving.clear();
 		blocks.clear();
 		traces.clear();
-		traceLookup.clear();
 		context.clear();
+		mode = M_IDLE;
+		selBlock = null;
+		selTr = null;
+		refresh(0);
 	}
 
 	private void cleanUpTraces() {
 		ArrayList<Trace> toRemove = new ArrayList<>();
-		for (Trace tr : traceLookup.values())
+		for (Trace tr : traces)
 			if (tr.pin < 0 && (tr.to == null || tr.from == null))
 				toRemove.add(tr);
 		int n = 0;
@@ -440,7 +528,7 @@ public class CircuitEditor implements IGuiSection {
 				if (t.pin < 0)
 					toRemove.add(t);
 			Trace f = tr.from;
-			tr.remove();
+			tr.remove(this);
 			if (f != null && f.pin < 0 && f.to == null)
 				toRemove.add(f);
 		}
@@ -450,7 +538,7 @@ public class CircuitEditor implements IGuiSection {
 
 	private void updateTypeCheck() {
 		while(!traceUpdates.isEmpty())
-			traceUpdates.remove().update();
+			traceUpdates.remove().update(this);
 		if (context.tick(1000)) {
 			//TODO repeated frame updates
 		}

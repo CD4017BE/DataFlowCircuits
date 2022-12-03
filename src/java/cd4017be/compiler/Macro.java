@@ -19,7 +19,7 @@ public class Macro implements NodeAssembler, VirtualMethod {
 
 	public Macro(BlockDef def) {
 		this.def = def;
-		this.nodes = new Node[Integer.highestOneBit(def.ins.length + def.outs.length - 1 << 1)];
+		this.nodes = new Node[Math.max(1, Integer.highestOneBit(def.ins.length + def.outs.length - 1 << 1))];
 		this.links = new HashMap<>();
 	}
 

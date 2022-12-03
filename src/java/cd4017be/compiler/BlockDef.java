@@ -46,4 +46,9 @@ public class BlockDef {
 		return vaSize != 0;
 	}
 
+	@Override
+	public String toString() {
+		return module + ":" + id;
+	}
+
 }

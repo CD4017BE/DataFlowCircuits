@@ -10,9 +10,17 @@ public interface Plugin {
 
 	Plugin DEFAULT = (type, def) -> {
 		switch(type) {
-		case "box": return new Macro(def);
+		case "block": return new Macro(def);
+		case "const": return NodeAssembler.CONST;
 		case "io": return NodeAssembler.IO;
-		case "typeop": return NodeAssembler.VIRTUAL;
+		case "to": return NodeAssembler.VIRTUAL;
+		case "et": return NodeAssembler.ET;
+		case "nt": return NodeAssembler.NT;
+		case "op": return NodeAssembler.OP;
+		case "mv": return NodeAssembler.MV;
+		case "cv": return NodeAssembler.CV;
+		case "ct": return NodeAssembler.CT;
+		case "err": return NodeAssembler.ERR;
 		default: return null;
 		}
 	};

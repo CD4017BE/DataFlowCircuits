@@ -2,9 +2,6 @@ package cd4017be.util;
 
 import static cd4017be.dfc.editor.Main.checkGLErrors;
 import static java.lang.Math.max;
-import static org.lwjgl.opengl.GL15C.GL_ARRAY_BUFFER;
-import static org.lwjgl.opengl.GL15C.GL_BUFFER_SIZE;
-import static org.lwjgl.opengl.GL15C.glGetBufferParameteri;
 import static org.lwjgl.opengl.GL20C.*;
 import java.nio.ByteBuffer;
 import org.lwjgl.system.MemoryStack;
@@ -20,7 +17,8 @@ public class VertexArray {
 	}
 
 	public final int buffer, mode, stride;
-	final Attribute[] attributes;
+	private final Attribute[] attributes;
+	private int bufCap;
 	public int count;
 
 	public VertexArray(int buffer, int mode, int stride, Attribute... attributes) {
@@ -46,32 +44,42 @@ public class VertexArray {
 
 	public void draw() {
 		bind();
-		for (Attribute attr : attributes) {
-			glEnableVertexAttribArray(attr.id);
-			glVertexAttribPointer(attr.id, attr.size, attr.type, attr.norm, stride, attr.offset);
-		}
+		for (Attribute attr : attributes)
+			if (attr.id >= 0) {
+				glEnableVertexAttribArray(attr.id);
+				glVertexAttribPointer(attr.id, attr.size, attr.type, attr.norm, stride, attr.offset);
+				checkGLErrors();
+			}
 		glDrawArrays(mode, 0, count);
 		for (Attribute attr : attributes)
-			glDisableVertexAttribArray(attr.id);
+			if (attr.id >= 0)
+				glDisableVertexAttribArray(attr.id);
 		checkGLErrors(1);
 	}
 
-	public void set(int ofs, ByteBuffer data) {
+	public void set(int vertex, int ofs, ByteBuffer data) {
+		if (!data.hasRemaining()) System.out.printf(
+			"%s forgot to FLIP THE BUFFER!\n",
+			Thread.currentThread().getStackTrace()[3]
+		);
 		bind();
-		ofs *= stride;
-		int len = data.remaining();
-		int cap = glGetBufferParameteri(GL_ARRAY_BUFFER, GL_BUFFER_SIZE);
-		if (len + ofs > cap) enlarge(max(len + ofs, cap << 1));
+		ofs += vertex * stride;
+		int end = data.remaining() + ofs, cap = bufCap;
+		if (end > cap) enlarge(max(end, cap << 1));
 		glBufferSubData(GL_ARRAY_BUFFER, ofs, data);
-		count = max(count, (ofs + len) / stride);
+		count = max(count, end / stride);
+	}
+
+	public void set(int vertex, ByteBuffer data) {
+		set(vertex, 0, data);
 	}
 
 	public void append(ByteBuffer data) {
-		set(count, data);
+		set(count, 0, data);
 	}
 
 	private void enlarge(int size) {
-		if (count == 0)
+		if (bufCap == 0 || count == 0)
 			glBufferData(GL_ARRAY_BUFFER, size, GL_DYNAMIC_DRAW);
 		else try (MemoryStack ms = MemoryStack.stackPush()) {
 			ByteBuffer buf = ms.malloc(count * stride);
@@ -79,6 +87,7 @@ public class VertexArray {
 			glBufferData(GL_ARRAY_BUFFER, size, GL_DYNAMIC_DRAW);
 			glBufferSubData(GL_ARRAY_BUFFER, 0, buf);
 		}
+		bufCap = size;
 	}
 
 }

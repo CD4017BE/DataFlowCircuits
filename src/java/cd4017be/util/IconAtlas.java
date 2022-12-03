@@ -1,7 +1,8 @@
 package cd4017be.util;
 
 import static cd4017be.dfc.editor.Main.checkGLErrors;
-import static org.lwjgl.opengl.GL14.GL_GENERATE_MIPMAP;
+import static java.lang.Math.min;
+import static java.lang.Math.scalb;
 import static org.lwjgl.opengl.GL20C.*;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -26,17 +27,16 @@ public class IconAtlas {
 		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-		glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA16, n0, 0, GL_RGBA, GL_UNSIGNED_SHORT, MemoryUtil.NULL);
+		glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA16, n0 * 2, 0, GL_RGBA, GL_UNSIGNED_SHORT, MemoryUtil.NULL);
 		checkGLErrors();
 		glBindTexture(GL_TEXTURE_2D, this.texId = glGenTextures());
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, levels);
-		glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
+		//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+		//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, levels);
+		//glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w0 << levels, h0 << levels, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, MemoryUtil.NULL);
 		checkGLErrors();
 		this.shader = shader;
@@ -54,7 +54,7 @@ public class IconAtlas {
 		glUniform3f(texScale,
 			1F / (float)(glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH) >> levels),
 			1F / (float)(glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT) >> levels),
-			1F / (float)(glGetTexLevelParameteri(GL_TEXTURE_1D, 0, GL_TEXTURE_WIDTH) >> levels)
+			1F / (float)(glGetTexLevelParameteri(GL_TEXTURE_1D, 0, GL_TEXTURE_WIDTH) >> 1)
 		);
 		checkGLErrors(1);
 	}
@@ -102,13 +102,12 @@ public class IconAtlas {
 		);
 		checkGLErrors();
 		if (old == null) {
-			if ((icon.id = loaded.size()) >= glGetTexLevelParameteri(GL_TEXTURE_1D, 0, GL_TEXTURE_WIDTH))
+			if ((icon.id = loaded.size()) >= glGetTexLevelParameteri(GL_TEXTURE_1D, 0, GL_TEXTURE_WIDTH) >> 1)
 				enlargeIndices();
 			loaded.add(holder);
 		} else icon.id = old.id;
-		updateId(icon);
+		updateId(icon, holder.icon(icon));
 		checkGLErrors();
-		holder.icon(icon);
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindTexture(GL_TEXTURE_1D, 0);
 		return icon;
@@ -118,7 +117,7 @@ public class IconAtlas {
 		try (MemoryStack ms = MemoryStack.stackPush()) {
 			ByteBuffer old = getData(ms, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, 4), buf;
 			int s = old.getShort();
-			int w = s >> 1, h = old.remaining() / s;
+			int w = s >> 2, h = old.remaining() / s;
 			if (w > h) h <<= 1; else w <<= 1;
 			System.out.printf("enlarging icon atlas to %d x %d\n", w, h);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, MemoryUtil.NULL);
@@ -140,17 +139,19 @@ public class IconAtlas {
 				}
 				AtlasSprite ns = atlas.place(icon.w, icon.h);
 				for (
-					int i = 0, di = ns.w << levels + 2, i1 = di * (ns.h << levels),
+					int i = 0, di = icon.w << levels + 2, i1 = di * (icon.h << levels),
 					j = (icon.y << levels) * s + (icon.x << levels + 2) + 2;
 					i < i1; i += di, j += s
 				) buf.put(i, old, j, di);
 				glTexSubImage2D(GL_TEXTURE_2D, 0, ns.x << levels, ns.y << levels, ns.w << levels, ns.h << levels, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, buf);
 				checkGLErrors();
-				updateId(ns);
-				holder.icon(ns);
+				ns.id = icon.id;
+				updateId(ns, holder.icon(ns));
 			}
 		}
+		updateShader();
 		checkGLErrors();
+		//FIXME why is texture size going back to pre-expanded values later on? This is cursed!
 	}
 
 	private void enlargeIndices() {
@@ -164,18 +165,20 @@ public class IconAtlas {
 		updateShader();
 	}
 
-	private void updateId(AtlasSprite icon) {
+	private void updateId(AtlasSprite icon, float[] rep) {
 		int w = glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH) >> levels;
 		int h = glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT) >> levels;
-		glTexSubImage1D(GL_TEXTURE_1D, 0, icon.id, 1, GL_RGBA, GL_UNSIGNED_SHORT, new short[] {
-			(short)((icon.x << 16) / w), (short)((icon.y << 16) / h),
-			(short)((icon.w - 1 << 16) / w), (short)((icon.h - 1 << 16) / h)
+		glTexSubImage1D(GL_TEXTURE_1D, 0, icon.id * 2, 2, GL_RGBA, GL_UNSIGNED_SHORT, new short[] {
+			(short)((icon.x << 16) / w    ), (short)((icon.y << 16) / h    ),
+			(short)((icon.w << 16) / w - 1), (short)((icon.h << 16) / h - 1),
+			(short)min(scalb(rep[0], 16), 65535), (short)min(scalb(rep[1], 16), 65535),
+			(short)min(scalb(rep[2], 16), 65535), (short)min(scalb(rep[3], 16), 65535),
 		});
 	}
 
 	public interface IconHolder {
 		AtlasSprite icon();
-		void icon(AtlasSprite icon);
+		float[] icon(AtlasSprite icon);
 	}
 
 }

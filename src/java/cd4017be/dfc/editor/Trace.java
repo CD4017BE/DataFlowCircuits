@@ -1,9 +1,6 @@
 package cd4017be.dfc.editor;
 
-import static cd4017be.dfc.editor.Shaders.TRACE_STRIDE;
-import static cd4017be.dfc.editor.Shaders.drawTrace;
-import static java.lang.Math.min;
-
+import static cd4017be.dfc.editor.Shaders.*;
 import org.lwjgl.system.MemoryStack;
 
 import cd4017be.compiler.*;
@@ -12,23 +9,21 @@ import cd4017be.util.VertexArray;
 
 /**Represents a data trace node.
  * @author CD4017BE */
-public class Trace extends IndexedSet.Element implements IMovable {
+public class Trace extends IndexedSet.Element implements CircuitObject {
 
-	public final CircuitEditor cc;
 	public Block block;
 	public Trace from, to, adj;
-	/**-1: trace, 0: output, 1..: input */
+	/**-1: trace, 0..outs-1: output, outs..: input */
 	public final int pin;
-	private int node;
-	private int pos, bufOfs;
-	public boolean placed;
+	private int node, color = VOID_COLOR;
+	private short x, y;
+	private VertexArray va;
 
-	public Trace(CircuitEditor cc) {
-		this(cc, null, -1);
+	public Trace() {
+		this(null, -1);
 	}
 
-	Trace(CircuitEditor cc, Block block, int pin) {
-		this.cc = cc;
+	Trace(Block block, int pin) {
 		this.block = block;
 		this.pin = pin;
 	}
@@ -43,15 +38,15 @@ public class Trace extends IndexedSet.Element implements IMovable {
 
 	@Override
 	public short x() {
-		return (short)pos;
+		return x;
 	}
 
 	@Override
 	public short y() {
-		return (short)(pos >> 16);
+		return y;
 	}
 
-	public void movePin(int i, byte[] pins, int x, int y, int w, int h) {
+	public void movePin(int i, byte[] pins, int x, int y, int w, int h, CircuitEditor cc) {
 		int o = (i *= 2) - pins.length + 2;
 		if (o > 0) {
 			y += o;
@@ -60,85 +55,71 @@ public class Trace extends IndexedSet.Element implements IMovable {
 		int dx = pins[i], dy = pins[i+1];
 		if (dx < 0) dx += w + 1;
 		if (dy < 0) dy += h + 1;
-		pos(x + dx, y + dy);
+		pos(x + dx, y + dy, cc);
 	}
 
 	@Override
-	public Trace pos(int x, int y) {
-		if (placed) throw new IllegalStateException("must pickup before move");
-		pos = key(x, y);
-		if (from != null || to != null)
-			cc.updatePos(this);
+	public Trace pos(int x, int y, CircuitEditor cc) {
+		this.x = (short)x;
+		this.y = (short)y;
+		draw();
 		for (Trace t = to; t != null; t = t.adj)
-				cc.updatePos(this);
+			t.draw();
 		return this;
 	}
 
 	@Override
-	public Trace pickup() {
-		if (!placed) return this;
-		cc.traceLookup.remove(pos, this);
-		placed = false;
-		if (pin >= 0)
-			for (Trace t = to; t != null; t = t.adj)
-				if (t.pos == pos) t.place();
+	public Trace pickup(CircuitEditor cc) {
 		return this;
 	}
 
 	@Override
-	public Trace place() {
-		if (placed) return this;
-		try {
-			placed = true;
-			return cc.traceLookup.merge(pos, this, Trace::merge);
-		} catch (MergeConflict e) {
-			placed = false;
-			Trace[] io0 = e.conflict.block.io, io1 = block.io;
-			for (Trace out = io0[0]; out.to != null;)
-				out.to.connect(this);
-			for (int i = min(io0.length, io1.length) - 1; i > 0; i--)
-				io1[i].connect(io0[i].from);
-			e.conflict.block.remove();
-			return place();
-		}
+	public Trace place(CircuitEditor cc) {
+		for (Block block : cc.blocks)
+			for (int i = 0; i < block.outs; i++) {
+				Trace tr = block.io[i];
+				if (tr.x == x && tr.y == y && tr != this)
+					return merge(tr, cc);
+			}
+		for (Trace tr : cc.traces)
+			if (tr.x == x && tr.y == y && tr != this)
+				return merge(tr, cc);
+		return this;
 	}
 
-	private Trace merge(Trace tr) {
+	private Trace merge(Trace tr, CircuitEditor cc) {
 		Trace rem;
-		if (tr.pin < 0) {
+		if (this.pin < 0)
+			rem = this;
+		else if (tr.pin < 0) {
 			rem = tr;
 			tr = this;
-		} else if (this.pin < 0)
-			rem = this;
-		else {
-			if (tr.pin > 0) {
+		} else {
+			if (!tr.isOut()) {
 				rem = tr;
 				tr = this;
-			} else if (this.pin > 0)
+			} else if (!this.isOut())
 				rem = this;
-			else throw new MergeConflict(this);
-			rem.connect(tr);
-			rem.placed = false;
+			else {
+				Block block0 = tr.block, block1 = this.block;
+				Trace[] io0 = block0.io, io1 = block1.io;
+				for (Trace out = tr; out.to != null;)
+					out.to.connect(this, cc);
+				for (int i = block0.outs, j = block1.outs; i < io0.length && j < io1.length; i++, j++)
+					io1[j].connect(io0[i].from, cc);
+				tr.block.remove(cc);
+				return this;
+			}
+			rem.connect(tr, cc);
 			return tr;
 		}
-		while(rem.to != null) rem.to.connect(tr);
-		rem.connect(null);
-		rem.placed = false;
-		cc.fullRedraw();
+		rem.connect(tr, cc);
+		rem.remove(cc);
 		return tr;
 	}
 
-	@SuppressWarnings("serial")
-	private static class MergeConflict extends IllegalStateException {
-		final Trace conflict;
-		MergeConflict(Trace collision) {
-			this.conflict = collision;
-		}
-	}
-
-	public void connect(Trace tr) {
+	public void connect(Trace tr, CircuitEditor cc) {
 		if (from == tr) return;
-		cc.fullRedraw();
 		if (from != null) {
 			Trace t0 = null;
 			for (Trace t = from.to; t != this; t = t.adj) t0 = t;
@@ -153,9 +134,10 @@ public class Trace extends IndexedSet.Element implements IMovable {
 			tr.to = this;
 		}
 		cc.traceUpdates.add(this);
+		draw();
 	}
 
-	public void setNode(int node) {
+	public void setNode(int node, CircuitEditor cc) {
 		if (node == this.node) return;
 		this.node = node;
 		if (block != null) {
@@ -167,27 +149,49 @@ public class Trace extends IndexedSet.Element implements IMovable {
 			cc.traceUpdates.add(to);
 	}
 
-	public void update() {
-		if (!isOut()) setNode(from == null ? -1 : from.node);
+	public void update(CircuitEditor cc) {
+		if (!isOut()) setNode(from == null ? -1 : from.node, cc);
 	}
 
 	@Override
-	public void remove() {
-		pickup();
-		while(to != null) to.connect(from);
-		connect(null);
-	}
-
-	public void draw(VertexArray va, MacroState ms, boolean re) {
-		if (from == null) return;
-		if (re || bufOfs < 0) bufOfs = va.count;
-		Value s = value(ms);
-		try (MemoryStack mem = MemoryStack.stackPush()) {
-			va.set(bufOfs, drawTrace(mem.malloc(TRACE_STRIDE * 4), from.x(), from.y(), x(), y(), s == null ? VOID_COLOR : s.type.n));
+	public void add(CircuitEditor cc) {
+		if (!isOut()) {
+			va = cc.traceVAO;
+			cc.traces.add(this);
 		}
 	}
 
-	public static final short VOID_COLOR = 47, STOP_COLOR = 0;
+	@Override
+	public void remove(CircuitEditor cc) {
+		va = null;
+		cc.traces.remove(this);
+		pickup(cc);
+		while(to != null) to.connect(from, cc);
+		connect(null, cc);
+	}
+
+	@Override
+	public void draw() {
+		int idx = getIdx();
+		if (idx < 0) return;
+		Trace from = this.from;
+		if (from == null) from = this;
+		try (MemoryStack ms = MemoryStack.stackPush()) {
+			va.set(idx * 4, drawTrace(
+				ms.malloc(TRACE_PRIMLEN),
+				from.x, from.y, x, y, color
+			).flip());
+		}
+		Main.refresh(0);
+	}
+
+	@Override
+	public void setIdx(int idx) {
+		super.setIdx(idx);
+		draw();
+	}
+
+	public static final short VOID_COLOR = 0;
 
 	public static int key(int x, int y) {
 		return y << 16 | x & 0xffff;
@@ -197,6 +201,15 @@ public class Trace extends IndexedSet.Element implements IMovable {
 	public boolean inRange(int x0, int y0, int x1, int y1) { 
 		int x = x(), y = y();
 		return x < x1 && y < y1 && x > x0 && y > y0;
+	}
+
+	public void updateColor(MacroState ms) {
+		Value s = value(ms);
+		int c = s == null ? VOID_COLOR : s.type.vtable.color;
+		if (c != color) {
+			color = c;
+			draw();
+		}
 	}
 
 	public Value value(MacroState ms) {

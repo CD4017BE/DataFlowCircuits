@@ -22,7 +22,7 @@ public class LoadingCache {
 
 	public LoadingCache(boolean graphics) {
 		if (graphics) {
-			this.icons = new IconAtlas(Shaders.blockP, 2, 16, 16, 256);
+			this.icons = new IconAtlas(Shaders.blockP, 2, 32, 32, 256);
 			this.defaultModel = new BlockModel(null, "default");
 			try (MemoryStack ms = MemoryStack.stackPush()) {
 				InputStream is = getClass().getResourceAsStream("/textures/placeholder.tga");

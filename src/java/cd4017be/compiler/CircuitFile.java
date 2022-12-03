@@ -10,8 +10,7 @@ import static org.lwjgl.opengl.GL12C.GL_UNSIGNED_SHORT_1_5_5_5_REV;
 import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.nio.file.*;
 import java.util.*;
 
 import org.lwjgl.system.MemoryStack;
@@ -119,7 +118,7 @@ public class CircuitFile {
 	}
 
 	public static Path path(BlockDef def) {
-		return def.module.path.resolveSibling("blocks/" + def.id + ".dfc");
+		return def.module.path.resolve("blocks/" + def.id + ".dfc");
 	}
 
 	public static ExtInputStream readBlock(BlockDef def) throws IOException {
@@ -130,24 +129,26 @@ public class CircuitFile {
 		BlockInfo[] circuit = readCircuit(is, m);
 		is.readU8(LAYOUT_VERSION);
 		Trace[] traces = new Trace[is.readVarInt() + 1];
+		Block[] blocks = new Block[circuit.length];
 		int no = 1, ni = 1;
 		for (BlockInfo info : circuit)
 			ni += info.outs;
-		for (BlockInfo info : circuit) {
-			Block block = new Block(info, cc);
-			block.pos(is.readI16(), is.readI16());
+		for (int i = 0; i < blocks.length; i++) {
+			Block block = blocks[i] = new Block(circuit[i]);
+			block.pos(is.readI16(), is.readI16(), cc);
 			int j = 0;
 			for (Trace tr : block.io)
 				traces[j++ < block.outs ? no++ : ni++] = tr;
 		}
 		for (int i = ni; i < traces.length; i++)
-			traces[i] = new Trace(cc);
+			traces[i] = new Trace();
 		for (int i = 1; i < traces.length; i++) {
 			Trace tr = traces[i];
-			tr.pos(is.readI16(), is.readI16());
-			if (i >= no) tr.connect(traces[is.readInt(traces.length - 1)]);
-			tr.place();
+			tr.pos(is.readI16(), is.readI16(), cc);
+			if (i >= no) tr.connect(traces[is.readInt(traces.length - 1)], cc);
+			tr.add(cc);
 		}
+		for (Block block : blocks) block.add(cc);
 	}
 
 	public static BlockInfo[] readCircuit(ExtInputStream is, Module m) throws IOException {
@@ -172,7 +173,7 @@ public class CircuitFile {
 			defs[i] = new BlockInfo(def != null ? def : m.cache.placeholder, out, in, arg);
 		}
 		String[] args = new String[is.readVarInt()];
-		for (int i = 1; i < args.length; i++)
+		for (int i = 0; i < args.length; i++)
 			args[i] = is.readUTF8();
 		BlockInfo[] blocks = new BlockInfo[is.readVarInt()];
 		for (int i = 0; i < blocks.length; i++) {
@@ -183,7 +184,7 @@ public class CircuitFile {
 			String[] arg = new String[def.args.length];
 			for (int j = 0; j < arg.length; j++)
 				arg[j] = args[is.readInt(args.length - 1)];
-			blocks[i] = new BlockInfo(def.def, def.outs, in, args);
+			blocks[i] = new BlockInfo(def.def, def.outs, in, arg);
 		}
 		return blocks;
 	}
@@ -196,7 +197,9 @@ public class CircuitFile {
 
 	public static void writeLayout(BlockDef def, IndexedSet<Block> blocks, IndexedSet<Trace> traces)
 	throws IOException {
-		try(ExtOutputStream os = new ExtOutputStream(newOutputStream(path(def)))) {
+		Path path = path(def);
+		Files.createDirectories(path.getParent());
+		try(ExtOutputStream os = new ExtOutputStream(newOutputStream(path))) {
 			BlockInfo[] circuit = new BlockInfo[blocks.size()];
 			int no = 0, ni = 0;
 			for (int i = 0; i < circuit.length; i++) {

@@ -4,11 +4,14 @@ import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.system.MemoryUtil;
+
+import cd4017be.compiler.LoadingCache;
 
 /**
  * @author CD4017BE */
@@ -21,7 +24,7 @@ public class Main {
 		if(!glfwInit()) throw new RuntimeException("can't init GLFW");
 		//create window and GL context
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-		long window = glfwCreateWindow(1536, 1024, TITLE, NULL, NULL);
+		long window = glfwCreateWindow(1024, 768, TITLE, NULL, NULL);
 		try {
 			if(window == NULL) throw new RuntimeException("can't create window");
 			glfwMakeContextCurrent(window);
@@ -79,10 +82,12 @@ public class Main {
 		glClearColor(0, 0, 0, 1);
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		//Palette pal = new Palette();
-		//GUI.add(new Circuit(pal));
-		//GUI.add(pal);
-		new MacroEdit();
+		
+		LoadingCache cache = new LoadingCache(true);
+		new CircuitEditor(cache).open(
+			cache.getModule(Path.of("src/dfc/glsl110"))
+			.getBlock("band")
+		);
 	}
 
 	private static void run(long window) {

@@ -26,6 +26,10 @@ public class TextField {
 		cur0 = cur1 = c < 0 ? text.length() : min(c, text.length());
 	}
 
+	public int cursor() {
+		return cur1;
+	}
+
 	public String get() {
 		return text;
 	}

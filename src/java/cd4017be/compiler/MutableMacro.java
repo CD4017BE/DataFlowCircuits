@@ -3,6 +3,7 @@ package cd4017be.compiler;
 import java.util.*;
 
 import cd4017be.dfc.editor.Block;
+import cd4017be.dfc.editor.CircuitEditor;
 
 /**
  * 
@@ -70,20 +71,20 @@ public class MutableMacro extends Macro {
 		}
 	}
 
-	public void addBlock(Block block) {
+	public void addBlock(Block block, CircuitEditor cc) {
 		curBlock = block;
 		int[] io = block.def.assembler.assemble(this, block.def, block.outs, block.ins(), block.args);
 		for (int i = block.outs - 1; i >= 0; i--)
-			block.io[i].setNode(io[i]);
+			block.io[i].setNode(io[i], cc);
 		for (int j = block.io.length - 1, i = j - block.outs; i >= 0; i--, j--)
 			block.nodesIn[i] = io[j];
 		curBlock = null;
 	}
 
-	public void removeBlock(Block block) {
+	public void removeBlock(Block block, CircuitEditor cc) {
 		Arrays.fill(block.nodesIn, -1);
 		for (int i = 0; i < block.outs; i++)
-			block.io[i].setNode(-1);
+			block.io[i].setNode(-1, cc);
 		for (int i = 0; i < nodeCount; i++) {
 			if (blocks[i] != block) continue;
 			Node node = nodes[i];

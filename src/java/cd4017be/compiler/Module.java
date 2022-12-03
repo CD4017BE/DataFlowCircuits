@@ -23,6 +23,7 @@ public class Module {
 	public final HashMap<Module, String> modNames = new HashMap<>();
 	public final HashMap<String, BlockDef> blocks = new HashMap<>();
 	public final HashMap<String, BlockModel> models = new HashMap<>();
+	public final HashMap<String, VTable> types = new HashMap<>();
 	public final HashMap<String, Value> signals = new HashMap<>();
 	private boolean loaded;
 
@@ -34,6 +35,7 @@ public class Module {
 			try {
 				plugin = (Plugin)new PluginClassLoader(path).loadClass("Plugin")
 				.getDeclaredConstructor().newInstance();
+				System.out.println("loaded plugin for module " + path);
 			} catch(
 				ClassNotFoundException | InstantiationException
 				| IllegalAccessException | IllegalArgumentException
@@ -59,25 +61,25 @@ public class Module {
 				for (Object e1 : (Object[])kv0.value()) {
 					KeyValue kv1 = (KeyValue)e1;
 					switch(kv1.key()) {
-					case "out" -> model.outs = parseIO((Object[])kv0.value());
-					case "in" -> model.ins = parseIO((Object[])kv0.value());
-					case "size" -> {
-						Object[] arr = (Object[])kv0.value();
-						model.tw = ((Number)arr[0]).byteValue();
-						model.th = ((Number)arr[1]).byteValue();
-					}
-					case "text" -> {
-						Object[] arr = (Object[])kv0.value();
-						model.tx = ((Number)arr[0]).byteValue();
-						model.ty = ((Number)arr[1]).byteValue();
+					case "out" -> model.outs = parseIO((Object[])kv1.value());
+					case "in" -> model.ins = parseIO((Object[])kv1.value());
+					case "dyn" -> {
+						Object[] arr = (Object[])kv1.value();
+						model.setDynRegion(
+							((Number)arr[0]).intValue(),
+							((Number)arr[1]).intValue(),
+							((Number)arr[2]).intValue(),
+							((Number)arr[3]).intValue()
+						);
 					}
 					}
 				}
 				models.put(key, model);
 			}
-		} catch (ClassCastException e) {
+		} catch (ClassCastException | ArrayIndexOutOfBoundsException e) {
 			throw new IOException(e);
 		}
+		System.out.println("loaded models for module " + path);
 	}
 
 	private static byte[] parseIO(Object[] arr) {
@@ -140,7 +142,7 @@ public class Module {
 										throw new IOException("module for block model not defined: " + s);
 									s = s.substring(i + 1);
 								}
-								model = m.models.get(s);
+								model = m.models.getOrDefault(s, cache.defaultModel);
 							}
 							case "name" -> name = (String)kv2.value();
 							case "in" -> in = (Object[])kv2.value();
@@ -158,11 +160,35 @@ public class Module {
 						def.name = name;
 						blocks.put(def.id, def);
 					}}
+				case "types" -> {
+					for (Object e1 : (Object[])kv0.value()) {
+						KeyValue kv1 = (KeyValue)e1;
+						Object[] ops = new Object[0];
+						String text = "";
+						int color = 0;
+						for (Object e2 : (Object[])kv1.value()) {
+							KeyValue kv2 = (KeyValue)e2;
+							switch(kv2.key()) {
+							case "text" -> text = (String)kv2.value();
+							case "color" -> color = ((Number)kv2.value()).intValue();
+							case "ops" -> ops = (Object[])kv2.value();
+							}
+						}
+						VTable vt = new VTable(text, color);
+						for (Object e2 : ops) {
+							KeyValue kv2 = (KeyValue)e2;
+							BlockDef def = blocks.get(kv2.value());
+							if (def != null && def.assembler instanceof VirtualMethod vm)
+								vt.put(kv2.key(), vm);
+						}
+						types.put(kv1.key(), vt);
+					}}
 				}
 			}
 		} catch (ClassCastException e) {
 			throw new IOException(e);
 		}
+		System.out.println("loaded content of module " + path);
 	}
 
 	public void save() throws IOException {
@@ -201,12 +227,17 @@ public class Module {
 	}
 
 	public BlockDef findIO(String name) {
-		BlockDef def = blocks.get(name);
+		BlockDef def = getBlock(name);
 		if (def != null && def.assembler == NodeAssembler.IO) return def;
 		for (Module m : imports.values())
-			if ((def = m.blocks.get(name)) != null && def.assembler == NodeAssembler.IO)
+			if ((def = m.getBlock(name)) != null && def.assembler == NodeAssembler.IO)
 				return def;
 		return null;
+	}
+
+	public BlockDef getBlock(String name) {
+		ensureLoaded();
+		return blocks.get(name);
 	}
 
 	public String name(Module mod) {
@@ -221,6 +252,11 @@ public class Module {
 			if ((ass = m.plugin.assembler(type, blockDef)) != null)
 				return ass;
 		return null;
+	}
+
+	@Override
+	public String toString() {
+		return path.toString();
 	}
 
 }

@@ -44,7 +44,7 @@ public final class NodeState {
 	}
 
 	public SignalError out(NodeState ns) {
-		return out(ns.value, ns.se);
+		return ns != null ? out(ns.value, ns.se) : null;
 	}
 
 	public SignalError out(Value value, SideEffects se) {
@@ -59,6 +59,16 @@ public final class NodeState {
 			if (ns != null && (chng || ns.update != 0))
 				ns.updateIn(j >> 24);
 		}
+		return null;
+	}
+
+	public NodeState inScopeUpdate(int i) {
+		int j = node.ins[i];
+		if (j < 0) return DISCONNECTED;
+		NodeState ns = state.states[j];
+		if (ns != null && ns.value != null) return ns;
+		update |= 1L << i;
+		state.updateScope(j);
 		return null;
 	}
 

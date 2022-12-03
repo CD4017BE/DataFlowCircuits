@@ -7,10 +7,11 @@ import org.lwjgl.system.MemoryStack;
 
 import cd4017be.compiler.*;
 import cd4017be.util.IndexedSet;
+import cd4017be.util.VertexArray;
 
 /**Represents an operand block.
  * @author CD4017BE */
-public class Block extends IndexedSet.Element implements IMovable {
+public class Block extends IndexedSet.Element implements CircuitObject {
 
 	public final BlockDef def;
 	public final Trace[] io;
@@ -18,35 +19,33 @@ public class Block extends IndexedSet.Element implements IMovable {
 	public final String[] args;
 	public final int outs;
 	public short x, y, w, h;
+	private VertexArray va;
 
-	public Block(BlockInfo info, CircuitEditor cc) {
-		this(info.def, info.outs, info.ins.length, info.args, cc);
+	public Block(BlockInfo info) {
+		this(info.def, info.outs, info.ins.length, info.args);
 	}
 
-	public Block(BlockDef def, int size, CircuitEditor cc) {
-		this(def, def.outs(size), def.ins(size), new String[def.args(size)], cc);
+	//TODO variable scaling
+	public Block(BlockDef def, int size) {
+		this(def, def.outs(size), def.ins(size), new String[def.args(size)]);
 	}
 
-	public Block(BlockDef def, int outs, int ins, String[] args, CircuitEditor cc) {
+	public Block(BlockDef def, int outs, int ins, String[] args) {
 		this.def = def;
 		this.outs = outs;
 		this.nodesIn = new int[ins];
 		this.io = new Trace[outs + ins];
 		this.args = args;
 		for (int i = 0; i < io.length; i++)
-			io[i] = new Trace(cc, this, i);
+			io[i] = new Trace(this, i);
+		for (int i = 0; i < args.length; i++)
+			if (args[i] == null) args[i] = "";
 		def.model.loadIcon();
 		updateSize();
-		cc.blocks.add(this);
-		cc.fullRedraw();
 	}
 
 	public int ins() {
 		return nodesIn.length;
-	}
-
-	public CircuitEditor circuit() {
-		return io[0].cc;
 	}
 
 	public boolean isInside(int x, int y) {
@@ -55,17 +54,17 @@ public class Block extends IndexedSet.Element implements IMovable {
 	}
 
 	@Override
-	public Block pickup() {
-		for (Trace tr : io) tr.pickup();
+	public Block pickup(CircuitEditor cc) {
+		for (Trace tr : io) tr.pickup(cc);
 		return this;
 	}
 
 	@Override
-	public Block pos(int x, int y) {
+	public Block pos(int x, int y, CircuitEditor cc) {
 		this.x = (short)x;
 		this.y = (short)y;
-		redraw();
-		updatePins();
+		draw();
+		updatePins(cc);
 		return this;
 	}
 
@@ -81,35 +80,34 @@ public class Block extends IndexedSet.Element implements IMovable {
 		int n = max(0, max(outs * 2 - model.outs.length, ins() * 2 - model.ins.length));
 		this.w = (short)max(w, model.icon.w);
 		this.h = (short)max(h, model.icon.h + n);
+		draw();
 	}
 
-	public void updatePins() {
+	public void updatePins(CircuitEditor cc) {
 		BlockModel model = def.model;
 		for (int i = 0; i < outs; i++)
-			io[i].movePin(i, model.outs, x, y, w, h);
+			io[i].movePin(i, model.outs, x, y, w, h, cc);
 		for (int i = outs, j = 0; i < io.length; i++, j++)
-			io[i].movePin(j, model.ins, x, y, w, h);
-	}
-
-	public String text() {
-		return args[0];
+			io[i].movePin(j, model.ins, x, y, w, h, cc);
 	}
 
 	@Override
-	public Block place() {
-		for (Trace tr : io) tr.place();
+	public Block place(CircuitEditor cc) {
+		for (Trace tr : io) tr.place(cc);
 		return this;
 	}
 
-	public void setText(String s) {
-		args[0] = s;
+	public void updateArg(int i) {
 		//TODO recreate block
 	}
 
-	public void redraw() {
+	@Override
+	public void draw() {
+		int idx = getIdx();
+		if (idx < 0) return;
 		try(MemoryStack ms = MemoryStack.stackPush()) {
-			circuit().blockVAO.set(getIdx() * BLOCK_STRIDE * 4, drawBlock(
-				ms.malloc(BLOCK_STRIDE * 4),
+			va.set(idx * 4, drawBlock(
+				ms.malloc(BLOCK_PRIMLEN),
 				x, y, w, h, def.model.icon
 			).flip());
 		}
@@ -137,17 +135,8 @@ public class Block extends IndexedSet.Element implements IMovable {
 
 	@Override
 	public void setIdx(int idx) {
-		CircuitEditor cc = circuit();
-		if (idx < 0) { // disconnect all Wires on removal
-			for (Trace tr : io) tr.remove();
-			cc.macro.removeBlock(this);
-			cc.fullRedraw();
-		} else {
-			if (getIdx() < 0)
-				cc.macro.addBlock(this);
-			redraw();
-		}
 		super.setIdx(idx);
+		draw();
 	}
 
 	@Override
@@ -170,8 +159,20 @@ public class Block extends IndexedSet.Element implements IMovable {
 	}
 
 	@Override
-	public void remove() {
-		circuit().blocks.remove(this);
+	public void add(CircuitEditor cc) {
+		va = cc.blockVAO;
+		if (cc.blocks.add(this)) {
+			cc.macro.addBlock(this, cc);
+			for (Trace tr : io) tr.add(cc);
+		}
+	}
+
+	@Override
+	public void remove(CircuitEditor cc) {
+		va = null;
+		cc.blocks.remove(this);
+		cc.macro.removeBlock(this, cc);
+		for (Trace tr : io) tr.remove(cc);
 	}
 
 	@Override

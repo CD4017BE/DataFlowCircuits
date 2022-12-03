@@ -33,6 +33,7 @@ public final class Node {
 	}
 
 	public void addOut(int dst) {
+		if (outs == null) outs = new int[4];
 		if (usedOuts >= outs.length)
 			outs = Arrays.copyOf(outs, outs.length * 2);
 		outs[usedOuts++] = dst;

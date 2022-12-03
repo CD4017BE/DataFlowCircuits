@@ -21,7 +21,7 @@ public class Shaders {
 	public static final int TEXT_STRIDE = 8;
 	private static final Attribute[] textA = {
 		new Attribute(textP, "pos", 2, GL_SHORT, false, 0),
-		new Attribute(textP, "char", 1, GL_SHORT, false, 4),
+		new Attribute(textP, "charCode", 1, GL_SHORT, false, 4),
 		new Attribute(textP, "color", 1, GL_UNSIGNED_BYTE, false, 6),
 		new Attribute(textP, "corner", 1, GL_UNSIGNED_BYTE, false, 7)
 	};
@@ -34,7 +34,7 @@ public class Shaders {
 	private static final int blockF = loadShader(GL_FRAGMENT_SHADER, "/shaders/block_frag.glsl");
 	/** block rendering shader */
 	public static final int blockP = program(blockV, blockF);
-	public static final int BLOCK_STRIDE = 12;
+	public static final int BLOCK_STRIDE = 12, BLOCK_PRIMLEN = BLOCK_STRIDE * 4;
 	private static final Attribute[] blockA = {
 		new Attribute(blockP, "pos", 2, GL_SHORT, false, 0),
 		new Attribute(blockP, "str", 2, GL_SHORT, false, 4),
@@ -50,7 +50,7 @@ public class Shaders {
 	private static final int traceF = loadShader(GL_FRAGMENT_SHADER, "/shaders/wire_frag.glsl");
 	/** trace rendering shader */
 	public static final int traceP = program(traceV, traceF);
-	public static final int TRACE_STRIDE = 10;
+	public static final int TRACE_STRIDE = 10, TRACE_PRIMLEN = TRACE_STRIDE * 4;
 	private static final Attribute[] traceA = {
 		new Attribute(traceP, "pos", 4, GL_SHORT, false, 0),
 		new Attribute(traceP, "type", 1, GL_UNSIGNED_BYTE, false, 8),
@@ -82,7 +82,7 @@ public class Shaders {
 	public static final float FONT_CW = 1F/16F, FONT_CH = 1.5F/16F;
 
 	/** default font texture for text rendering */
-	public static final int font_tex = texture2D(GL_LINEAR, GL_REPEAT, GL_R3_G3_B2, "font");
+	public static final int font_tex = texture2DMM(GL_LINEAR_MIPMAP_NEAREST, GL_NEAREST, GL_REPEAT, GL_R3_G3_B2, "font0", "font1");
 	public static final int trace_tex = texture2D(GL_NEAREST, GL_REPEAT, GL_RGB5_A1, "traces");
 	public static final VertexArray text_vao = genTextVAO(32);
 	public static final VertexArray sel_vao = genSelVAO(8);
@@ -212,11 +212,11 @@ public class Shaders {
 	public static void initFont(int tex, float cw, float ch) {
 		glBindTexture(GL_TEXTURE_2D, tex);
 		glUseProgram(textP);
-		if (glGetTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER) != GL_NEAREST) {
+		/*if (glGetTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER) != GL_NEAREST) {
 			int w = glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH);
 			int h = glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT);
 			glUniform4f(text_tileSize, cw, ch, -0.5F / (float)w, -0.5F / (float)h);
-		} else glUniform4f(text_tileSize, cw, ch, 0, 0);
+		} else*/ glUniform4f(text_tileSize, cw, ch, 0, 0);
 	}
 
 	/**Actually render the text previously sent to {@link #print(CharSequence, int, int, int, int, int)}.
@@ -230,11 +230,7 @@ public class Shaders {
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_1D, palette_tex);
 		glUseProgram(textP);
-		glUniformMatrix3fv(text_transform, false, new float[] {
-			sx,  0, 0,
-			 0, sy, 0,
-			 x,  y, 0,
-		});
+		transform(text_transform, x, y, sx, sy);
 		checkGLErrors();
 		text_vao.draw();
 		text_vao.clear();
@@ -269,7 +265,7 @@ public class Shaders {
 				buf.putShort(x1).putShort(y1).putChar(ch).put(col).put(X1Y1);
 				buf.putShort(x0).putShort(y1).putChar(ch).put(col).put(X0Y1);
 			}
-			text_vao.append(buf.flip());
+			if (buf.position() > 0) text_vao.append(buf.flip());
 		}
 	}
 
@@ -307,14 +303,24 @@ public class Shaders {
 	) {
 		glBindTexture(GL_TEXTURE_1D, palette_tex);
 		glUseProgram(selP);
-		glUniformMatrix3fv(sel_transform, false, new float[] {
-			sx,  0, 0,
-			 0, sy, 0,
-			 x,  y, 0,
-		});
+		transform(sel_transform, x, y, sx, sy);
 		glUniform2f(sel_edgeRange, e0, e1);
 		sel_vao.draw();
 		sel_vao.clear();
+	}
+
+	/**Set the transformation for id
+	 * @param id shader uniform matrix that represents a transformation
+	 * @param ox offset X
+	 * @param oy offset Y
+	 * @param sx scale X
+	 * @param sy scale Y */
+	public static void transform(int id, float ox, float oy, float sx, float sy) {
+		glUniformMatrix3fv(id, false, new float[] {
+			sx,  0, 0,
+			 0, sy, 0,
+			ox, oy, 0,
+		});
 	}
 
 }

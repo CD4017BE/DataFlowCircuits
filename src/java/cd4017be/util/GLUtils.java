@@ -141,9 +141,13 @@ public class GLUtils {
 	}
 
 	public static void loadTexture(ByteBuffer img, int target, int fmt) {
+		loadTexture(img, target, 0, fmt);
+	}
+
+	public static void loadTexture(ByteBuffer img, int target, int lvl, int fmt) {
 		if (img == null) return;
 		glTexImage2D(
-			target, 0, fmt, img.getShort(), img.getShort(), 0,
+			target, lvl, fmt, img.getShort(), img.getShort(), 0,
 			img.getChar(), img.getChar(), img
 		);
 	}
@@ -164,6 +168,28 @@ public class GLUtils {
 		try(MemoryStack ms = MemoryStack.stackPush()) {
 			loadTexture(readImage(path, ms), GL_TEXTURE_2D, format);
 		}
+		return tex;
+	}
+
+	/**Load and configure a 2D texture
+	 * @param minFilter texture minification filter mode
+	 * @param magFilter texture magnification filter mode
+	 * @param wrap boundary behavior
+	 * @param format internal format for GL
+	 * @param paths file paths of mip-map levels to load (from highest to lowest LOD)
+	 * @return GL texture id */
+	public static int texture2DMM(int minFilter, int magFilter, int wrap, int format, String... paths) {
+		int tex = glGenTextures();
+		glBindTexture(GL_TEXTURE_2D, tex);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, paths.length - 1);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
+		for (int i = 0; i < paths.length; i++)
+			try(MemoryStack ms = MemoryStack.stackPush()) {
+				loadTexture(readImage(paths[i], ms), GL_TEXTURE_2D, i, format);
+			}
 		return tex;
 	}
 
