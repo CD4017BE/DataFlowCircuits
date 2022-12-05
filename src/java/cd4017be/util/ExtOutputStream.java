@@ -30,9 +30,19 @@ public class ExtOutputStream extends FilterOutputStream {
 		out.write(v >> 24);
 	}
 
+	public void writeUTF8(String s) throws IOException {
+		if (s == null || s.isEmpty()) {
+			writeVarInt(0);
+			return;
+		}
+		byte[] data = s.getBytes(UTF_8);
+		writeVarInt(data.length);
+		out.write(data);
+	}
+
 	/**@return the String to write. It must not be larger than 255 bytes after UTF-8 encoding!
 	 * @throws IOException on I/O error */
-	public void writeSmallUTF(String s) throws IOException {
+	public void writeL8UTF8(String s) throws IOException {
 		if (s == null || s.isEmpty()) {
 			write(0);
 			return;
@@ -46,9 +56,9 @@ public class ExtOutputStream extends FilterOutputStream {
 
 	/**@return the String to write. It must not be larger than 65535 bytes after UTF-8 encoding!
 	 * @throws IOException on I/O error */
-	public void writeUTF(String s) throws IOException {
+	public void writeL16UTF8(String s) throws IOException {
 		if (s == null || s.isEmpty()) {
-			write(0);
+			write16(0);
 			return;
 		}
 		byte[] data = s.getBytes(UTF_8);

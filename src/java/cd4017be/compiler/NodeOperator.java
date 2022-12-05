@@ -1,5 +1,6 @@
 package cd4017be.compiler;
 
+import java.util.Arrays;
 
 /**
  * 
@@ -13,35 +14,52 @@ public interface NodeOperator {
 		void compScope(NodeState ns, Scope scope);
 	}
 
-	NodeOperator
-	CONST = ns -> ns.out((Value)ns.data(), null),
-	INPUT = ns -> ns.out(ns.state.inVal((int)ns.data())),
-	PASS = ns -> ns.out(ns.in(0)),
-	MACRO = ns -> new MacroState(ns, (Macro)ns.data()).errors,
-	ELEMENT = ns -> {
+	NodeOperator CONST = ns -> {
+		Value v = (Value)ns.data();
+		if (v == null) v = ns.state.context.disconnected.value;
+		return ns.out(v, null);
+	};
+	NodeOperator INPUT = ns -> ns.out(ns.state.inVal((int)ns.data()));
+	NodeOperator PASS = ns -> ns.out(ns.in(0));
+	NodeOperator MACRO = ns -> new MacroState(ns, (Macro)ns.data()).errors;
+	NodeOperator ELEMENT = ns -> {
 		NodeState a = ns.in(0);
 		return ns.out(a.value.args[(int)ns.data()], a.se);
-	},
-	VIRTUAL = ns -> {
+	};
+	NodeOperator VIRTUAL = ns -> {
 		String name = (String)ns.data();
 		NodeState a = ns.in(0);
 		VirtualMethod vm = a.value.type.vtable.get(name);
 		return vm != null ? vm.run(a, ns)
 			: new SignalError("unsupported operation: " + name);
-	},
-	EL_TYPE = ns -> {
+	};
+	NodeOperator EL_TYPE = ns -> {
 		NodeState a = ns.in(0);
 		Type t = a.value.type;
 		Object o = ns.data();
 		int i = o instanceof String s ? t.index(s) : (int)o;
 		return ns.out(new Value(t.elem(i), null), null);
-	},
-	NEW_TYPE = ns -> {
-		Type t = (Type)ns.data();
-		t = new Type(t.vtable, ns.in(0).value.type, t.n);
-		return ns.out(new Value(t, null), null);
-	},
-	OPERATION = ns -> {
+	};
+	NodeOperator NEW_TYPE = ns -> {
+		Context c = ns.state.context;
+		String[] args = (String[])ns.data();
+		String arg = args[0];
+		int n = 0;
+		int i = arg.lastIndexOf('#');
+		if (i >= 0) {
+			n = Integer.parseInt(arg.substring(i + 1));
+			arg = arg.substring(0, i);
+		}
+		String[] names = Arrays.copyOfRange(args, 1, args.length);
+		Type[] elem = new Type[names.length];
+		for (int j = 0; j < elem.length; j++)
+			elem[j] = ns.in(j).value.type;
+		VTable vt = ns.state.macro.def.module.types.get(arg);
+		if (vt == null) vt = c.disconnected.value.type.vtable;
+		Type t = new Type(vt, names, elem, n);
+		return ns.out(new Value(t.unique(c.types), null), null);
+	};
+	NodeOperator OPERATION = ns -> {
 		Type t = ns.in(0).value.type;
 		Value[] ins = new Value[ns.ins() - 1];
 		SideEffects e = null;
@@ -53,9 +71,9 @@ public interface NodeOperator {
 			else if (se != null && se != e)
 				e = new SideEffects(e, s.se, null);
 		}
-		return ns.out(new Value(t, ns.data(), ins), e);
-	},
-	ERROR = ns -> new SignalError((String)ns.data());
+		return ns.out(new Value(t, (String)ns.data(), ins), e);
+	};
+	NodeOperator ERROR = ns -> new SignalError((String)ns.data());
 
 	Scoped OUTPUT = new Scoped() {
 		@Override
@@ -63,7 +81,7 @@ public interface NodeOperator {
 			int n = ns.ins();
 			Value v;
 			SideEffects e = null;
-			if (n == 0) v = Value.VOID;
+			if (n == 0) v = ns.state.context.disconnected.value;
 			else if (n == 1) {
 				NodeState s = ns.in(0);
 				v = s.value;
@@ -78,7 +96,7 @@ public interface NodeOperator {
 					else if (se != null && se != e)
 						e = new SideEffects(e, s.se, null);
 				}
-				v = new Value(Type.VOID, null, ins);
+				v = new Value(ns.state.context.disconnected.value.type, null, ins);
 			}
 			return ns.state.pop(v, e);
 		}

@@ -19,7 +19,7 @@ public class CircuitEditor implements IGuiSection {
 
 	/**Editing modes */
 	private static final byte M_IDLE = 0, M_BLOCK_SEL = 1, M_TRACE_SEL = 2, M_TRACE_MV = 3, M_TRACE_DRAW = 4,
-	M_MULTI_SEL = 5, M_MULTI_MOVE = 6;
+	M_MULTI_SEL = 5, M_MULTI_MOVE = 6, M_BLOCK_SCALE = 7;
 
 	public final IndexedSet<Block> blocks;
 	public final IndexedSet<Trace> traces;
@@ -32,7 +32,7 @@ public class CircuitEditor implements IGuiSection {
 	final TextField text = new TextField(this::setText);
 	final ArrayList<String> autoComplete = new ArrayList<>();
 	/** mouse grid offset and zoom */
-	int ofsX, ofsY, zoom = 16;
+	int ofsX, ofsY, zoom = 16, dSize;
 	boolean panning = false;
 	/** 0: nothing, 1: frame, 2: texts, -1: everything */
 	byte redraw;
@@ -52,7 +52,7 @@ public class CircuitEditor implements IGuiSection {
 		this.traceVAO = genTraceVAO(64);
 		this.blocks = new IndexedSet<>(new Block[64]);
 		this.traces = new IndexedSet<>(new Trace[64]);
-		this.context = new Context();
+		this.context = new Context(cache.types);
 		this.icons = cache.icons;
 		this.palette = new Palette(this);
 		Main.GUI.add(this);
@@ -145,8 +145,15 @@ public class CircuitEditor implements IGuiSection {
 		}
 		if (mode == M_MULTI_SEL || mode == M_MULTI_MOVE)
 			addSel(min(lmx, mx), min(lmy, my), abs(mx - lmx), abs(my - lmy), FG_GREEN_L);
-		if (selBlock != null)
-			addSel(selBlock.x * 2, selBlock.y * 2, selBlock.w * 2, selBlock.h * 2, FG_BLUE_L);
+		if (selBlock != null) {
+			int h = selBlock.h * 2;
+			if (mode == M_BLOCK_SCALE) {
+				h += dSize * selBlock.def.model.rh * 2;
+				String s = "size " + (dSize + selBlock.size());
+				print(s, FG_BLUE_L, selBlock.x * 2 + selBlock.w - s.length(), selBlock.y * 2 + h, 2, 3);
+			}
+			addSel(selBlock.x * 2, selBlock.y * 2, selBlock.w * 2, h, FG_BLUE_L);
+		}
 		if (selTr != null)
 			addSel(selTr.x() * 2 - 1, selTr.y() * 2 - 1, 2, 2, FG_RED_L);
 		int ac0 = 0, ac1 = 0, x = 0, y = 0;
@@ -274,9 +281,20 @@ public class CircuitEditor implements IGuiSection {
 					}
 			selTrace(sel);
 			if (selBlock != old) refresh(0);
+			if (selTr != null) glfwSetCursor(WINDOW, MAIN_CURSOR);
+			else if (selBlock == null) glfwSetCursor(WINDOW, SEL_CURSOR);
+			else if (selBlock.def.varSize() && (selBlock.y + selBlock.h) * 2 - my < 2)
+				glfwSetCursor(WINDOW, VRESIZE_CURSOR);
+			else {
+				int dy = my - selBlock.textY();
+				if (dy >= 0 && dy >> 2 < selBlock.args.length)
+					glfwSetCursor(WINDOW, TEXT_CURSOR);
+				else glfwSetCursor(WINDOW, MAIN_CURSOR);
+			}
 			return;
 		}
 		case M_TRACE_SEL:
+			glfwSetCursor(WINDOW, MOVE_CURSOR);
 			if (selTr.pin < 0) {
 				selTr.pickup(this);
 				mode = M_TRACE_MV;
@@ -288,15 +306,24 @@ public class CircuitEditor implements IGuiSection {
 				return;
 			}
 		case M_TRACE_MV, M_TRACE_DRAW:
+			glfwSetCursor(WINDOW, MOVE_CURSOR);
 			selTr.pos(x + 1 >> 1, y + 1 >> 1, this);
 			return;
 		case M_MULTI_SEL:
+			glfwSetCursor(WINDOW, SEL_CURSOR);
 			refresh(0);
+			return;
+		case M_BLOCK_SCALE:
+			glfwSetCursor(WINDOW, VRESIZE_CURSOR);
+			if (dSize != (dSize = floorDiv(my - lmy + 2, selBlock.def.model.rh * 2)))
+				refresh(0);
+			return;
 		default: return;
 		case M_BLOCK_SEL:
 			if (moving.isEmpty())
 				moving.add(selBlock.pickup(this));
 		case M_MULTI_MOVE:
+			glfwSetCursor(WINDOW, MOVE_CURSOR);
 		}
 		int dx = x - lmx >> 1, dy = y - lmy >> 1;
 		if (dx == 0 && dy == 0) return;
@@ -320,7 +347,11 @@ public class CircuitEditor implements IGuiSection {
 				if (mode != M_IDLE) break;
 				lmx = mx;
 				lmy = my;
-				mode = selBlock == null ? M_MULTI_SEL : M_BLOCK_SEL;
+				if (selBlock == null) mode = M_MULTI_SEL;
+				else if (selBlock.def.varSize() && (selBlock.y + selBlock.h) * 2 - my < 2) {
+					dSize = 0;
+					mode = M_BLOCK_SCALE;
+				} else mode = M_BLOCK_SEL;
 				refresh(0);
 			} else if (mode == M_TRACE_DRAW) {
 				Trace t = selTr.place(this);
@@ -368,6 +399,10 @@ public class CircuitEditor implements IGuiSection {
 					(lmx - block.textX() + block.args[row].length() + 1 >> 1) : 0;
 				editText(block, row, col);
 				refresh(0);
+			} else if (mode == M_BLOCK_SCALE) {
+				selBlock = selBlock.resize(dSize, this);
+				mode = M_IDLE;
+				refresh(0);
 			} else if (mode == M_TRACE_MV) {
 				selTr.place(this);
 				mode = M_IDLE;
@@ -399,11 +434,11 @@ public class CircuitEditor implements IGuiSection {
 		boolean ctrl = (mods & GLFW_MOD_CONTROL) != 0;
 		boolean shift = (mods & GLFW_MOD_SHIFT) != 0;
 		switch(key) {
-		case GLFW_KEY_UP:
+		case GLFW_KEY_PAGE_UP:
 			if (editing != null)
 				editText(editing, editArg - 1, text.cursor());
 			break;
-		case GLFW_KEY_DOWN:
+		case GLFW_KEY_PAGE_DOWN:
 			if (editing != null)
 				editText(editing, editArg + 1, text.cursor());
 			break;
@@ -425,22 +460,27 @@ public class CircuitEditor implements IGuiSection {
 		case GLFW_KEY_S:
 			if (!ctrl) break;
 			try {
-				CircuitFile.writeLayout(macro.def, blocks, traces);
+				BlockDef def = macro.def;
+				CircuitFile.writeLayout(def, blocks, traces);
 				info = "saved!";
+				if (def.assembler instanceof Macro m)
+					m.clear();
+				else if (def.assembler instanceof ConstList cl) {
+					SignalError error = cl.compile();
+					if (error == null) info += " compiled!";
+					else info += " " + error.toString();
+				}
 			} catch(IOException e) {
 				e.printStackTrace();
 				info = e.toString();
 			}
+			refresh(0);
 			break;
 		case GLFW_KEY_W:
 			if (ctrl) glfwSetWindowShouldClose(WINDOW, true);
 			break;
 		case GLFW_KEY_D:
 			if (ctrl) cleanUpTraces();
-			break;
-		case GLFW_KEY_B:
-			if (!ctrl) break;
-			//new MacroEdit(icons, new BlockDef(""));
 			break;
 		case GLFW_KEY_HOME:
 			ofsX = ofsY = 0;

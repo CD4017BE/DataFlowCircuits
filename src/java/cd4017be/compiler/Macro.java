@@ -24,6 +24,8 @@ public class Macro implements NodeAssembler, VirtualMethod {
 	}
 
 	public void clear() {
+		loaded = false;
+		Arrays.fill(nodes, 0, nodeCount, null);
 		nodeCount = 0;
 		links.clear();
 	}
@@ -52,6 +54,7 @@ public class Macro implements NodeAssembler, VirtualMethod {
 
 	@Override
 	public int[] assemble(Macro macro, BlockDef def, int outs, int ins, String[] args) {
+		if (ins != ins()) return NodeAssembler.err(macro, def, outs, ins, "wrong IO count");
 		int[] io = new int[ins + outs];
 		Node in = macro.addNode(MACRO, this, ins);
 		if (outs == 1) io[0] = in.idx;
@@ -84,8 +87,8 @@ public class Macro implements NodeAssembler, VirtualMethod {
 		}
 		clear();
 		//create output and input nodes
-		int outs = def.outs.length;
-		Node out = addNode(OUTPUT, null, outs);
+		String[] outs = def.outs;
+		Node out = addNode(OUTPUT, null, outs.length);
 		for (int i = 0; i < ins(); i++)
 			links.put(def.ins[i], addNode(INPUT, i, 0));
 		//assemble block nodes
@@ -95,8 +98,13 @@ public class Macro implements NodeAssembler, VirtualMethod {
 			arr[i] = info.def.assembler.assemble(this, info.def, info.outs, info.ins.length, info.args);
 		}
 		//connect macro outputs
-		for (int i = 0; i < outs; i++) {
-			Node n = links.get(def.outs[i]);
+		if (def.assembler instanceof ConstList) {
+			outs = links.keySet().toArray(String[]::new);
+			int i = out.idx;
+			out = nodes[i] = new Node(OUTPUT, outs, outs.length, i);
+		}
+		for (int i = 0; i < outs.length; i++) {
+			Node n = links.get(outs[i]);
 			out.ins[i] = n == null ? -1 : n.idx;
 		}
 		//connect blocks

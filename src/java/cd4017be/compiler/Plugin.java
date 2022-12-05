@@ -11,7 +11,7 @@ public interface Plugin {
 	Plugin DEFAULT = (type, def) -> {
 		switch(type) {
 		case "block": return new Macro(def);
-		case "const": return NodeAssembler.CONST;
+		case "const": return new ConstList(def);
 		case "io": return NodeAssembler.IO;
 		case "to": return NodeAssembler.VIRTUAL;
 		case "et": return NodeAssembler.ET;

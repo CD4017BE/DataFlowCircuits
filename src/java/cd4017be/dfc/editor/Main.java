@@ -74,10 +74,16 @@ public class Main {
 	private static IGuiSection inFocus;
 	private static boolean redraw = true, lock;
 	public static int WIDTH, HEIGHT;
-	public static long WINDOW;
+	public static long WINDOW,
+	MAIN_CURSOR, VRESIZE_CURSOR, MOVE_CURSOR, TEXT_CURSOR, SEL_CURSOR;
 
 	static void init(long window) {
 		WINDOW = window;
+		MAIN_CURSOR = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
+		VRESIZE_CURSOR = glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
+		MOVE_CURSOR = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
+		TEXT_CURSOR = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
+		SEL_CURSOR = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
 		glfwSetInputMode(window, GLFW_LOCK_KEY_MODS, GLFW_TRUE);
 		glClearColor(0, 0, 0, 1);
 		glEnable(GL_BLEND);

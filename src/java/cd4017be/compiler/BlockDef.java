@@ -15,14 +15,14 @@ public class BlockDef {
 	public final int vaSize;
 	public String name;
 
-	public BlockDef(Module module, String id, String type, String[] ins, String[] outs, String[] args, BlockModel model) {
+	public BlockDef(Module module, String id, String type, String[] ins, String[] outs, String[] args, BlockModel model, int vaSize) {
 		this.module = module;
 		this.id = id;
 		this.ins = ins;
 		this.outs = outs;
 		this.args = args;
 		this.model = model;
-		this.vaSize = 0;
+		this.vaSize = vaSize;
 		this.type = type;
 		this.assembler = module == null ? null : module.assembler(type, this);
 	}

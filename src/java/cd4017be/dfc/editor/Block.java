@@ -2,6 +2,9 @@ package cd4017be.dfc.editor;
 
 import static cd4017be.dfc.editor.Shaders.*;
 import static java.lang.Math.max;
+import static java.lang.Math.min;
+
+import java.util.Arrays;
 
 import org.lwjgl.system.MemoryStack;
 
@@ -25,7 +28,6 @@ public class Block extends IndexedSet.Element implements CircuitObject {
 		this(info.def, info.outs, info.ins.length, info.args);
 	}
 
-	//TODO variable scaling
 	public Block(BlockDef def, int size) {
 		this(def, def.outs(size), def.ins(size), new String[def.args(size)]);
 	}
@@ -68,6 +70,36 @@ public class Block extends IndexedSet.Element implements CircuitObject {
 		return this;
 	}
 
+	public Block resize(int ds, CircuitEditor cc) {
+		if (ds == 0) return this;
+		int s = size() + ds;
+		if (s < 0)
+			if (s == ds) return this;
+			else s = 0;
+		Block block = new Block(def, def.outs(s), def.ins(s), Arrays.copyOf(args, def.args(s)));
+		System.arraycopy(args, 0, block.args, 0, min(args.length, block.args.length));
+		for (int i = 0, l = min(outs, block.outs); i < l; i++) {
+			Trace ta = io[i], tb = block.io[i];
+			while(ta.to != null) ta.to.connect(tb, cc);
+		}
+		for (int i = outs, j = block.outs, l = min(ins(), block.ins()); l > 0; i++, j++, l--) {
+			Trace ta = io[i], tb = block.io[j];
+			while(ta.to != null) ta.to.connect(tb, cc);
+			tb.connect(ta.from, cc);
+		}
+		remove(cc);
+		block.pos(x, y, cc).add(cc);
+		return block.place(cc);
+	}
+
+	public int size() {
+		return max(max(
+			outs - def.outs.length,
+			ins() - def.ins.length),
+			args.length - def.args.length
+		) + 1;
+	}
+
 	public void updateSize() {
 		BlockModel model = def.model;
 		int w = 0, h = 0;
@@ -77,7 +109,7 @@ public class Block extends IndexedSet.Element implements CircuitObject {
 		}
 		w += model.tw;
 		h += model.th;
-		int n = max(0, max(outs * 2 - model.outs.length, ins() * 2 - model.ins.length));
+		int n = max(-1, max(outs * 2 - model.outs.length, ins() * 2 - model.ins.length) >> 1) * model.rh;
 		this.w = (short)max(w, model.icon.w);
 		this.h = (short)max(h, model.icon.h + n);
 		draw();
@@ -86,9 +118,9 @@ public class Block extends IndexedSet.Element implements CircuitObject {
 	public void updatePins(CircuitEditor cc) {
 		BlockModel model = def.model;
 		for (int i = 0; i < outs; i++)
-			io[i].movePin(i, model.outs, x, y, w, h, cc);
+			io[i].movePin(i, model.outs, x, y, w, h, model.rh, cc);
 		for (int i = outs, j = 0; i < io.length; i++, j++)
-			io[i].movePin(j, model.ins, x, y, w, h, cc);
+			io[i].movePin(j, model.ins, x, y, w, h, model.rh, cc);
 	}
 
 	@Override
@@ -98,7 +130,7 @@ public class Block extends IndexedSet.Element implements CircuitObject {
 	}
 
 	public void updateArg(int i) {
-		//TODO recreate block
+		//TODO recreate node
 	}
 
 	@Override

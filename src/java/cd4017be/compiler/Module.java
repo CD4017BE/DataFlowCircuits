@@ -24,7 +24,6 @@ public class Module {
 	public final HashMap<String, BlockDef> blocks = new HashMap<>();
 	public final HashMap<String, BlockModel> models = new HashMap<>();
 	public final HashMap<String, VTable> types = new HashMap<>();
-	public final HashMap<String, Value> signals = new HashMap<>();
 	private boolean loaded;
 
 	public Module(LoadingCache cache, Path path) {
@@ -63,9 +62,18 @@ public class Module {
 					switch(kv1.key()) {
 					case "out" -> model.outs = parseIO((Object[])kv1.value());
 					case "in" -> model.ins = parseIO((Object[])kv1.value());
-					case "dyn" -> {
+					case "rep" -> {
 						Object[] arr = (Object[])kv1.value();
-						model.setDynRegion(
+						model.setRepRegion(
+							((Number)arr[0]).intValue(),
+							((Number)arr[1]).intValue(),
+							((Number)arr[2]).intValue(),
+							((Number)arr[3]).intValue()
+						);
+					}
+					case "text" -> {
+						Object[] arr = (Object[])kv1.value();
+						model.setTextRegion(
 							((Number)arr[0]).intValue(),
 							((Number)arr[1]).intValue(),
 							((Number)arr[2]).intValue(),
@@ -127,6 +135,7 @@ public class Module {
 						Object[] out = {}, in = out, arg = out;
 						String name = kv1.key();
 						BlockModel model = cache.defaultModel;
+						int scale = 0;
 						for (Object e2 : (Object[])kv1.value()) {
 							KeyValue kv2 = (KeyValue)e2;
 							switch(kv2.key()) {
@@ -148,6 +157,14 @@ public class Module {
 							case "in" -> in = (Object[])kv2.value();
 							case "out" -> out = (Object[])kv2.value();
 							case "arg" -> arg = (Object[])kv2.value();
+							case "var" -> {
+								for (Object o3 : (Object[])kv2.value())
+									switch((String)o3) {
+									case "out" -> scale |= BlockDef.VAR_OUT;
+									case "in" -> scale |= BlockDef.VAR_IN;
+									case "arg" -> scale |= BlockDef.VAR_ARG;
+									}
+								}
 							}
 						}
 						BlockDef def = new BlockDef(
@@ -155,7 +172,7 @@ public class Module {
 							Arrays.copyOf(in, in.length, String[].class),
 							Arrays.copyOf(out, out.length, String[].class),
 							Arrays.copyOf(arg, arg.length, String[].class),
-							model
+							model, scale
 						);
 						def.name = name;
 						blocks.put(def.id, def);
@@ -174,7 +191,7 @@ public class Module {
 							case "ops" -> ops = (Object[])kv2.value();
 							}
 						}
-						VTable vt = new VTable(text, color);
+						VTable vt = new VTable(this, kv1.key(), text, color);
 						for (Object e2 : ops) {
 							KeyValue kv2 = (KeyValue)e2;
 							BlockDef def = blocks.get(kv2.value());
@@ -232,6 +249,16 @@ public class Module {
 		for (Module m : imports.values())
 			if ((def = m.getBlock(name)) != null && def.assembler == NodeAssembler.IO)
 				return def;
+		return null;
+	}
+
+	public VTable findType(String name) {
+		ensureLoaded();
+		VTable vt = types.get(name);
+		if (vt != null) return vt;
+		for (Module m : imports.values())
+			if ((vt = m.ensureLoaded().types.get(name)) != null)
+				return vt;
 		return null;
 	}
 

@@ -108,9 +108,16 @@ public class ExtInputStream extends FilterInputStream {
 
 	private final byte[] buf = new byte[255];
 
+	public String readUTF8() throws IOException {
+		int l = readVarInt();
+		byte[] arr = l <= buf.length ? buf : new byte[l];
+		readAll(arr, 0, l);
+		return new String(arr, 0, l, UTF_8);
+	}
+
 	/**@return an up to 255 byte sized UTF-8 encoded String read from this stream
 	 * @throws IOException on I/O error or EOF */
-	public String readSmallUTF8() throws IOException {
+	public String readL8UTF8() throws IOException {
 		int l = readU8();
 		readAll(buf, 0, l);
 		return new String(buf, 0, l, UTF_8);
@@ -118,7 +125,7 @@ public class ExtInputStream extends FilterInputStream {
 
 	/**@return an up to 65535 byte sized UTF-8 encoded String read from this stream
 	 * @throws IOException on I/O error or EOF */
-	public String readUTF8() throws IOException {
+	public String readL16UTF8() throws IOException {
 		int l = readU16();
 		byte[] arr = l <= buf.length ? buf : new byte[l];
 		readAll(arr, 0, l);

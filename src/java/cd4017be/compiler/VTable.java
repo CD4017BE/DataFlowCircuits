@@ -9,12 +9,31 @@ import java.util.HashMap;
 public class VTable extends HashMap<String, VirtualMethod> {
 	private static final long serialVersionUID = -2902223347716374669L;
 
-	public final String name;
+	public final Module module;
+	public final String id, name;
 	public final int color;
 
-	public VTable(String name, int color) {
+	public VTable(Module module, String id, String name, int color) {
+		this.module = module;
+		this.id = id;
 		this.name = name;
 		this.color = color;
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		return o == this || o instanceof VTable other
+		&& other.module == module && other.id.equals(id);
+	}
+
+	@Override
+	public int hashCode() {
+		return module.hashCode() * 31 + id.hashCode();
+	}
+
+	@Override
+	public String toString() {
+		return module + ":" + id;
 	}
 
 }

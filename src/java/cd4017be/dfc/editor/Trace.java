@@ -46,13 +46,13 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		return y;
 	}
 
-	public void movePin(int i, byte[] pins, int x, int y, int w, int h, CircuitEditor cc) {
-		int o = (i *= 2) - pins.length + 2;
+	public void movePin(int i, byte[] pins, int x, int y, int w, int h, int rh, CircuitEditor cc) {
+		int o = i - (pins.length >> 1) + 1;
 		if (o > 0) {
-			y += o;
+			y += o * rh;
 			i -= o;
 		}
-		int dx = pins[i], dy = pins[i+1];
+		int dx = pins[i*=2], dy = pins[i+1];
 		if (dx < 0) dx += w + 1;
 		if (dy < 0) dy += h + 1;
 		pos(x + dx, y + dy, cc);

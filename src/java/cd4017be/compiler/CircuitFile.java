@@ -2,8 +2,7 @@ package cd4017be.compiler;
 
 import static java.lang.Integer.numberOfLeadingZeros;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
-import static java.nio.file.Files.newInputStream;
-import static java.nio.file.Files.newOutputStream;
+import static java.nio.file.Files.*;
 import static org.lwjgl.opengl.GL12C.GL_BGRA;
 import static org.lwjgl.opengl.GL12C.GL_UNSIGNED_SHORT_1_5_5_5_REV;
 
@@ -12,6 +11,7 @@ import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.file.*;
 import java.util.*;
+import java.util.Map.Entry;
 
 import org.lwjgl.system.MemoryStack;
 
@@ -25,7 +25,8 @@ public class CircuitFile {
 	private static final int
 	GRAPH_MAGIC = 'd' | 'f' << 8 | 'c' << 16 | 'G' << 24,
 	MODEL_MAGIC = 'd' | 'f' << 8 | 'c' << 16 | 'M' << 24,
-	CIRCUIT_VERSION = 0, LAYOUT_VERSION = 0, MODEL_VERSION = 0;
+	SIGNAL_MAGIC= 'd' | 'f' << 8 | 'c' << 16 | 'S' << 24,
+	CIRCUIT_VERSION = 0, LAYOUT_VERSION = 0, MODEL_VERSION = 0, SIGNAL_VERSION = 0;
 
 	private static void checkMagic(ExtInputStream eis, int magic) throws IOException {
 		if (eis.readI32() != magic) throw new IOException("wrong file format");
@@ -157,7 +158,7 @@ public class CircuitFile {
 		Module[] modules = new Module[is.readVarInt() + 1];
 		modules[0] = m;
 		for (int i = 1; i < modules.length; i++) {
-			String name = is.readSmallUTF8();
+			String name = is.readL8UTF8();
 			Module mod = modules[i] = m.imports.get(name);
 			if (mod != null) mod.ensureLoaded();
 			else System.out.printf("missing module '%s'\n", name);
@@ -166,7 +167,7 @@ public class CircuitFile {
 		for (int i = 0; i < defs.length; i++) {
 			Module mod = modules[is.readInt(modules.length - 1)];
 			int out = is.readU8(), in = is.readU8(), arg = is.readU8();
-			String name = is.readSmallUTF8();
+			String name = is.readL8UTF8();
 			BlockDef def = null;
 			if (mod != null && (def = mod.blocks.get(name)) == null)
 				System.out.printf("missing block '%s' in module '%s'\n", name, mod);
@@ -174,7 +175,7 @@ public class CircuitFile {
 		}
 		String[] args = new String[is.readVarInt()];
 		for (int i = 0; i < args.length; i++)
-			args[i] = is.readUTF8();
+			args[i] = is.readL16UTF8();
 		BlockInfo[] blocks = new BlockInfo[is.readVarInt()];
 		for (int i = 0; i < blocks.length; i++) {
 			BlockInfo def = defs[is.readInt(defs.length - 1)];
@@ -198,7 +199,7 @@ public class CircuitFile {
 	public static void writeLayout(BlockDef def, IndexedSet<Block> blocks, IndexedSet<Trace> traces)
 	throws IOException {
 		Path path = path(def);
-		Files.createDirectories(path.getParent());
+		createDirectories(path.getParent());
 		try(ExtOutputStream os = new ExtOutputStream(newOutputStream(path))) {
 			BlockInfo[] circuit = new BlockInfo[blocks.size()];
 			int no = 0, ni = 0;
@@ -270,7 +271,7 @@ public class CircuitFile {
 		os.write8(CIRCUIT_VERSION);
 		os.writeVarInt(modules.size());
 		for (Module mod : modules.keySet())
-			os.writeSmallUTF(m.name(mod));
+			os.writeL8UTF8(m.name(mod));
 		os.writeVarInt(defIds.length);
 		i = 0;
 		for (BlockInfo def : defs.keySet()) {
@@ -278,11 +279,11 @@ public class CircuitFile {
 			os.write8(def.outs);
 			os.write8(def.ins.length);
 			os.write8(def.args.length);
-			os.writeSmallUTF(def.def.id);
+			os.writeL8UTF8(def.def.id);
 		}
 		os.writeVarInt(args.size());
 		for (String s : args.keySet())
-			os.writeUTF(s);
+			os.writeL16UTF8(s);
 		os.writeVarInt(blocks.length);
 		for (i = 0; i < blocks.length; i++) {
 			int[] ids = blockIds[i];
@@ -293,6 +294,160 @@ public class CircuitFile {
 			}
 			for (int j = 1; j < ids.length; j++)
 				os.writeInt(ids[j], args.size() - 1);
+		}
+	}
+
+	private static Path constPath(BlockDef def) {
+		return def.module.path.resolve("out/" + def.id + ".dfc");
+	}
+
+	private static void resolveType(Type type, LinkedHashMap<Type, Integer> types) {
+		if (types.containsKey(type)) return;
+		for (int l = type.count(), i = 0; i < l; i++)
+			resolveType(type.elem(i), types);
+		types.putIfAbsent(type, types.size());
+	}
+
+	public static void writeSignals(BlockDef def, HashMap<String, Value> signals) throws IOException {
+		LinkedHashMap<Module, Integer> modules = new LinkedHashMap<>();
+		LinkedHashMap<VTable, Integer> vtables = new LinkedHashMap<>();
+		LinkedHashMap<Type, Integer> types = new LinkedHashMap<>();
+		LinkedHashMap<Value, Integer> values = new LinkedHashMap<>();
+		//collect all values and types
+		ArrayList<Value> stack = new ArrayList<>();
+		stack.addAll(signals.values());
+		while(!stack.isEmpty()) {
+			int n = stack.size();
+			Value val = stack.get(n - 1);
+			for (Value v : val.args) {
+				if (values.containsKey(v)) continue;
+				stack.add(v);
+			}
+			if (stack.size() > n) continue;
+			stack.remove(n - 1);
+			if (values.putIfAbsent(val, values.size()) == null)
+				resolveType(val.type, types);
+		}
+		//collect all V-tables and modules
+		LinkedHashMap<String, Integer> names = new LinkedHashMap<>();
+		for (Type type : types.keySet()) {
+			vtables.putIfAbsent(type.vtable, vtables.size());
+			for (int i = 0; i < type.count(); i++)
+				names.putIfAbsent(type.name(i), names.size());
+		}
+		for (VTable vtable : vtables.keySet())
+			modules.putIfAbsent(vtable.module, modules.size());
+		//write file
+		Path path = constPath(def);
+		createDirectories(path.getParent());
+		try (ExtOutputStream os = new ExtOutputStream(newOutputStream(path))) {
+			//write header
+			os.write32(SIGNAL_MAGIC);
+			os.write8(SIGNAL_VERSION);
+			//write module descriptions
+			os.writeVarInt(modules.size());
+			for (Module module : modules.keySet())
+				os.writeUTF8(module.toString());
+			//write V-table descriptions
+			os.writeVarInt(vtables.size());
+			for (VTable vtable : vtables.keySet()) {
+				os.writeInt(modules.get(vtable.module), modules.size() - 1);
+				os.writeUTF8(vtable.id);
+			}
+			//write type tree
+			os.writeVarInt(names.size());
+			for (String name : names.keySet())
+				os.writeUTF8(name);
+			os.writeVarInt(types.size());
+			int n = 0;
+			for (Type type : types.keySet()) {
+				os.write32(type.n);
+				os.writeInt(vtables.get(type.vtable), vtables.size() - 1);
+				int l = type.count();
+				os.writeVarInt(l);
+				for (int i = 0; i < l; i++) {
+					os.writeInt(types.get(type.elem(i)), n - 1);
+					os.writeInt(names.get(type.name(i)), names.size() - 1);
+				}
+				n++;
+			}
+			//write value tree
+			names.clear();
+			for (Value val : values.keySet())
+				names.putIfAbsent(val.op, names.size());
+			os.writeVarInt(names.size());
+			for (String name : names.keySet())
+				os.writeUTF8(name);
+			os.writeVarInt(values.size());
+			n = 0;
+			for (Value val : values.keySet()) {
+				os.writeInt(types.get(val.type), types.size() - 1);
+				os.writeInt(names.get(val.op), names.size() - 1);
+				os.writeVarInt(val.args.length);
+				for (Value v : val.args)
+					os.writeInt(values.get(v), n - 1);
+				n++;
+			}
+			//write signal table
+			os.writeVarInt(signals.size());
+			for (Entry<String, Value> e : signals.entrySet()) {
+				os.writeInt(values.get(e.getValue()), values.size() - 1);
+				os.writeUTF8(e.getKey());
+			}
+		}
+	}
+
+	public static void readSignals(BlockDef def, HashMap<String, Value> signals) throws IOException {
+		Path path = constPath(def);
+		try(ExtInputStream is = new ExtInputStream(newInputStream(path))) {
+			//read header
+			checkMagic(is, SIGNAL_MAGIC);
+			is.readU8(SIGNAL_VERSION);
+			//read module descriptions
+			LoadingCache cache = def.module.cache;
+			Module[] modules = new Module[is.readVarInt()];
+			for (int i = 0; i < modules.length; i++)
+				modules[i] = cache.getModule(Path.of(is.readUTF8())).ensureLoaded();
+			//read V-table descriptions
+			VTable[] vtables = new VTable[is.readVarInt()];
+			for (int i = 0; i < vtables.length; i++) {
+				Module m = modules[is.readInt(modules.length - 1)];
+				vtables[i] = m.types.get(is.readUTF8());
+			}
+			//read type tree
+			String[] names = new String[is.readVarInt()];
+			for (int i = 0; i < names.length; i++)
+				names[i] = is.readUTF8();
+			Type[] types = new Type[is.readVarInt()];
+			for (int i = 0; i < types.length; i++) {
+				int n = is.readI32();
+				VTable vt = vtables[is.readInt(vtables.length - 1)];
+				String[] keys = new String[is.readVarInt()];
+				Type[] elem = new Type[keys.length];
+				for (int j = 0; j < elem.length; j++) {
+					elem[j] = types[is.readInt(i - 1)];
+					keys[j] = names[is.readInt(names.length - 1)];
+				}
+				types[i] = new Type(vt, keys, elem, n).unique(cache.types);
+			}
+			//read value tree
+			names = new String[is.readVarInt()];
+			for (int i = 0; i < names.length; i++)
+				names[i] = is.readUTF8();
+			Value[] values = new Value[is.readVarInt()];
+			for (int i = 0; i < values.length; i++) {
+				Type type = types[is.readInt(types.length - 1)];
+				String op = names[is.readInt(names.length - 1)];
+				Value[] args = new Value[is.readVarInt()];
+				for (int j = 0; j < args.length; j++)
+					args[j] = values[is.readInt(i - 1)];
+				values[i] = new Value(type, op, args);
+			}
+			//read signal table
+			for (int l = is.readVarInt(); l > 0; l--) {
+				Value val = values[is.readInt(values.length - 1)];
+				signals.put(is.readUTF8(), val);
+			}
 		}
 	}
 

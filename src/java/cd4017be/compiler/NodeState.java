@@ -4,10 +4,6 @@ package cd4017be.compiler;
  * @author CD4017BE */
 public final class NodeState {
 
-	public static final NodeState DISCONNECTED = new NodeState(null, null);
-	static {
-		DISCONNECTED.value = Value.VOID;
-	}
 	/** the state where the update is running in */
 	public final MacroState state;
 	/** the node being updated */
@@ -35,7 +31,7 @@ public final class NodeState {
 
 	public NodeState in(int i) {
 		i = node.ins[i];
-		return i < 0 ? DISCONNECTED : state.states[i];
+		return i < 0 ? state.context.disconnected : state.states[i];
 	}
 
 	public void updateIn(int i) {
@@ -64,7 +60,7 @@ public final class NodeState {
 
 	public NodeState inScopeUpdate(int i) {
 		int j = node.ins[i];
-		if (j < 0) return DISCONNECTED;
+		if (j < 0) return state.context.disconnected;
 		NodeState ns = state.states[j];
 		if (ns != null && ns.value != null) return ns;
 		update |= 1L << i;
@@ -111,6 +107,7 @@ public final class NodeState {
 			SignalError error = node.op.compValue(this);
 			if (error != null) error.record(this);
 		} catch (Throwable e) {
+			e.printStackTrace();
 			new SignalError(e).record(this);
 		}
 	}

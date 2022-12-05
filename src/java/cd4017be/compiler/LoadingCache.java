@@ -15,6 +15,7 @@ import cd4017be.util.IconAtlas;
  * @author CD4017BE */
 public class LoadingCache {
 
+	public final HashMap<Type, Type> types = new HashMap<>();
 	private final HashMap<Path, Module> modules = new HashMap<>();
 	public final IconAtlas icons;
 	public final BlockModel defaultModel;
@@ -35,7 +36,7 @@ public class LoadingCache {
 			this.icons = null;
 			this.defaultModel = null;
 		}
-		placeholder = new BlockDef(null, "missing", null, new String[0], new String[0], new String[0], defaultModel);
+		placeholder = new BlockDef(null, "missing", null, new String[0], new String[0], new String[0], defaultModel, 0);
 	}
 
 	public Module getModule(Path path) {

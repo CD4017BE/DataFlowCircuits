@@ -130,6 +130,7 @@ public class Palette implements IGuiSection {
 			this.mhvr != (this.mhvr = mhvr) |
 			this.bhvr != (this.bhvr = bhvr)
 		) refresh(0);
+		if (inrange) glfwSetCursor(WINDOW, MAIN_CURSOR);
 		return inrange;
 	}
 

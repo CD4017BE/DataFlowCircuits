@@ -38,4 +38,9 @@ public class SignalError {
 		ns.error = null;
 	}
 
+	@Override
+	public String toString() { 
+		return child == null ? msg : msg + "->" + child;
+	}
+
 }

@@ -9,7 +9,7 @@ public class Type {
 
 	private static final String[] SINGLE = {"el"}, NONE = {};
 	private static final Type[] EMPTY = {};
-	public static final Type VOID = new Type(new VTable("void", 2), 0);
+	//public static final Type VOID = new Type(new VTable(null, "void", "void", 2), 0);
 
 	private final String[] names;
 	private final Type[] elem;
