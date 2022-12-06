@@ -4,8 +4,7 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.HashMap;
+import java.util.*;
 
 import cd4017be.util.ConfigFile;
 import cd4017be.util.ConfigFile.KeyValue;
@@ -19,9 +18,9 @@ public class Module {
 	public final Path path;
 	public final LoadingCache cache;
 	public final Plugin plugin;
-	public final HashMap<String, Module> imports = new HashMap<>();
+	public final LinkedHashMap<String, Module> imports = new LinkedHashMap<>();
 	public final HashMap<Module, String> modNames = new HashMap<>();
-	public final HashMap<String, BlockDef> blocks = new HashMap<>();
+	public final LinkedHashMap<String, BlockDef> blocks = new LinkedHashMap<>();
 	public final HashMap<String, BlockModel> models = new HashMap<>();
 	public final HashMap<String, VTable> types = new HashMap<>();
 	private boolean loaded;

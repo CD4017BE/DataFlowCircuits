@@ -49,10 +49,7 @@ public class Palette implements IGuiSection {
 	private void selModule(int i) {
 		msel = i;
 		Module m = modules[i].ensureLoaded();
-		this.palette = new BlockDef[m.blocks.size()];
-		int j = 0;
-		for (BlockDef def : m.blocks.values())
-			palette[j++] = def;
+		this.palette = m.blocks.values().toArray(BlockDef[]::new);
 		bw = bh = 1;
 		for (BlockDef def : palette) {
 			def.model.loadIcon();

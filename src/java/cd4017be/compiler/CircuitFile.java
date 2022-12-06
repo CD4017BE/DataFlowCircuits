@@ -201,6 +201,7 @@ public class CircuitFile {
 		Path path = path(def);
 		createDirectories(path.getParent());
 		try(ExtOutputStream os = new ExtOutputStream(newOutputStream(path))) {
+			BitSet visited = new BitSet(traces.size());
 			BlockInfo[] circuit = new BlockInfo[blocks.size()];
 			int no = 0, ni = 0;
 			for (int i = 0; i < circuit.length; i++) {
@@ -210,13 +211,16 @@ public class CircuitFile {
 				int[] in = new int[block.ins()];
 				for (int j = 0; j < in.length; j++, ni++) {
 					Trace tr = block.io[j + o];
+					visited.clear();
 					traces.add(ni, tr);
 					int id;
 					for (id = -1; tr != null; tr = tr.from)
 						if (tr.isOut()) {
 							id = tr.block.getIdx() | tr.pin << 16;
 							break;
-						}
+						} else if (visited.get(tr.getIdx()))
+							break;
+						else visited.set(tr.getIdx());
 					in[j] = id;
 				}
 				circuit[i] = new BlockInfo(block.def, o, in, block.args);
