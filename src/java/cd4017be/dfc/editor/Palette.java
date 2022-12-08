@@ -1,5 +1,6 @@
 package cd4017be.dfc.editor;
 
+import static cd4017be.compiler.LoadingCache.ATLAS;
 import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
 import static java.lang.Math.*;
@@ -108,7 +109,7 @@ public class Palette implements IGuiSection {
 		}
 		drawSel(-1F, 1F, scaleX, scaleY, 0F, 1F);
 		drawText(-1F, 1F, scaleX, scaleY);
-		circuit.icons.bind();
+		ATLAS.bind();
 		transform(block_transform, -1F, 1F + scaleY * (modNames.length + 3) * 5F, 2F * scaleX, 2F * scaleY);
 		blockVAO.draw();
 	}

@@ -1,13 +1,11 @@
 package cd4017be.compiler;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.lang.ref.WeakReference;
+import java.net.URISyntaxException;
 import java.nio.file.Path;
-import java.util.HashMap;
-import org.lwjgl.system.MemoryStack;
+import java.util.WeakHashMap;
 
 import cd4017be.dfc.editor.Shaders;
-import cd4017be.util.GLUtils;
 import cd4017be.util.IconAtlas;
 
 /**
@@ -15,32 +13,51 @@ import cd4017be.util.IconAtlas;
  * @author CD4017BE */
 public class LoadingCache {
 
-	public final HashMap<Type, Type> types = new HashMap<>();
-	private final HashMap<Path, Module> modules = new HashMap<>();
-	public final IconAtlas icons;
-	public final BlockModel defaultModel;
-	public final BlockDef placeholder;
-
-	public LoadingCache(boolean graphics) {
-		if (graphics) {
-			this.icons = new IconAtlas(Shaders.blockP, 2, 32, 32, 256);
-			this.defaultModel = new BlockModel(null, "default");
-			try (MemoryStack ms = MemoryStack.stackPush()) {
-				InputStream is = getClass().getResourceAsStream("/textures/placeholder.tga");
-				if (is == null) throw new IOException("missing placeholder icon");
-				icons.load(GLUtils.readTGA(is, ms), defaultModel);
-			} catch(IOException e) {
-				e.printStackTrace();
-			}
-		} else {
-			this.icons = null;
-			this.defaultModel = null;
+	private static final WeakHashMap<Path, WeakReference<Module>> MODULES = new WeakHashMap<>();
+	public static final Module CORE;
+	public static final BlockModel MISSING_MODEL;
+	public static final BlockDef MISSING_BLOCK, IN_BLOCK, OUT_BLOCK;
+	static {
+		try {
+			CORE = getModule(Path.of(LoadingCache.class.getResource("/core/module.cfg").toURI()).getParent());
+		} catch(URISyntaxException e) {
+			throw new RuntimeException(e);
 		}
-		placeholder = new BlockDef(null, "missing", null, new String[0], new String[0], new String[0], defaultModel, 0);
+		MISSING_MODEL = CORE.models.get("missing");
+		MISSING_BLOCK = CORE.getBlock("missing");
+		IN_BLOCK = CORE.getBlock("in");
+		OUT_BLOCK = CORE.getBlock("out");
 	}
 
-	public Module getModule(Path path) {
-		return modules.computeIfAbsent(path, p -> new Module(this, p));
+	public static IconAtlas ATLAS;
+
+	public static void initGraphics() {
+		if (ATLAS == null)
+			ATLAS = new IconAtlas(Shaders.blockP, 2, 32, 32, 256);
+	}
+
+//	public LoadingCache(boolean graphics) {
+//		if (graphics) {
+//			
+//			this.defaultModel = new BlockModel(null, "default");
+//			try (MemoryStack ms = MemoryStack.stackPush()) {
+//				InputStream is = getClass().getResourceAsStream("/textures/placeholder.tga");
+//				if (is == null) throw new IOException("missing placeholder icon");
+//				icons.load(GLUtils.readTGA(is, ms), defaultModel);
+//			} catch(IOException e) {
+//				e.printStackTrace();
+//			}
+//		} else {
+//			this.icons = null;
+//		}
+//	}
+
+	public static Module getModule(Path path) {
+		var ref = MODULES.get(path);
+		Module m = ref == null ? null : ref.get();
+		if (m == null)
+			MODULES.put(path, new WeakReference<>(m = new Module(path)));
+		return m;
 	}
 
 }

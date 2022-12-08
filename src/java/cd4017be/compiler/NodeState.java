@@ -1,8 +1,13 @@
 package cd4017be.compiler;
 
+import cd4017be.compiler.builtin.Bundle;
+
 /**Used to schedule scope and signal updates on nodes.
  * @author CD4017BE */
 public final class NodeState {
+
+	public static final NodeState DISCONNECTED = new NodeState(null, null);
+	static {DISCONNECTED.value = Bundle.VOID;}
 
 	/** the state where the update is running in */
 	public final MacroState state;
@@ -31,7 +36,7 @@ public final class NodeState {
 
 	public NodeState in(int i) {
 		i = node.ins[i];
-		return i < 0 ? state.context.disconnected : state.states[i];
+		return i < 0 ? DISCONNECTED : state.states[i];
 	}
 
 	public void updateIn(int i) {
@@ -60,7 +65,7 @@ public final class NodeState {
 
 	public NodeState inScopeUpdate(int i) {
 		int j = node.ins[i];
-		if (j < 0) return state.context.disconnected;
+		if (j < 0) return DISCONNECTED;
 		NodeState ns = state.states[j];
 		if (ns != null && ns.value != null) return ns;
 		update |= 1L << i;

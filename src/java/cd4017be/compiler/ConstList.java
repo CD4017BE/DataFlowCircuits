@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+import cd4017be.compiler.builtin.Bundle;
 import cd4017be.util.Profiler;
 
 /**
@@ -32,7 +33,9 @@ public class ConstList implements NodeAssembler.TextAutoComplete {
 		if (ins != 0) return NodeAssembler.err(macro, def, outs, ins, "wrong IO count");
 		ensureLoaded();
 		String name = args.length > 0 ? args[0] : def.outs[0];
-		return macro.addNode(NodeOperator.CONST, signals.get(name), ins).makeLinks(outs);
+		Value val = signals.get(name);
+		if (val == null) val = Bundle.VOID;
+		return macro.addNode(NodeOperator.CONST, val, ins).makeLinks(outs);
 	}
 
 	@Override
@@ -43,9 +46,8 @@ public class ConstList implements NodeAssembler.TextAutoComplete {
 
 	public SignalError compile() {
 		Profiler p = new Profiler(System.out);
-		Module m = def.module;
-		Context cont = new Context(m.cache.types);
-		cont.setInputs(m);
+		Context cont = new Context();
+		cont.setInputs();
 		Macro macro = new Macro(def);
 		cont.run(macro);
 		p.end("graph setup");
@@ -58,8 +60,9 @@ public class ConstList implements NodeAssembler.TextAutoComplete {
 		this.signals = new HashMap<>();
 		if (keys.length == 1)
 			signals.put(keys[0], value);
-		else for (int i = 0; i < keys.length; i++)
-			signals.put(keys[i], value.args[i]);
+		else if (value instanceof Bundle b)
+			for (int i = 0; i < keys.length; i++)
+			signals.put(keys[i], b.values[i]);
 		try {
 			CircuitFile.writeSignals(def, signals);
 		} catch (IOException e) {

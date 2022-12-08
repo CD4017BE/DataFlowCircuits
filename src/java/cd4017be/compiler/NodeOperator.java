@@ -2,6 +2,9 @@ package cd4017be.compiler;
 
 import java.util.Arrays;
 
+import cd4017be.compiler.builtin.Bundle;
+import cd4017be.compiler.builtin.DynOp;
+
 /**
  * 
  * @author CD4017BE */
@@ -14,17 +17,13 @@ public interface NodeOperator {
 		void compScope(NodeState ns, Scope scope);
 	}
 
-	NodeOperator CONST = ns -> {
-		Value v = (Value)ns.data();
-		if (v == null) v = ns.state.context.disconnected.value;
-		return ns.out(v, null);
-	};
+	NodeOperator CONST = ns -> ns.out((Value)ns.data(), null);
 	NodeOperator INPUT = ns -> ns.out(ns.state.inVal((int)ns.data()));
 	NodeOperator PASS = ns -> ns.out(ns.in(0));
 	NodeOperator MACRO = ns -> new MacroState(ns, (Macro)ns.data()).errors;
 	NodeOperator ELEMENT = ns -> {
 		NodeState a = ns.in(0);
-		return ns.out(a.value.args[(int)ns.data()], a.se);
+		return ns.out(((Bundle)a.value).values[(int)ns.data()], a.se);
 	};
 	NodeOperator VIRTUAL = ns -> {
 		String name = (String)ns.data();
@@ -38,10 +37,9 @@ public interface NodeOperator {
 		Type t = a.value.type;
 		Object o = ns.data();
 		int i = o instanceof String s ? t.index(s) : (int)o;
-		return ns.out(new Value(t.elem(i), null), null);
+		return ns.out(new Value(t.elem(i)), null);
 	};
 	NodeOperator NEW_TYPE = ns -> {
-		Context c = ns.state.context;
 		String[] args = (String[])ns.data();
 		String arg = args[0];
 		int n = 0;
@@ -55,9 +53,9 @@ public interface NodeOperator {
 		for (int j = 0; j < elem.length; j++)
 			elem[j] = ns.in(j).value.type;
 		VTable vt = ns.state.macro.def.module.types.get(arg);
-		if (vt == null) vt = c.disconnected.value.type.vtable;
+		if (vt == null) vt = Bundle.BUNDLE.vtable;
 		Type t = new Type(vt, names, elem, n);
-		return ns.out(new Value(t.unique(c.types), null), null);
+		return ns.out(new Value(t.unique()), null);
 	};
 	NodeOperator OPERATION = ns -> {
 		Type t = ns.in(0).value.type;
@@ -71,7 +69,7 @@ public interface NodeOperator {
 			else if (se != null && se != e)
 				e = new SideEffects(e, s.se, null);
 		}
-		return ns.out(new Value(t, (String)ns.data(), ins), e);
+		return ns.out(new DynOp(t, (String)ns.data(), ins), e);
 	};
 	NodeOperator ERROR = ns -> new SignalError((String)ns.data());
 
@@ -81,7 +79,7 @@ public interface NodeOperator {
 			int n = ns.ins();
 			Value v;
 			SideEffects e = null;
-			if (n == 0) v = ns.state.context.disconnected.value;
+			if (n == 0) v = Bundle.VOID;
 			else if (n == 1) {
 				NodeState s = ns.in(0);
 				v = s.value;
@@ -96,7 +94,7 @@ public interface NodeOperator {
 					else if (se != null && se != e)
 						e = new SideEffects(e, s.se, null);
 				}
-				v = new Value(ns.state.context.disconnected.value.type, null, ins);
+				v = new Bundle(ins);
 			}
 			return ns.state.pop(v, e);
 		}

@@ -88,10 +88,9 @@ public class Main {
 		glClearColor(0, 0, 0, 1);
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		
-		LoadingCache cache = new LoadingCache(true);
-		new CircuitEditor(cache).open(
-			cache.getModule(Path.of("src/dfc/glsl110"))
+		LoadingCache.initGraphics();
+		new CircuitEditor().open(
+			LoadingCache.getModule(Path.of("src/dfc/glsl110"))
 			.getBlock("band")
 		);
 	}

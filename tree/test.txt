@@ -1,0 +1,851 @@
+# helper nodes:
+nnd _ VEC FLOAT D2
+cst VEC2
+nnd _ VEC FLOAT D3
+cst VEC3
+nnd _ VEC FLOAT D4
+cst VEC4
+nra _ in0 BOOL _ _
+set BVEC_IN0
+nn '$, $' _ in0 in1
+set IN0_IN1
+
+# type definitions:
+nnd 'void' TYPE VOID _
+cst void
+nnd 'float' TYPE FLOAT _
+cst float
+nnd 'int' TYPE INT _
+cst int
+nnd 'bool' TYPE BOOL _
+cst bool
+nnd 'vec2' TYPE VEC2 _
+cst vec2
+nnd 'vec3' TYPE VEC3 _
+cst vec3
+nnd 'vec4' TYPE VEC4 _
+cst vec4
+nnd _ VEC INT D2
+nnd 'ivec2' TYPE 1 _
+cst ivec2
+nnd _ VEC INT D3
+nnd 'ivec3' TYPE 1 _
+cst ivec3
+nnd _ VEC INT D4
+nnd 'ivec4' TYPE 1 _
+cst ivec4
+nnd _ VEC BOOL D2
+nnd 'bvec2' TYPE 1 _
+cst bvec2
+nnd _ VEC BOOL D3
+nnd 'bvec3' TYPE 1 _
+cst bvec3
+nnd _ VEC BOOL D4
+nnd 'bvec4' TYPE 1 _
+cst bvec4
+nnd _ MAT D2 D2
+nnd 'mat2' TYPE 1 _
+cst mat2
+nnd _ MAT D3 D3
+nnd 'mat3' TYPE 1 _
+cst mat3
+nnd _ MAT D4 D4
+nnd 'mat4' TYPE 1 _
+cst mat4
+nnd 'sampler1D' TYPE SAMPLER_1D _
+cst sampler1D
+nnd 'sampler2D' TYPE SAMPLER_2D _
+cst sampler2D
+nnd 'sampler3D' TYPE SAMPLER_3D _
+cst sampler3D
+nnd 'samplerCube' TYPE SAMPLER_CUBE _
+cst samplerCube
+nnd 'sampler1DShadow' TYPE SAMPLER_1D_SHADOW _
+cst sampler1DShadow
+nnd 'sampler2DShadow' TYPE SAMPLER_2D_SHADOW _
+cst sampler2DShadow
+
+# built-in variables:
+nn 'true' BOOL _ _
+cst true
+nn 'false' BOOL _ _
+cst false
+nnd 'gl_Position' VAR VEC4 _
+cst gl_Position
+nnd 'gl_PointSize' VAR FLOAT _
+cst gl_PointSize
+nnd 'gl_ClipVertex' VAR VEC4 _
+cst gl_ClipVertex
+nn 'gl_FragCoord' VEC4 _ _
+cst gl_FragCoord
+nn 'gl_FrontFacing' BOOL _ _
+cst gl_FrontFacing
+nnd 'gl_FragColor' VAR VEC4 _
+cst gl_FragColor
+nnd _ ARRAY VEC4 D1
+nnd 'gl_FragData' VAR 1 _
+cst gl_FragData
+nnd 'gl_FragDepth' VAR FLOAT _
+
+# structural operations:
+def shader 2
+nn DEF_LOCAL _ in1 _
+nn 'void main() {\n$$}\n' _ 1 _
+nn INSERT_GLOBAL _ 1 _
+nn '#version $$\n' _ in0 _
+nn INSERT_GLOBAL _ 1 2
+end shader
+
+def uniform 2
+nna 'uniform $ $;\n' in0 in0 in1
+nn INSERT_GLOBAL 1 1 in1
+md TYPE 0 1 in0
+end uniform
+
+def attribute 2
+nna 'attribute $ $;\n' in0 in0 in1
+nn INSERT_GLOBAL 1 1 in1
+md TYPE 0 1 in0
+end attribute
+
+def varyingIn 2
+nna 'varying $ $;\n' in0 in0 in1
+nn INSERT_GLOBAL 1 1 in1
+md TYPE 0 1 in0
+end varyingIn
+
+def varyingOut 2
+nna 'varying $ $;\n' in0 in0 in1
+nra INSERT_GLOBAL VAR 1 1 in1
+md TYPE 0 1 in0
+end varyingOut
+
+def local 3
+nn '$ $' _ in0 in1
+nn '$ = $;\n' _ 1 in2
+nn INSERT_LOCAL in2 1 in1
+end local
+
+def set 3
+nn '$ = $;\n' VOID in0 in1
+nn INSERT_LOCAL in2 1 in2
+cda _ 1 in0 in1
+md VAR _ 1 in0
+end set
+
+# expression operations:
+def el 2
+def el_rec 2
+nnb _ in0 _ _
+call el_rec 1 in1
+md _ 1 0 in0
+cdo 1 in0 in0 in1
+end el_rec
+nnb _ in0 _ _
+call el_rec 1 in1
+nna '$.$' 1 in0 in1
+mda _ 1 0 2
+nna _ in1 _ _
+nna '$.$' in0 in0 in1
+nrb '$.$' in0 2 in0 in1
+md _ 1 0 3
+mda D1 1 3 in1
+mda STRUCT 0 6 in0
+md VEC 1 2 in0
+end el
+
+def idx 2
+nna _ in0 _ _
+nrb '$[$]' VEC4 1 in0 in1
+nna '$[$]' in0 in0 in1
+md VEC 0 1 in0
+md MAT 1 3 in0
+md ARRAY 1 3 in0
+md INT 0 1 in1
+end idx
+
+def pair 2
+nn '$, $' _ in0 in1
+end pair
+
+def lt 2
+nn '($ < $)' BOOL in0 in1
+md INT 0 1 in0
+md FLOAT 1 2 in0
+nn 'lessThan($, $)' BVEC_IN0 in0 in1
+md BOOL 1 0 in0
+md VEC 3 1 in0
+cd 0 1 in0 in1
+end lt
+
+def gt 2
+nn '($ > $)' BOOL in0 in1
+md INT 0 1 in0
+md FLOAT 1 2 in0
+nn 'greaterThan($, $)' BVEC_IN0 in0 in1
+md BOOL 1 0 in0
+md VEC 3 1 in0
+cd 0 1 in0 in1
+end gt
+
+def le 2
+nn '($ <= $)' BOOL in0 in1
+md INT 0 1 in0
+md FLOAT 1 2 in0
+nn 'lessThanEqual($, $)' BVEC_IN0 in0 in1
+md BOOL 1 0 in0
+md VEC 3 1 in0
+cd 0 1 in0 in1
+end le
+
+def ge 2
+nn '($ >= $)' BOOL in0 in1
+md INT 0 1 in0
+md FLOAT 1 2 in0
+nn 'greaterThanEqual($, $)' BVEC_IN0 in0 in1
+md BOOL 1 0 in0
+md VEC 3 1 in0
+cd 0 1 in0 in1
+end ge
+
+def eq 2
+nn '($ == $)' BOOL in0 in1
+md ARRAY 1 0 in0
+md _ 1 0 in0
+nn 'equal($, $)' BVEC_IN0 in0 in1
+md VEC 2 1 in0
+cd 0 1 in0 in1
+end eq
+
+def ne 2
+nn '($ != $)' BOOL in0 in1
+md ARRAY 1 0 in0
+md _ 1 0 in0
+nn 'notEqual($, $)' BVEC_IN0 in0 in1
+md VEC 2 1 in0
+cd 0 1 in0 in1
+end ne
+
+def and 2
+nn '($ && $)' in0 in0 in1
+md BOOL 0 1 in0
+md BOOL 0 1 in1
+end and
+
+def or 2
+nn '($ || $)' in0 in0 in1
+md BOOL 0 1 in0
+md BOOL 0 1 in1
+end or
+
+def xor 2
+nn '($ ^^ $)' in0 in0 in1
+md BOOL 0 1 in0
+md BOOL 0 1 in1
+end xor
+
+def not 1
+nn 'not($$)' in0 in0 _
+mda BOOL 0 1 in0
+md VEC 0 1 in0
+nn '!$$' in0 in0 _
+md BOOL 2 1 in0
+end not
+
+def neg 1
+nn '-$$' in0 in0 _
+mda BOOL 1 0 in0
+md INT 0 2 in0
+md FLOAT 1 2 in0
+md VEC 1 3 in0
+md MAT 1 5 in0
+end neg
+
+def sel 3
+nn '$ : $' _ in1 in2
+nn '($ ? $)' in1 in0 1
+md _ 1 0 in1
+md ARRAY 1 0 in1
+cd 0 1 in1 in2
+md BOOL 0 1 in0
+end sel
+
+def add 2
+nn '($ + $)' in0 in0 in1
+nn '($ + $)' in1 in0 in1
+md INT 0 2 in0
+md FLOAT 1 3 in0
+cd 0 1 in0 in1
+cda 0 4 in1 in0
+mda BOOL 1 0 in1
+md VEC 3 1 in1
+md FLOAT 0 7 in0
+md MAT 2 1 in1
+cda 0 10 in0 in1
+cd 1 11 in0 in1
+mda BOOL 1 0 in0
+md VEC 4 1 in0
+md FLOAT 0 14 in1
+cd 1 15 in0 in1
+md MAT 3 1 in0
+end add
+
+def sub 2
+nn '($ - $)' in0 in0 in1
+nn '($ - $)' in1 in0 in1
+md INT _ 2 in0
+md FLOAT 1 3 in0
+cd 0 1 in0 in1
+cda 0 4 in1 in0
+mda BOOL 1 0 in1
+md VEC 3 1 in1
+md FLOAT 0 7 in0
+md MAT 2 1 in1
+cda 0 10 in0 in1
+cd 1 11 in0 in1
+mda BOOL 1 0 in0
+md VEC 4 1 in0
+md FLOAT 0 14 in1
+cd 1 15 in0 in1
+md MAT 3 1 in0
+end sub
+
+def mul 2
+nn '($ * $)' in0 in0 in1
+nn '($ * $)' in1 in0 in1
+nn 'matrixCompMult($, $)' in0 in0 in1
+md INT 0 3 in0
+md FLOAT 1 4 in0
+cd 0 1 in0 in1
+cda 0 5 in1 in0
+md BOOL 1 0 in1
+md VEC 3 1 in1
+md FLOAT 0 8 in0
+md MAT 2 1 in1
+cda 0 11 in0 in1
+cd 1 12 in0 in1
+mda BOOL 1 0 in0
+md VEC 4 1 in0
+md FLOAT 0 15 in1
+cd 1 14 in0 in1
+md MAT 3 1 in0
+end mul
+
+def div 2
+nn '($ / $)' in0 in0 in1
+nn '($ / $)' in1 in0 in1
+md INT 0 2 in0
+md FLOAT 1 3 in0
+cd 0 1 in0 in1
+cda 0 4 in1 in0
+mda BOOL 1 0 in1
+md VEC 3 1 in1
+md FLOAT 0 7 in0
+md MAT 2 1 in1
+cda 0 10 in0 in1
+cd 1 11 in0 in1
+mda BOOL 1 0 in0
+md VEC 4 1 in0
+md FLOAT 0 14 in1
+cd 1 15 in0 in1
+md MAT 3 1 in0
+end div
+
+def cast 2
+nna '$($)' in0 in0 in1
+md TYPE 0 1 in0
+end cast
+
+def prod 2
+nn 'dot($, $)' FLOAT in0 in1
+mda FLOAT 0 1 in0
+cd 0 1 in0 in1
+nna _ in1 _ _
+nnb _ in1 _ _
+nrb '($ * $)' in0 1 in0 in1
+cdb 0 1 in0 3
+mda FLOAT 0 1 in0
+nna _ in0 _ _
+nnb _ in0 _ _
+nrb '($ * $)' in1 2 in0 in1
+cdb 0 1 in1 2
+mda FLOAT 0 1 in1
+nrb '($ * $)' in0 9 in0 in1
+cdb 0 1 in0 11
+md VEC 0 8 in0
+md MAT 14 1 in1
+md VEC 0 5 in1
+md MAT 1 4 in1
+md MAT 3 1 in0
+end prod
+
+def radians 1
+nn 'radians($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end radians
+
+def degrees 1
+nn 'degrees($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end degrees
+
+def sin 1
+nn 'sin($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end sin
+
+def cos 1
+nn 'cos($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end cos
+
+def tan 1
+nn 'tan($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end tan
+
+def asin 1
+nn 'asin($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end asin
+
+def acos 1
+nn 'acos($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end acos
+
+def atan 1
+nn 'atan($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end atan
+
+def atan2 2
+nn 'atan($, $)' in0 in0 in1
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+cd 0 1 in0 in1
+end atan2
+
+def pow 2
+nn 'pow($, $)' in0 in0 in1
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+cd 0 1 in0 in1
+end pow
+
+def exp 1
+nn 'exp($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end exp
+
+def log 1
+nn 'log($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end log
+
+def exp2 1
+nn 'exp2($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end exp2
+
+def log2 1
+nn 'log2($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end log2
+
+def sqrt 1
+nn 'sqrt($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end sqrt
+
+def inversesqrt 1
+nn 'inversesqrt($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end inversesqrt
+
+def abs 1
+nn 'abs($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end abs
+
+def sign 1
+nn 'sign($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end sign
+
+def floor 1
+nn 'floor($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end floor
+
+def ceil 1
+nn 'ceil($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end ceil
+
+def fract 1
+nn 'fract($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end fract
+
+def mod 2
+nn 'mod($, $)' in0 in0 in1
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+md FLOAT 0 1 in1
+cd 1 2 in0 in1
+end mod
+
+def min 2
+nn 'min($, $)' in0 in0 in1
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+md FLOAT 0 1 in1
+cd 1 2 in0 in1
+end min
+
+def max 2
+nn 'max($, $)' in0 in0 in1
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+md FLOAT 0 1 in1
+cd 1 2 in0 in1
+end max
+
+def clamp 3
+nn 'clamp($, $)' in0 IN0_IN1 in2
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+md FLOAT 0 1 in2
+cd 1 2 in0 in2
+md FLOAT 0 1 in1
+cd 1 2 in0 in1
+end clamp
+
+def mix 3
+nn 'mix($, $)' in0 IN0_IN1 in2
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+md FLOAT 0 1 in2
+cd 1 2 in0 in2
+cd 0 1 in0 in1
+end mix
+
+def step 2
+nn 'step($$)' in1 in0 in1
+md FLOAT 0 1 in1
+mda FLOAT 0 2 in1
+md VEC 2 1 in1
+md FLOAT 0 1 in0
+cd 1 2 in0 in1
+end step
+
+def smoothstep 3
+nn 'smoothstep($, $)' in2 IN0_IN1 in2
+md FLOAT 0 1 in2
+mda FLOAT 0 2 in2
+md VEC 2 1 in2
+md FLOAT 0 1 in0
+cd 1 2 in0 in2
+md FLOAT 0 1 in1
+cd 1 2 in2 in1
+end smoothstep
+
+def length 1
+nn 'length($$)' FLOAT in0 _
+mda FLOAT 0 1 in0
+md VEC 0 1 in0
+end length
+
+def distance 2
+nn 'distance($, $)' FLOAT in0 in1
+mda FLOAT 0 1 in0
+md VEC 0 1 in0
+cd 0 1 in0 in1
+end distance
+
+def cross 2
+nn 'cross($, $)' VEC3 in0 in1
+cd 0 1 VEC3 in1
+cd 0 1 VEC3 in0
+end cross
+
+def normalize 1
+nn 'normalize($$)' in0 in0 _
+mda FLOAT 0 1 in0
+md VEC 0 1 in0
+end normalize
+
+def faceforward 3
+nn 'faceforward($, $)' in0 IN0_IN1 in2
+mda FLOAT 0 1 in0
+md VEC 0 1 in0
+cd 0 1 in0 in1
+cd 0 1 in0 in2
+end faceforward
+
+def reflect 2
+nn 'reflect($, $)' in0 in0 in1
+mda FLOAT 0 1 in0
+md VEC 0 1 in0
+cd 0 1 in0 in1
+end reflect
+
+def refract 3
+nn 'refract($, $)' in0 IN0_IN1 in2
+mda FLOAT 0 1 in0
+md VEC 0 1 in0
+cd 0 1 in0 in1
+md FLOAT 0 1 in2
+end refract
+
+def any 1
+nn 'any($$)' BOOL in0 _
+mda BOOL 0 1 in0
+md VEC 0 1 in0
+end any
+
+def all 1
+nn 'all($$)' BOOL in0 _
+mda BOOL 0 1 in0
+md VEC 0 1 in0
+end all
+
+def texture 3
+nn '$, $' in1 in1 in2
+md FLOAT 0 1 in2
+md _ 1 in1 in2
+nn 'shadow2DProj($, $)' VEC4 in0 1
+nn 'shadow2D($, $)' VEC4 in0 2
+cd 0 2 VEC4 3
+cd 1 2 VEC3 4
+md SAMPLER_2D_SHADOW 0 1 in0
+nn 'shadow1DProj($, $)' VEC4 in0 6
+nn 'shadow1D($, $)' VEC4 in0 7
+cd 0 2 VEC4 8
+cd 1 2 VEC3 9
+md SAMPLER_1D_SHADOW 5 1 in0
+nn 'textureCube($, $)' VEC4 in0 11
+cd 0 1 VEC3 12
+md SAMPLER_CUBE 3 1 in0
+nn 'texture3DProj($, $)' VEC4 in0 14
+nn 'texture3D($, $)' VEC4 in0 15
+cd 0 2 VEC4 16
+cd 1 2 VEC3 17
+md SAMPLER_3D 5 1 in0
+nn 'texture2DProj($, $)' VEC4 in0 19
+nn 'texture2D($, $)' VEC4 in0 20
+cd 0 2 VEC4 21
+cd 1 3 VEC3 22
+cd 1 3 VEC2 23
+md SAMPLER_2D 6 1 in0
+nn 'texture1DProj($, $)' VEC4 in0 25
+nn 'texture1D($, $)' VEC4 in0 26
+cd 0 2 VEC4 27
+cd 1 3 VEC2 28
+cd 1 3 FLOAT 29
+md SAMPLER_1D 6 1 in0
+end texture
+
+def textureLod 3
+nn 'shadow2DProjLod($, $)' VEC4 IN0_IN1 in2
+nn 'shadow2DLod($, $)' VEC4 IN0_IN1 in2
+cd 0 2 VEC4 in1
+cd 1 2 VEC3 in1
+md SAMPLER_2D_SHADOW 0 1 in0
+nn 'shadow1DProjLod($, $)' VEC4 IN0_IN1 in2
+nn 'shadow1DLod($, $)' VEC4 IN0_IN1 in2
+cd 0 2 VEC4 in1
+cd 1 2 VEC3 in1
+md SAMPLER_1D_SHADOW 5 1 in0
+nn 'textureCubeLod($, $)' VEC4 IN0_IN1 in2
+cd 0 1 VEC3 in1
+md SAMPLER_CUBE 3 1 in0
+nn 'texture3DProjLod($, $)' VEC4 IN0_IN1 in2
+nn 'texture3DLod($, $)' VEC4 IN0_IN1 in2
+cd 0 2 VEC4 in1
+cd 1 2 VEC3 in1
+md SAMPLER_3D 5 1 in0
+nn 'texture2DProjLod($, $)' VEC4 IN0_IN1 in2
+nn 'texture2DLod($, $)' VEC4 IN0_IN1 in2
+cd 0 2 VEC4 in1
+cd 1 3 VEC3 in1
+cd 1 3 VEC2 in1
+md SAMPLER_2D 6 1 in0
+nn 'texture1DProjLod($, $)' VEC4 IN0_IN1 in2
+nn 'texture1DLod($, $)' VEC4 IN0_IN1 in2
+cd 0 2 VEC4 in1
+cd 1 3 VEC2 in1
+cd 1 3 FLOAT in1
+md SAMPLER_1D 6 1 in0
+md FLOAT 0 1 in2
+end textureLod
+
+def dFdx 1
+nn 'dFdx($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end dFdx
+
+def dFdy 1
+nn 'dFdy($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end dFdy
+
+def fwidth 1
+nn 'fwidth($$)' in0 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end fwidth
+
+def noise1 1
+nn 'noise1($$)' FLOAT in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end noise1
+
+def noise2 1
+nn 'noise2($$)' VEC2 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end noise2
+
+def noise3 1
+nn 'noise3($$)' VEC3 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end noise3
+
+def noise4 1
+nn 'noise4($$)' VEC4 in0 _
+md FLOAT 0 1 in0
+mda FLOAT 0 2 in0
+md VEC 2 1 in0
+end noise4
+
+# program:
+call uniform mat3 'transform'
+cst transform
+call uniform vec3 'texScale'
+cst texScale
+call uniform sampler1D 'atlas'
+cst atlas
+call attribute vec2 'pos'
+cst pos
+call attribute vec2 'str'
+cst str
+call attribute float 'iconId'
+cst iconId
+call attribute float 'corner'
+cst corner
+call varyingOut vec2 'tex0'
+cst tex0
+call varyingOut vec2 'tex1'
+cst tex1
+call varyingOut vec2 'f'
+cst f
+nn '1.0' FLOAT _ _
+cst float1
+nn '2.0' FLOAT _ _
+cst float2
+nn '65536.0' FLOAT _ _
+call div float1 1
+cst rofs
+nn '65535.0' FLOAT _ _
+call mul rofs 1
+cst rsca
+nnd 'xy' ELEMENT D2 _
+cst xy
+nnd 'zw' ELEMENT D2 _
+cst zw
+nnd 'z' ELEMENT D1 _
+cst z
+
+def main 0
+call div corner float2
+call floor 1
+call mod corner float2
+call pair 1 2
+call cast vec2 1
+call el texScale z
+call mul iconId 1
+call texture atlas 1 _
+call mul 1 rsca
+call el 1 zw
+call add 1 rofs
+call el texScale xy
+call mul str 1
+call max 1 2
+nn '0.5' FLOAT _ _
+call sub 11 1
+call mul 1 6
+call div 1 4
+call add 1 14
+call set f 1 _
+call add 10 8
+call mul 1 17
+call el 14 xy
+call add 1 2
+call sub 1 12
+call set tex0 1 6
+call set tex1 3 1
+call pair pos float1
+call cast vec3 1
+call prod transform 1
+call pair 1 float1
+call cast vec4 1
+call set gl_Position 1 6
+call shader '110' 1
+end main

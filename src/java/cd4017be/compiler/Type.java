@@ -1,11 +1,13 @@
 package cd4017be.compiler;
 
-import java.util.Arrays;
-import java.util.HashMap;
+import java.lang.ref.WeakReference;
+import java.util.*;
 
 /**
  * @author CD4017BE */
 public class Type {
+
+	private static final WeakHashMap<Type, WeakReference<Type>> CACHE = new WeakHashMap<>();
 
 	private static final String[] SINGLE = {"el"}, NONE = {};
 	private static final Type[] EMPTY = {};
@@ -71,9 +73,12 @@ public class Type {
 		return elem[i];
 	}
 
-	public Type unique(HashMap<Type, Type> set) {
-		Type type = set.putIfAbsent(this, this);
-		return type == null ? this : type;
+	public Type unique() {
+		WeakReference<Type> ref = CACHE.get(this);
+		Type type = ref == null ? null : ref.get();
+		if (type != null) return type;
+		CACHE.put(this, new WeakReference<>(this));
+		return this;
 	}
 
 	@Override

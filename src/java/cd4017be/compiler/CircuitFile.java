@@ -15,6 +15,7 @@ import java.util.Map.Entry;
 
 import org.lwjgl.system.MemoryStack;
 
+import cd4017be.compiler.builtin.CstBytes;
 import cd4017be.dfc.editor.*;
 import cd4017be.util.*;
 
@@ -171,7 +172,7 @@ public class CircuitFile {
 			BlockDef def = null;
 			if (mod != null && (def = mod.blocks.get(name)) == null)
 				System.out.printf("missing block '%s' in module '%s'\n", name, mod);
-			defs[i] = new BlockInfo(def != null ? def : m.cache.placeholder, out, in, arg);
+			defs[i] = new BlockInfo(def != null ? def : LoadingCache.MISSING_BLOCK, out, in, arg);
 		}
 		String[] args = new String[is.readVarInt()];
 		for (int i = 0; i < args.length; i++)
@@ -319,9 +320,9 @@ public class CircuitFile {
 		while(!stack.isEmpty()) {
 			int n = stack.size();
 			Value val = stack.get(n - 1);
-			for (Value v : val.args) {
-				if (values.containsKey(v)) continue;
-				stack.add(v);
+			for (int i = val.elCount() - 1; i >= 0; i--) {
+				Value v = val.element(i);
+				if (!values.containsKey(v)) stack.add(v);
 			}
 			if (stack.size() > n) continue;
 			stack.remove(n - 1);
@@ -372,20 +373,34 @@ public class CircuitFile {
 				n++;
 			}
 			//write value tree
-			names.clear();
-			for (Value val : values.keySet())
-				names.putIfAbsent(val.op, names.size());
-			os.writeVarInt(names.size());
-			for (String name : names.keySet())
-				os.writeUTF8(name);
+			LinkedHashMap<CstBytes, Integer> datas = new LinkedHashMap<>();
+			int[] di = new int[values.size()];
+			n = 0;
+			for (Value val : values.keySet()) {
+				CstBytes data = val.data();
+				if (data == null) di[n++] = 0;
+				else {
+					Integer i = datas.putIfAbsent(data, datas.size());
+					di[n++] = i != null ? i + 1 : datas.size();
+				}
+			}
+			os.writeVarInt(datas.size());
+			for (CstBytes data : datas.keySet()) {
+				os.writeVarInt(data.len);
+				os.write(data.value, data.ofs, data.len);
+			}
 			os.writeVarInt(values.size());
 			n = 0;
 			for (Value val : values.keySet()) {
 				os.writeInt(types.get(val.type), types.size() - 1);
-				os.writeInt(names.get(val.op), names.size() - 1);
-				os.writeVarInt(val.args.length);
-				for (Value v : val.args)
-					os.writeInt(values.get(v), n - 1);
+				int i = di[n];
+				os.writeInt(i, datas.size());
+				if (i != 0) {
+					int l = val.elCount();
+					os.writeVarInt(l);
+					for (int j = 0; j < l; j++)
+						os.writeInt(values.get(val.element(j)), n - 1);
+				}
 				n++;
 			}
 			//write signal table
@@ -404,10 +419,9 @@ public class CircuitFile {
 			checkMagic(is, SIGNAL_MAGIC);
 			is.readU8(SIGNAL_VERSION);
 			//read module descriptions
-			LoadingCache cache = def.module.cache;
 			Module[] modules = new Module[is.readVarInt()];
 			for (int i = 0; i < modules.length; i++)
-				modules[i] = cache.getModule(Path.of(is.readUTF8())).ensureLoaded();
+				modules[i] = LoadingCache.getModule(Path.of(is.readUTF8())).ensureLoaded();
 			//read V-table descriptions
 			VTable[] vtables = new VTable[is.readVarInt()];
 			for (int i = 0; i < vtables.length; i++) {
@@ -428,20 +442,23 @@ public class CircuitFile {
 					elem[j] = types[is.readInt(i - 1)];
 					keys[j] = names[is.readInt(names.length - 1)];
 				}
-				types[i] = new Type(vt, keys, elem, n).unique(cache.types);
+				types[i] = new Type(vt, keys, elem, n).unique();
 			}
 			//read value tree
-			names = new String[is.readVarInt()];
-			for (int i = 0; i < names.length; i++)
-				names[i] = is.readUTF8();
+			byte[][] datas = new byte[is.readVarInt() + 1][];
+			for (int i = 1; i < datas.length; i++)
+				is.readAll(datas[i] = new byte[is.readVarInt()]);
 			Value[] values = new Value[is.readVarInt()];
 			for (int i = 0; i < values.length; i++) {
 				Type type = types[is.readInt(types.length - 1)];
-				String op = names[is.readInt(names.length - 1)];
-				Value[] args = new Value[is.readVarInt()];
-				for (int j = 0; j < args.length; j++)
-					args[j] = values[is.readInt(i - 1)];
-				values[i] = new Value(type, op, args);
+				byte[] data = datas[is.readInt(datas.length - 1)];
+				Value[] args;
+				if (data != null) {
+					args = new Value[is.readVarInt()];
+					for (int j = 0; j < args.length; j++)
+						args[j] = values[is.readInt(i - 1)];
+				} else args = null;
+				values[i] = Value.deserialize(type, data, args);
 			}
 			//read signal table
 			for (int l = is.readVarInt(); l > 0; l--) {

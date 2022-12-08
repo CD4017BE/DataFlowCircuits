@@ -7,6 +7,7 @@ import cd4017be.compiler.*;
 import cd4017be.compiler.NodeAssembler.TextAutoComplete;
 import cd4017be.util.*;
 
+import static cd4017be.compiler.LoadingCache.*;
 import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
 import static java.lang.Math.*;
@@ -25,7 +26,6 @@ public class CircuitEditor implements IGuiSection {
 	public final IndexedSet<Trace> traces;
 	final ArrayList<CircuitObject> moving = new ArrayList<>();
 	final ArrayDeque<Trace> traceUpdates = new ArrayDeque<>();
-	final IconAtlas icons;
 	final Palette palette;
 	/** GL vertex arrays */
 	final VertexArray blockVAO, traceVAO;
@@ -47,13 +47,12 @@ public class CircuitEditor implements IGuiSection {
 	final Context context;
 	MutableMacro macro;
 
-	public CircuitEditor(LoadingCache cache) {
+	public CircuitEditor() {
 		this.blockVAO = genBlockVAO(64);
 		this.traceVAO = genTraceVAO(64);
 		this.blocks = new IndexedSet<>(new Block[64]);
 		this.traces = new IndexedSet<>(new Trace[64]);
-		this.context = new Context(cache.types);
-		this.icons = cache.icons;
+		this.context = new Context();
 		this.palette = new Palette(this);
 		Main.GUI.add(this);
 		Main.GUI.add(palette);
@@ -74,27 +73,21 @@ public class CircuitEditor implements IGuiSection {
 			e.printStackTrace();
 		}
 		if (blocks.isEmpty()) {
-			BlockDef io = def.module.findIO("out");
-			if (io != null) {
-				int i = 0;
-				for (String s : def.outs) {
-					Block block = new Block(io, 1);
-					block.args[0] = s;
-					block.updateSize();
-					block.pos(2, i * 4, this).add(this);
-					i++;
-				}
+			int i = 0;
+			for (String s : def.outs) {
+				Block block = new Block(OUT_BLOCK, 1);
+				block.args[0] = s;
+				block.updateSize();
+				block.pos(2, i * 4, this).add(this);
+				i++;
 			}
-			io = def.module.findIO("in");
-			if (io != null) {
-				int i = 0;
-				for (String s : def.ins) {
-					Block block = new Block(io, 1);
-					block.args[0] = s;
-					block.updateSize();
-					block.pos(-2 - block.w, i * 4, this).add(this);
-					i++;
-				}
+			i = 0;
+			for (String s : def.ins) {
+				Block block = new Block(IN_BLOCK, 1);
+				block.args[0] = s;
+				block.updateSize();
+				block.pos(-2 - block.w, i * 4, this).add(this);
+				i++;
 			}
 		}
 	}
@@ -124,7 +117,7 @@ public class CircuitEditor implements IGuiSection {
 		traceVAO.draw();
 		checkGLErrors();
 		
-		icons.bind();
+		ATLAS.bind();
 		glUniformMatrix3fv(block_transform, false, mat);
 		blockVAO.count = blocks.size() * 4;
 		blockVAO.draw();
