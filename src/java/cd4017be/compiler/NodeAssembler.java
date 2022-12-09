@@ -1,5 +1,6 @@
 package cd4017be.compiler;
 
+import java.nio.CharBuffer;
 import java.util.ArrayList;
 
 /**
@@ -91,6 +92,18 @@ public interface NodeAssembler {
 	};
 	NodeAssembler ERR = (macro, def, outs, ins, args) -> {
 		return macro.addNode(NodeOperator.ERROR, args.length > 0 ? args[0] : "error", ins).makeLinks(outs);
+	};
+	NodeAssembler EXPR = (macro, def, outs, ins, args) -> {
+		if (ins != 0 && args.length < 1) return err(macro, def, outs, ins, "wrong IO count");
+		Value val;
+		try {
+			CharBuffer buf = CharBuffer.wrap(args[0]);
+			val = Value.parse(buf, macro.def.module);
+			if (buf.hasRemaining()) throw new IllegalArgumentException("unexpected symbols " + buf);
+		} catch (RuntimeException e) {
+			return err(macro, def, outs, ins, "can't parse expression: " + e.getMessage());
+		}
+		return macro.addNode(NodeOperator.CONST, val, ins).makeLinks(outs);
 	};
 
 }

@@ -28,6 +28,7 @@ public interface Plugin {
 			switch(type) {
 			case "block": return new Macro(def);
 			case "const": return new ConstList(def);
+			case "ce": return NodeAssembler.EXPR;
 			case "io": return NodeAssembler.IO;
 			case "to": return NodeAssembler.VIRTUAL;
 			case "et": return NodeAssembler.ET;

@@ -90,8 +90,8 @@ public class Main {
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		LoadingCache.initGraphics();
 		new CircuitEditor().open(
-			LoadingCache.getModule(Path.of("src/dfc/glsl110"))
-			.getBlock("band")
+			LoadingCache.getModule(Path.of("src/dfc/test"))
+			.getBlock("test")
 		);
 	}
 

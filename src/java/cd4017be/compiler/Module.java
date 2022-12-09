@@ -8,7 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
-
+import cd4017be.compiler.builtin.Bundle;
 import cd4017be.util.ConfigFile;
 import cd4017be.util.ConfigFile.KeyValue;
 import cd4017be.util.ConfigWriter;
@@ -275,6 +275,10 @@ public class Module {
 			if ((ass = m.plugin.assembler(type, blockDef)) != null)
 				return ass;
 		return null;
+	}
+
+	public Value signal(String name) {
+		return Bundle.VOID;
 	}
 
 	@Override

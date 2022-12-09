@@ -72,7 +72,7 @@ public class CircuitEditor implements IGuiSection {
 		} catch(IOException e) {
 			e.printStackTrace();
 		}
-		if (blocks.isEmpty()) {
+		if (blocks.isEmpty() && def.type.equals("block")) {
 			int i = 0;
 			for (String s : def.outs) {
 				Block block = new Block(OUT_BLOCK, 1);
@@ -83,6 +83,13 @@ public class CircuitEditor implements IGuiSection {
 			}
 			i = 0;
 			for (String s : def.ins) {
+				Block block = new Block(IN_BLOCK, 1);
+				block.args[0] = s;
+				block.updateSize();
+				block.pos(-2 - block.w, i * 4, this).add(this);
+				i++;
+			}
+			for (String s : def.args) {
 				Block block = new Block(IN_BLOCK, 1);
 				block.args[0] = s;
 				block.updateSize();
