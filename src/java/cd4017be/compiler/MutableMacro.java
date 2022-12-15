@@ -1,9 +1,11 @@
 package cd4017be.compiler;
 
+import static cd4017be.compiler.NodeOperator.INPUT;
+import static cd4017be.compiler.NodeOperator.OUTPUT;
+
 import java.util.*;
 
-import cd4017be.dfc.editor.Block;
-import cd4017be.dfc.editor.CircuitEditor;
+import cd4017be.dfc.editor.*;
 
 /**
  * 
@@ -20,6 +22,23 @@ public class MutableMacro extends Macro {
 		super(def);
 		this.blocks = new Block[nodes.length];
 		this.free = new int[16];
+	}
+
+	@Override
+	public void load() {
+		clear();
+		//create output and input nodes
+		String[] outs = def.outs;
+		Node out = addNode(OUTPUT, null, outs.length);
+		for (int i = 0; i < ins(); i++)
+			links.put(def.ins[i], addNode(INPUT, i, 0));
+		if (!(def.assembler instanceof ConstList))
+			for (int i = 0; i < outs.length; i++) {
+				Node n = addIONode(outs[i]);
+				out.ins[i] = n.idx;
+				n.addOut(out.idx(i));
+			}
+		loaded = true;
 	}
 
 	@Override
@@ -46,6 +65,7 @@ public class MutableMacro extends Macro {
 	public Node addIONode(String name) {
 		Node n = super.addIONode(name);
 		blocks[n.idx] = null;
+		//TODO for ConstList connect all I/O nodes to output
 		return n;
 	}
 
@@ -76,15 +96,22 @@ public class MutableMacro extends Macro {
 		int[] io = block.def.assembler.assemble(this, block.def, block.outs, block.ins(), block.args);
 		for (int i = block.outs - 1; i >= 0; i--)
 			block.io[i].setNode(io[i], cc);
-		for (int j = block.io.length - 1, i = j - block.outs; i >= 0; i--, j--)
-			block.nodesIn[i] = io[j];
+		for (int j = block.io.length - 1, i = j - block.outs; i >= 0; i--, j--) {
+			int idx = block.nodesIn[i] = io[j];
+			connect(block.io[j].node(), idx);
+		}
 		curBlock = null;
 	}
 
 	public void removeBlock(Block block, CircuitEditor cc) {
+		for (int i = 0; i < block.outs; i++) {
+			Trace out = block.io[i];
+			//clear destinations first to ensure the signal trace will ripple flush
+			for(Trace tr = out.to; tr != null; tr = tr.adj)
+				tr.setNode(-1, cc);
+			out.setNode(-1, cc);
+		}
 		Arrays.fill(block.nodesIn, -1);
-		for (int i = 0; i < block.outs; i++)
-			block.io[i].setNode(-1, cc);
 		for (int i = 0; i < nodeCount; i++) {
 			if (blocks[i] != block) continue;
 			Node node = nodes[i];

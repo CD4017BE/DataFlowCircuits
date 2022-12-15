@@ -11,7 +11,7 @@ import cd4017be.compiler.*;
  * @author CD4017BE */
 public class CstFloat extends Value {
 
-	public static final Type CST_FLOAT = new Type(CORE.findType("cfloat"), 0).unique();
+	public static final Type CST_FLOAT = Type.of(CORE.findType("cfloat"), 0);
 
 	public final double value;
 

@@ -115,7 +115,7 @@ public class Value {
 					buf = encode(enc, s, p, q, buf, true);
 					q++;
 					break;
-				}
+				} else q++;
 			}
 			s.limit(l).position(q);
 			return new CstBytes(buf.array(), 0, buf.position());

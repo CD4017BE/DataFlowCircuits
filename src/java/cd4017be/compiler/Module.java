@@ -197,13 +197,14 @@ public class Module {
 							}
 						}
 						VTable vt = new VTable(this, kv1.key(), text, color, vc);
+						types.put(kv1.key(), vt);
+						vt.initInternal();
 						for (Object e2 : ops) {
 							KeyValue kv2 = (KeyValue)e2;
 							BlockDef def = blocks.get(kv2.value());
 							if (def != null && def.assembler instanceof VirtualMethod vm)
 								vt.put(kv2.key(), vm);
 						}
-						types.put(kv1.key(), vt);
 					}}
 				}
 			}

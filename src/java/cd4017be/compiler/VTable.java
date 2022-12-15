@@ -28,12 +28,15 @@ public class VTable extends HashMap<String, VirtualMethod> {
 		this.name = name;
 		this.color = color;
 		this.valueClass = valueClass;
-		Lookup lu = MethodHandles.lookup();
 		try {
-			this.deserializer = lu.findStatic(valueClass, "deserialize", Value.DESERIALIZER);
+			this.deserializer = MethodHandles.lookup().findStatic(valueClass, "deserialize", Value.DESERIALIZER);
 		} catch(NoSuchMethodException | IllegalAccessException e1) {
 			throw new IllegalArgumentException(e1);
 		}
+	}
+
+	public void initInternal() {
+		Lookup lu = MethodHandles.lookup();
 		for (Method meth : valueClass.getDeclaredMethods()) {
 			if (((PUBLIC | STATIC) & ~meth.getModifiers()) != 0) continue;
 			if (meth.getReturnType() != SignalError.class) continue;

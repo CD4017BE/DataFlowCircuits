@@ -12,7 +12,7 @@ import cd4017be.compiler.*;
  * @author CD4017BE */
 public class CstBytes extends Value {
 
-	public static final Type CST_BYTES = new Type(CORE.findType("cbytes"), 0).unique();
+	public static final Type CST_BYTES = Type.of(CORE.findType("cbytes"), 0);
 	public static final CstBytes EMPTY = new CstBytes(new byte[0]);
 
 	public final byte[] value;

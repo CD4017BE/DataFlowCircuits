@@ -8,7 +8,7 @@ import cd4017be.compiler.*;
  * @author CD4017BE */
 public class Bundle extends Value {
 
-	public static final Type BUNDLE = new Type(CORE.findType("bundle"), 0).unique();
+	public static final Type BUNDLE = Type.of(CORE.findType("bundle"), 0);
 	public static final Value[] EMPTY = {};
 	public static final Bundle VOID = new Bundle(EMPTY);
 
@@ -22,6 +22,16 @@ public class Bundle extends Value {
 	public Bundle(Type type, Value[] values) {
 		super(type, true);
 		this.values = values;
+	}
+
+	@Override
+	public String toString() {
+		if (values.length == 0) return "()";
+		StringBuilder sb = new StringBuilder();
+		sb.append('(').append(values[0]);
+		for (int i = 1; i < values.length; i++)
+			sb.append(", ").append(values[i]);
+		return sb.append(')').toString();
 	}
 
 	@Override

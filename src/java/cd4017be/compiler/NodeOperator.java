@@ -54,8 +54,8 @@ public interface NodeOperator {
 			elem[j] = ns.in(j).value.type;
 		VTable vt = ns.state.macro.def.module.types.get(arg);
 		if (vt == null) vt = Bundle.BUNDLE.vtable;
-		Type t = new Type(vt, names, elem, n);
-		return ns.out(new Value(t.unique()), null);
+		Type t = Type.of(vt, names, elem, n);
+		return ns.out(new Value(t), null);
 	};
 	NodeOperator OPERATION = ns -> {
 		Type t = ns.in(0).value.type;

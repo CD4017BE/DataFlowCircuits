@@ -8,7 +8,7 @@ import cd4017be.compiler.*;
  * @author CD4017BE */
 public class CstInt extends Value {
 
-	public static final Type CST_INT = new Type(CORE.findType("cint"), 0).unique();
+	public static final Type CST_INT = Type.of(CORE.findType("cint"), 0);
 
 	public final long value;
 

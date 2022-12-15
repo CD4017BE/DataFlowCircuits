@@ -15,7 +15,7 @@ public class Macro implements NodeAssembler, VirtualMethod {
 	public final BlockDef def;
 	HashMap<String, Node> links;
 	Node[] nodes;
-	private boolean loaded;
+	protected boolean loaded;
 
 	public Macro(BlockDef def) {
 		this.def = def;

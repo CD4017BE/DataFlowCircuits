@@ -442,7 +442,7 @@ public class CircuitFile {
 					elem[j] = types[is.readInt(i - 1)];
 					keys[j] = names[is.readInt(names.length - 1)];
 				}
-				types[i] = new Type(vt, keys, elem, n).unique();
+				types[i] = Type.of(vt, keys, elem, n);
 			}
 			//read value tree
 			byte[][] datas = new byte[is.readVarInt() + 1][];

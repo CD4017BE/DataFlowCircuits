@@ -15,7 +15,7 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 	public Trace from, to, adj;
 	/**-1: trace, 0..outs-1: output, outs..: input */
 	public final int pin;
-	private int node, color = VOID_COLOR;
+	private int node = -1, color = VOID_COLOR;
 	private short x, y;
 	private VertexArray va;
 
@@ -142,8 +142,10 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		this.node = node;
 		if (block != null) {
 			int in = pin - block.outs;
-			if (in >= 0)
+			if (in >= 0) {
 				cc.macro.connect(node, block.nodesIn[in]);
+				cc.runTypeCheck();
+			}
 		}
 		for (Trace to = this.to; to != null; to = to.adj)
 			cc.traceUpdates.add(to);

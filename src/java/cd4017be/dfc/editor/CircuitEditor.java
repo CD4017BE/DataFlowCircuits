@@ -43,6 +43,7 @@ public class CircuitEditor implements IGuiSection {
 	Trace selTr;
 	Block selBlock, editing;
 	int editArg;
+	boolean textModified;
 	String info = "";
 	final Context context;
 	MutableMacro macro;
@@ -66,7 +67,7 @@ public class CircuitEditor implements IGuiSection {
 	public void open(BlockDef def) {
 		clear();
 		palette.setModule(def.module);
-		macro = new MutableMacro(def);
+		context.run(macro = new MutableMacro(def));
 		try {
 			CircuitFile.readLayout(CircuitFile.readBlock(def), def.module, this);
 		} catch(IOException e) {
@@ -134,8 +135,11 @@ public class CircuitEditor implements IGuiSection {
 		if (ms != null) {
 			for (SignalError e = ms.errors; e != null; e = e.next) {
 				Block block = macro.blocks[e.nodeId];
-				if (block != null)
+				if (block != null) {
 					addSel(block.x * 2, block.y * 2, block.w * 2, block.h * 2, FG_RED);
+					if (block == selBlock)
+						print(e.msg, BG_BLACK_T | FG_RED, block.x * 2 + block.w - e.msg.length(), block.y * 2 - 4, 2, 3);
+				}
 			}
 			for (NodeState ns = ms.first; ns != null; ns = ns.next) {
 				Block block = macro.blocks[ns.node.idx];
@@ -198,22 +202,27 @@ public class CircuitEditor implements IGuiSection {
 	private void setText(String text) {
 		editing.args[editArg] = text;
 		editing.updateSize();
+		textModified = true;
+	}
+
+	private void updateArg() {
+		if (editing == null || !textModified) return;
+		macro.removeBlock(editing, this);
+		macro.addBlock(editing, this);
+		textModified = false;
 	}
 
 	private void editText(Block block, int row, int col) {
 		if (block == null || row < 0 || row >= block.args.length) {
-			if (editing != null) {
-				editing.updateArg(editArg);
-				refresh(0);
-			}
+			if (editing != null) refresh(0);
+			updateArg();
 			editing = null;
 			editArg = -1;
 			text.set("", 0);
 			autoComplete.clear();
 		} else {
 			if (block != editing || row != editArg) {
-				if (editing != null)
-					editing.updateArg(editArg);
+				updateArg();
 				editing = block;
 				editArg = row;
 				autoComplete.clear();
@@ -264,13 +273,13 @@ public class CircuitEditor implements IGuiSection {
 			Block old = selBlock;
 			selBlock = null;
 			for (Block block : blocks) {
-				if (block.isInside(x >> 1, y >> 1)) {
-					selBlock = block;
-					break;
-				}
 				for (int i = 0; sel == null && i < block.outs; i++) {
 					Trace t = block.io[i];
 					if (t.x() == gx && t.y() == gy) sel = t;
+				}
+				if (block.isInside(x >> 1, y >> 1)) {
+					selBlock = block;
+					break;
 				}
 			}
 			if (sel == null)
@@ -582,6 +591,11 @@ public class CircuitEditor implements IGuiSection {
 		if (context.tick(1000)) {
 			//TODO repeated frame updates
 		}
+	}
+
+	public void runTypeCheck() {
+		if (context.stackFrame == null)
+			context.stackFrame = macro.state;
 	}
 
 }

@@ -1,5 +1,7 @@
 package cd4017be.compiler;
 
+import java.util.Arrays;
+
 /**
  * 
  * @author CD4017BE */
@@ -28,7 +30,11 @@ public class Context {
 	}
 
 	public void run(Macro macro) {
+		if (inputs == null || inputs.length != macro.ins())
+			Arrays.fill(inputs = new NodeState[macro.ins()], NodeState.DISCONNECTED);
 		this.stackFrame = new MacroState(this, macro);
+		if (macro instanceof MutableMacro mm)
+			mm.state = stackFrame;
 	}
 
 	public void setInputs(Value... ins) {

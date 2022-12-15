@@ -129,10 +129,6 @@ public class Block extends IndexedSet.Element implements CircuitObject {
 		return this;
 	}
 
-	public void updateArg(int i) {
-		//TODO recreate node
-	}
-
 	@Override
 	public void draw() {
 		int idx = getIdx();
