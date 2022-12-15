@@ -1,4 +1,6 @@
 #version 110
+#extension GL_ARB_shader_texture_lod : require
+
 uniform sampler2D texture;
 varying vec2 tex0, tex1, size, ofs;
 
