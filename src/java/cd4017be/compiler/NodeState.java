@@ -19,7 +19,7 @@ public final class NodeState {
 	public SideEffects se;
 	public SignalError error;
 	/** bits[0..62]: missing inputs, bit[63]: missing scope */
-	long update;
+	long update, usedIns;
 
 	NodeState(MacroState state, Node node) {
 		this.state = state;
@@ -44,6 +44,10 @@ public final class NodeState {
 			schedule();
 	}
 
+	public Scope inScope(int i) {
+		return (usedIns >> i & 1) != 0 ? scope : null;
+	}
+
 	public SignalError out(NodeState ns) {
 		return ns != null ? out(ns.value, ns.se) : null;
 	}
@@ -64,6 +68,7 @@ public final class NodeState {
 	}
 
 	public NodeState inScopeUpdate(int i) {
+		usedIns |= 1L << i;
 		int j = node.ins[i];
 		if (j < 0) return DISCONNECTED;
 		NodeState ns = state.states[j];
@@ -79,11 +84,16 @@ public final class NodeState {
 		value = null;
 		se = null;
 		int n = node.ins.length;
-		update = (1L << n) - 1L & ins;
+		update = usedIns = (1L << n) - 1L & ins;
 		for (int i = 0; i < n; i++) {
-			if ((ins >>> i & 1) == 0) continue;
 			int j = node.ins[i];
-			if (j < 0) update ^= 1L << i;
+			if ((ins >>> i & 1) == 0) {
+				if (j < 0) continue;
+				NodeState ns = state.states[j];
+				if (ns == null) continue;
+				ns.update |= Long.MIN_VALUE;
+				ns.schedule();
+			} else if (j < 0) update ^= 1L << i;
 			else state.updateScope(j);
 		}
 		return true;
@@ -96,8 +106,9 @@ public final class NodeState {
 			int[] outs = node.outs;
 			NodeState[] states = state.states;
 			for (int i = node.usedOuts - 1; i >= 0; i--) {
-				NodeState ns = states[outs[i] & 0xffffff];
-				s = Scope.union(s, ns == null ? null : ns.scope);
+				int o = outs[i];
+				NodeState ns = states[o & 0xffffff];
+				s = Scope.union(s, ns != null ? ns.inScope(o >>> 24) : null);
 			}
 			if (node.op instanceof NodeOperator.Scoped sno)
 				sno.compScope(this, s);

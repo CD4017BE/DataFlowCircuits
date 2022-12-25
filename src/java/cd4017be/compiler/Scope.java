@@ -1,7 +1,5 @@
 package cd4017be.compiler;
 
-import java.util.ArrayList;
-
 /**
  * TODO add some data storage fields
  * @author CD4017BE */
@@ -12,8 +10,6 @@ public class Scope {
 	public final Scope parent;
 	/** nesting level >= 0 */
 	public final int lvl;
-	SideEffects se;
-	ArrayList<Value> values = new ArrayList<>();
 
 	private Scope() {
 		this.parent = null;
@@ -26,13 +22,13 @@ public class Scope {
 		this.lvl = parent.lvl + 1;
 	}
 
-	public void add(NodeState ns) {
-		SideEffects se = ns.se;
-		if (this.se == null) this.se = se;
-		else if (se != null && se != this.se)
-			this.se = new SideEffects(this.se, se, null);
-		values.add(ns.value);
-	}
+//	public void add(NodeState ns) {
+//		SideEffects se = ns.se;
+//		if (this.se == null) this.se = se;
+//		else if (se != null && se != this.se)
+//			this.se = new SideEffects(this.se, se, null);
+//		values.add(ns.value);
+//	}
 
 	/**@param a
 	 * @param b

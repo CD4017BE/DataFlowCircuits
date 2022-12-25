@@ -62,7 +62,7 @@ public class Palette implements IGuiSection {
 			bh = max(bh, icon.h);
 		}
 		blockVAO.clear();
-		nw = 16;
+		nw = 20;
 		int x = 0, y = 0, l = palette.length;
 		try(MemoryStack ms = MemoryStack.stackPush()) {
 			ByteBuffer buf = ms.malloc(l * BLOCK_PRIMLEN);

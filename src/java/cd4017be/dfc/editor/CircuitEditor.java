@@ -491,6 +491,13 @@ public class CircuitEditor implements IGuiSection {
 		case GLFW_KEY_D:
 			if (ctrl) cleanUpTraces();
 			break;
+		case GLFW_KEY_R:
+			if (!ctrl) break;
+			context.clear();
+			context.run(macro);
+			info = "type check restarted";
+			refresh(0);
+			break;
 		case GLFW_KEY_HOME:
 			ofsX = ofsY = 0;
 			refresh(0);

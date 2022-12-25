@@ -37,7 +37,10 @@ public interface Plugin {
 			case "mv": return NodeAssembler.MV;
 			case "cv": return NodeAssembler.CV;
 			case "ct": return NodeAssembler.CT;
+			case "do": return NodeAssembler.DO;
+			case "loop": return NodeAssembler.LOOP;
 			case "err": return NodeAssembler.ERR;
+			case "swt": return NodeAssembler.SWT;
 			default: return null;
 			}
 		}

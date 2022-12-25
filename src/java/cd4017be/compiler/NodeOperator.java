@@ -3,6 +3,9 @@ package cd4017be.compiler;
 import java.util.Arrays;
 
 import cd4017be.compiler.builtin.Bundle;
+import cd4017be.compiler.builtin.CstFloat;
+import cd4017be.compiler.builtin.CstInt;
+import cd4017be.compiler.builtin.CstLoop;
 import cd4017be.compiler.builtin.DynOp;
 
 /**
@@ -29,8 +32,10 @@ public interface NodeOperator {
 		String name = (String)ns.data();
 		NodeState a = ns.in(0);
 		VirtualMethod vm = a.value.type.vtable.get(name);
+		if (vm != null) return vm.run(a, ns);
+		if (ns.ins() == 2) vm = ns.in(1).value.type.vtable.get('r' + name);
 		return vm != null ? vm.run(a, ns)
-			: new SignalError("unsupported operation: " + name);
+			: new SignalError("inputs don't support " + name);
 	};
 	NodeOperator EL_TYPE = ns -> {
 		NodeState a = ns.in(0);
@@ -134,6 +139,61 @@ public interface NodeOperator {
 		@Override
 		public void compScope(NodeState ns, Scope scope) {
 			ns.scope(scope, 0b0011L);
+		}
+	};
+	Scoped CMP_SWT = new Scoped() {
+		@Override
+		public SignalError compValue(NodeState ns) {
+			Value val = ns.in(0).value;
+			int cmp;
+			if (val instanceof CstInt cv) {
+				long v = cv.value;
+				cmp = v > 0 ? 1 : v < 0 ? 3 : 2;
+			} else if (val instanceof CstFloat cv) {
+				double v = cv.value;
+				cmp = v > 0 ? 1 : v < 0 ? 3 : 2;
+			} else return new SignalError("expected constant number");
+			return ns.out(ns.inScopeUpdate(cmp));
+		}
+		@Override
+		public void compScope(NodeState ns, Scope scope) {
+			ns.scope(scope, 0b0001L);
+		}
+	};
+	Scoped DO = new Scoped() {
+		@Override
+		public SignalError compValue(NodeState ns) {
+			return ns.out(ns.in(0));
+		}
+		@Override
+		public void compScope(NodeState ns, Scope scope) {
+			ns.scope(scope == null ? null : scope.parent, -1L);
+			if (scope instanceof CstLoop cl)
+				ns.value = cl.value;
+		}
+	};
+	Scoped LOOP = new Scoped() {
+		@Override
+		public SignalError compValue(NodeState ns) {
+			if (!(ns.in(0).value instanceof CstInt cv))
+				return new SignalError("expected const int for loop condition");
+			if (cv.value == 0)
+				return ns.out(ns.inScopeUpdate(2));
+			NodeState next = ns.inScopeUpdate(1);
+			CstLoop scope = (CstLoop)ns.scope;
+			if (next != null && next.value != scope.value)
+				ns.scope(new CstLoop(scope.parent, next.value), 0b001L);
+			return null;
+		}
+		@Override
+		public void compScope(NodeState ns, Scope scope) {
+			if (scope == null) {
+				ns.scope(scope, -1L);
+				return;
+			}
+			Scope old = ns.scope;
+			if (old == null || old.parent != scope)
+				ns.scope(new CstLoop(scope, null), 0b001L);
 		}
 	};
 

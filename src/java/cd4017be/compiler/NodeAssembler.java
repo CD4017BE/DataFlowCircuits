@@ -82,14 +82,11 @@ public interface NodeAssembler {
 			list.addAll(macro.def.module.types.keySet());
 		}
 	};
-	NodeAssembler CV = (macro, def, outs, ins, args) -> {
-		if (ins != 4) return err(macro, def, outs, ins, "wrong IO count");
-		return macro.addNode(NodeOperator.COMP_VT, null, ins).makeLinks(outs);
-	};
-	NodeAssembler CT = (macro, def, outs, ins, args) -> {
-		if (ins != 4) return err(macro, def, outs, ins, "wrong IO count");
-		return macro.addNode(NodeOperator.COMP_TYPE, null, ins).makeLinks(outs);
-	};
+	NodeAssembler CV = new Basic(NodeOperator.COMP_VT, 4);
+	NodeAssembler CT = new Basic(NodeOperator.COMP_TYPE, 4);
+	NodeAssembler SWT = new Basic(NodeOperator.CMP_SWT, 4);
+	NodeAssembler DO = new Basic(NodeOperator.DO, 1);
+	NodeAssembler LOOP = new Basic(NodeOperator.LOOP, 3);
 	NodeAssembler ERR = (macro, def, outs, ins, args) -> {
 		return macro.addNode(NodeOperator.ERROR, args.length > 0 ? args[0] : "error", ins).makeLinks(outs);
 	};
@@ -106,4 +103,19 @@ public interface NodeAssembler {
 		return macro.addNode(NodeOperator.CONST, val, ins).makeLinks(outs);
 	};
 
+	class Basic implements NodeAssembler {
+		final NodeOperator op;
+		final int ins;
+
+		public Basic(NodeOperator op, int ins) {
+			this.op = op;
+			this.ins = ins;
+		}
+
+		@Override
+		public int[] assemble(Macro macro, BlockDef def, int outs, int ins, String[] args) {
+			if (ins != this.ins) return err(macro, def, outs, ins, "wrong IO count");
+			return macro.addNode(op, null, ins).makeLinks(outs);
+		}
+	}
 }
