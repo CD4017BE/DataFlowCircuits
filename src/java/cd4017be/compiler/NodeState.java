@@ -13,7 +13,7 @@ public final class NodeState {
 	public final MacroState state;
 	/** the node being updated */
 	public final Node node;
-	public NodeState next;
+	public NodeState nextD, nextS;
 	public Scope scope;
 	public Value value;
 	public SideEffects se;
@@ -41,7 +41,7 @@ public final class NodeState {
 
 	public void updateIn(int i) {
 		if (scope != null && (update &= ~(1L << i)) == 0)
-			schedule();
+			scheduleD();
 	}
 
 	public Scope inScope(int i) {
@@ -90,36 +90,36 @@ public final class NodeState {
 			if ((ins >>> i & 1) == 0) {
 				if (j < 0) continue;
 				NodeState ns = state.states[j];
-				if (ns == null) continue;
-				ns.update |= Long.MIN_VALUE;
-				ns.schedule();
+				if (ns != null) ns.scheduleS();
 			} else if (j < 0) update ^= 1L << i;
 			else state.updateScope(j);
 		}
 		return true;
 	}
 
-	public void update() {
-		if (update < 0) {
-			update ^= Long.MIN_VALUE;
-			Scope s = null;
-			int[] outs = node.outs;
-			NodeState[] states = state.states;
-			for (int i = node.usedOuts - 1; i >= 0; i--) {
-				int o = outs[i];
-				NodeState ns = states[o & 0xffffff];
-				s = Scope.union(s, ns != null ? ns.inScope(o >>> 24) : null);
-			}
-			if (node.op instanceof NodeOperator.Scoped sno)
-				sno.compScope(this, s);
-			else scope(s, -1L);
-			if (value != null) {
-				out(value, se);
-				return;
-			}
+	public void updateS() {
+		if (update >= 0) return;
+		update ^= Long.MIN_VALUE;
+		Scope s = null;
+		int[] outs = node.outs;
+		NodeState[] states = state.states;
+		for (int i = node.usedOuts - 1; i >= 0; i--) {
+			int o = outs[i];
+			NodeState ns = states[o & 0xffffff];
+			s = Scope.union(s, ns != null ? ns.inScope(o >>> 24) : null);
 		}
-		if (update != 0 || scope == null) return;
-		try {
+		if (node.op instanceof NodeOperator.Scoped sno)
+			sno.compScope(this, s);
+		else scope(s, -1L);
+		if (value != null) {
+			out(value, se);
+			return;
+		}
+		if (update == 0 && scope != null) scheduleD();
+	}
+
+	public void updateD() {
+		if (scope != null && update == 0) try {
 			SignalError error = node.op.compValue(this);
 			if (error != null) error.record(this);
 		} catch (Throwable e) {
@@ -128,13 +128,23 @@ public final class NodeState {
 		}
 	}
 
-	public void schedule() {
-		if (next != null) return;
-		NodeState ns = state.last;
+	public void scheduleS() {
+		update |= Long.MIN_VALUE;
+		if (nextS != null) return;
+		NodeState ns = state.lastS;
 		if (ns == this) return;
-		if (ns != null) ns.next = this;
-		else state.first = this;
-		state.last = this;
+		if (ns != null) ns.nextS = this;
+		else state.firstS = this;
+		state.lastS = this;
+	}
+
+	public void scheduleD() {
+		if (nextD != null) return;
+		NodeState ns = state.lastD;
+		if (ns == this) return;
+		if (ns != null) ns.nextD = this;
+		else state.firstD = this;
+		state.lastD = this;
 		if (error != null) error.clear(this);
 	}
 

@@ -141,7 +141,12 @@ public class CircuitEditor implements IGuiSection {
 						print(e.msg, BG_BLACK_T | FG_RED, block.x * 2 + block.w - e.msg.length(), block.y * 2 - 4, 2, 3);
 				}
 			}
-			for (NodeState ns = ms.first; ns != null; ns = ns.next) {
+			for (NodeState ns = ms.firstS; ns != null; ns = ns.nextS) {
+				Block block = macro.blocks[ns.node.idx];
+				if (block != null)
+					addSel(block.x * 2, block.y * 2, block.w * 2, block.h * 2, FG_GREEN);
+			}
+			for (NodeState ns = ms.firstD; ns != null; ns = ns.nextD) {
 				Block block = macro.blocks[ns.node.idx];
 				if (block != null)
 					addSel(block.x * 2, block.y * 2, block.w * 2, block.h * 2, FG_GREEN);

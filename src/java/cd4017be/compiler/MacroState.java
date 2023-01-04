@@ -8,8 +8,8 @@ public class MacroState {
 	public final Context context;
 	public final Macro macro;
 	public NodeState[] states;
-	public NodeState first;
-	NodeState last;
+	public NodeState firstD, firstS;
+	NodeState lastD, lastS;
 	public SignalError errors;
 
 	/**@param context
@@ -30,9 +30,7 @@ public class MacroState {
 	}
 
 	public void updateScope(int i) {
-		NodeState ns = state(i);
-		ns.update |= Long.MIN_VALUE;
-		ns.schedule();
+		state(i).scheduleS();
 	}
 
 	public NodeState state(int i) {
@@ -42,12 +40,19 @@ public class MacroState {
 	}
 
 	public void tick() {
-		NodeState ns = first;
-		if (ns != null) {
-			ns.update();
-			if ((first = ns.next) == null)
-				last = null;
-			else ns.next = null;
+		NodeState ns = firstS;
+		while (ns != null) {
+			ns.updateS();
+			NodeState ns0 = ns;
+			ns = ns0.nextS;
+			ns0.nextS = null;
+		}
+		firstS = lastS = null;
+		if ((ns = firstD) != null) {
+			if ((firstD = ns.nextD) == null)
+				lastD = null;
+			else ns.nextD = null;
+			ns.updateD();
 		} else popError();
 	}
 
