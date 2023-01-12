@@ -9,11 +9,14 @@ import java.lang.invoke.MethodHandles.Lookup;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 
+import cd4017be.compiler.builtin.ScopeData;
+import cd4017be.compiler.builtin.SignalError;
+
 
 /**
  * 
  * @author CD4017BE */
-public class VTable extends HashMap<String, VirtualMethod> {
+public class VTable extends HashMap<String, Instruction> {
 	private static final long serialVersionUID = -2902223347716374669L;
 
 	public final Module module;
@@ -41,9 +44,9 @@ public class VTable extends HashMap<String, VirtualMethod> {
 			if (((PUBLIC | STATIC) & ~meth.getModifiers()) != 0) continue;
 			if (meth.getReturnType() != SignalError.class) continue;
 			Class<?>[] par = meth.getParameterTypes();
-			if (par.length != 2 || par[0] != NodeState.class || par[1] != NodeState.class) continue;
+			if (par.length != 2 || par[0] != Arguments.class || par[1] != ScopeData.class) continue;
 			try {
-				put(meth.getName(), asInterfaceInstance(VirtualMethod.class, lu.unreflect(meth)));
+				put(meth.getName(), asInterfaceInstance(Instruction.class, lu.unreflect(meth)));
 			} catch(IllegalAccessException e) {
 				e.printStackTrace();
 			}

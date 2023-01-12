@@ -1,48 +1,47 @@
 package cd4017be.compiler;
 
+import java.util.Collection;
+
 /**
- * TODO add some data storage fields
+ * 
  * @author CD4017BE */
-public class Scope {
-	/** The root scope which has no parent and is the ultimate parent of all other scopes. */
-	public static final Scope ROOT = new Scope();
+public abstract class Scope {
 
 	public final Scope parent;
-	/** nesting level >= 0 */
 	public final int lvl;
 
-	private Scope() {
-		this.parent = null;
-		this.lvl = 0;
-	}
-
-	/**@param parent of the new Scope */
-	public Scope(Scope parent) {
+	protected Scope(Scope parent, int lvl) {
 		this.parent = parent;
-		this.lvl = parent.lvl + 1;
+		this.lvl = lvl;
 	}
 
-//	public void add(NodeState ns) {
-//		SideEffects se = ns.se;
-//		if (this.se == null) this.se = se;
-//		else if (se != null && se != this.se)
-//			this.se = new SideEffects(this.se, se, null);
-//		values.add(ns.value);
-//	}
+	public abstract void getSrc(Collection<ScopeBranch> src);
+	public abstract boolean isIn(Collection<ScopeBranch> src, int lvl);
+	public abstract void addMember(Node node);
 
-	/**@param a
-	 * @param b
-	 * @return the first common parent scope of a and b or null if both arguments null */
-	public static Scope union(Scope a, Scope b) {
-		if (a == null) return b;
-		if (b == null) return a;
-		while(a.lvl > b.lvl) a = a.parent;
-		while(b.lvl > a.lvl) b = b.parent;
-		while (a != b) {
-			a = a.parent;
-			b = b.parent;
+	protected void buildRelPath(StringBuilder sb, Scope parent) {
+		if (this.parent != parent) {
+			this.parent.buildRelPath(sb, parent);
+			sb.append(':');
 		}
-		return a;
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		buildRelPath(sb, null);
+		return sb.toString();
+	}
+
+	public static void main(String[] args) {
+//		Scope
+//		a = new ScopeBranch(ROOT, 1, 0),
+//		b = new ScopeBranch(ROOT, 1, 1),
+//		c = new ScopeBranch(ROOT, 1, -2),
+//		u = union(a, b), v = union(b, c),
+//		d = new ScopeBranch(u, 2, 0),
+//		e = new ScopeBranch(u, 2, -1);
+//		System.out.println(union(v, d, e));
 	}
 
 }

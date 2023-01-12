@@ -49,23 +49,23 @@ public class Bundle extends Value {
 		return CstBytes.EMPTY;
 	}
 
-	public static SignalError cast(NodeState a, NodeState ns) {
-		Type ta = a.value.type;
-		Value vb = ns.in(1).value;
-		if (vb.type == ta) return ns.out(vb, null);
+	public static Value cast(Arguments args, ScopeData scope) {
+		Value va = args.in(0), vb = args.in(1);
+		Type ta = va.type;
+		if (vb.type == ta) return vb;
 		if (vb instanceof Bundle cb)
-			return ns.out(new Bundle(ta, cb.values), null);
-		return ns.out(new Bundle(ta, new Value[] {vb}), null);
+			return new Bundle(ta, cb.values);
+		return new Bundle(ta, new Value[] {vb});
 	}
 
-	public static SignalError con(NodeState a, NodeState ns) {
-		Bundle ca = (Bundle)a.value;
+	public static Value con(Arguments args, ScopeData scope) {
+		Bundle ca = (Bundle)args.in(0);
+		Value vb = args.in(1);
 		Value[] x = ca.values, elem;
-		Value vb = ns.in(1).value;
 		if (vb instanceof Bundle cb && vb.type.vtable == ca.type.vtable) {
 			Value[] y = cb.values;
-			if (y.length == 0) return ns.out(ca, null);
-			if (x.length == 0) return ns.out(cb, null);
+			if (y.length == 0) return ca;
+			if (x.length == 0) return cb;
 			elem = new Value[x.length + y.length];
 			System.arraycopy(x, 0, elem, 0, x.length);
 			System.arraycopy(y, 0, elem, x.length, y.length);
@@ -73,24 +73,25 @@ public class Bundle extends Value {
 			elem = Arrays.copyOf(x, x.length + 1);
 			elem[x.length] = vb;
 		}
-		return ns.out(new Bundle(elem), null);
+		return new Bundle(elem);
 	}
 
-	public static SignalError rcon(NodeState a, NodeState ns) {
-		Bundle cb = (Bundle)ns.in(1).value;
+	public static Value rcon(Arguments args, ScopeData scope) {
+		Value va = args.in(0);
+		Bundle cb = (Bundle)args.in(1);
 		Value[] y = cb.values, elem = new Value[y.length + 1];
-		elem[0] = a.value;
+		elem[0] = va;
 		System.arraycopy(y, 0, elem, 1, y.length);
-		return ns.out(new Bundle(elem), null);
+		return new Bundle(elem);
 	}
 
-	public static SignalError get(NodeState a, NodeState ns) {
-		Bundle ca = (Bundle)a.value;
+	public static Value get(Arguments args, ScopeData scope) {
+		Bundle ca = (Bundle)args.in(0);
+		Value vb = args.in(1);
 		Value[] xa = ca.values;
 		Type ta = ca.type;
-		Value vb = ns.in(1).value;
-		if (ns.ins() > 2) {
-			if (vb instanceof CstInt cb && ns.in(2).value instanceof CstInt cc) {
+		if (args.ins() > 2) {
+			if (vb instanceof CstInt cb && args.in(2) instanceof CstInt cc) {
 				int l = xa.length;
 				int idx0 = (int)cb.value, idx1 = (int)cc.value;
 				if (idx0 < 0 && (idx0 += l) < 0) idx0 = 0;
@@ -98,19 +99,19 @@ public class Bundle extends Value {
 				if (idx1 < 0 && (idx1 += l) < 0) idx1 = 0;
 				else if (idx1 > l) idx1 = l;
 				if (idx0 == 0 && idx1 == l)
-					return ns.out(ca, null);
+					return ca;
 				if (idx0 >= idx1)
-					return ns.out(VOID, null);
-				return ns.out(new Bundle(ta, Arrays.copyOfRange(xa, idx0, idx1)), null);
+					return VOID;
+				return new Bundle(ta, Arrays.copyOfRange(xa, idx0, idx1));
 			}
 		} else if (vb instanceof CstInt cb) {
 			int idx = (int)cb.value;
 			if (idx < 0 && (idx += xa.length) < 0 || idx >= xa.length)
-				return ns.out(VOID, null);
-			return ns.out(xa[idx], null);
+				return VOID;
+			return xa[idx];
 		} else if (vb instanceof CstBytes cb) {
 			int idx = ta.index(cb.toString());
-			return ns.out(idx < 0 || idx >= xa.length ? VOID : xa[idx], null);
+			return idx < 0 || idx >= xa.length ? VOID : xa[idx];
 		} else if (vb instanceof Bundle cb) {
 			Value[] elem = new Value[cb.values.length];
 			for (int i = 0; i < elem.length; i++) {
@@ -124,14 +125,15 @@ public class Bundle extends Value {
 				} else return new SignalError("invalid index type in element " + i);
 				elem[i] = idx < 0 || idx >= xa.length ? VOID : xa[idx];
 			}
-			return ns.out(new Bundle(ta, elem), null);
+			return new Bundle(ta, elem);
 		}
 		return new SignalError("invalid index type");
 	}
 
-	public static SignalError len(NodeState a, NodeState ns) {
-		Bundle ca = (Bundle)a.value;
-		return ns.out(new CstInt(ca.values.length), null);
+	public static Value len(Arguments args, ScopeData scope) {
+		Value va = args.in(0);
+		Bundle ca = (Bundle)va;
+		return new CstInt(ca.values.length);
 	}
 
 	public static Value deserialize(Type type, byte[] data, Value[] elements) {

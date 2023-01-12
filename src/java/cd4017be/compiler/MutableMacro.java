@@ -1,10 +1,8 @@
 package cd4017be.compiler;
 
-import static cd4017be.compiler.NodeOperator.INPUT;
-import static cd4017be.compiler.NodeOperator.OUTPUT;
-
 import java.util.*;
 
+import cd4017be.compiler.instr.ConstList;
 import cd4017be.dfc.editor.*;
 
 /**
@@ -13,14 +11,14 @@ import cd4017be.dfc.editor.*;
 public class MutableMacro extends Macro {
 
 	public MacroState state;
-	public Block[] blocks;
-	Block curBlock;
+	public CodeBlock[] blocks;
+	CodeBlock curBlock;
 	int[] free;
 	int freeCount;
 
 	public MutableMacro(BlockDef def) { 
 		super(def);
-		this.blocks = new Block[nodes.length];
+		this.blocks = new CodeBlock[nodes.length];
 		this.free = new int[16];
 	}
 
@@ -91,7 +89,7 @@ public class MutableMacro extends Macro {
 		}
 	}
 
-	public void addBlock(Block block, CircuitEditor cc) {
+	public void addBlock(CodeBlock block, CircuitEditor cc) {
 		curBlock = block;
 		int[] io = block.def.assembler.assemble(this, block.def, block.outs, block.ins(), block.args);
 		for (int i = block.outs - 1; i >= 0; i--)
@@ -103,7 +101,7 @@ public class MutableMacro extends Macro {
 		curBlock = null;
 	}
 
-	public void removeBlock(Block block, CircuitEditor cc) {
+	public void removeBlock(CodeBlock block, CircuitEditor cc) {
 		for (int i = 0; i < block.outs; i++) {
 			Trace out = block.io[i];
 			//clear destinations first to ensure the signal trace will ripple flush

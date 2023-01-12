@@ -1,6 +1,7 @@
 package cd4017be.compiler;
 
 import cd4017be.compiler.builtin.*;
+import cd4017be.compiler.instr.*;
 
 /**
  * 
@@ -26,11 +27,11 @@ public interface Plugin {
 		@Override
 		public NodeAssembler assembler(String type, BlockDef def) {
 			switch(type) {
-			case "block": return new Macro(def);
+			case "block": return new Function(def);
 			case "const": return new ConstList(def);
 			case "ce": return NodeAssembler.EXPR;
-			case "io": return NodeAssembler.IO;
-			case "to": return NodeAssembler.VIRTUAL;
+			case "io": return IO.INSTANCE;
+			case "to": return new VirtualCall(def.id);
 			case "et": return NodeAssembler.ET;
 			case "nt": return NodeAssembler.NT;
 			case "op": return NodeAssembler.OP;

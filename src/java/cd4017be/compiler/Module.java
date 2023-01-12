@@ -202,7 +202,7 @@ public class Module {
 						for (Object e2 : ops) {
 							KeyValue kv2 = (KeyValue)e2;
 							BlockDef def = blocks.get(kv2.value());
-							if (def != null && def.assembler instanceof VirtualMethod vm)
+							if (def != null && def.assembler instanceof Instruction vm)
 								vt.put(kv2.key(), vm);
 						}
 					}}

@@ -1,7 +1,6 @@
 package cd4017be.compiler.builtin;
 
 import static cd4017be.compiler.LoadingCache.CORE;
-import static cd4017be.compiler.VirtualMethod.revOp;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.util.Arrays;
@@ -76,47 +75,47 @@ public class CstBytes extends Value {
 		return this;
 	}
 
-	public static SignalError bcast(NodeState a, NodeState ns) {
-		Value vb = ns.in(1).value;
+	public static Value bcast(Arguments args, ScopeData scope) {
+		Value vb = args.in(1);
 		if (vb instanceof CstBytes cb)
-			return ns.out(vb, null);
+			return vb;
 		if (vb instanceof CstInt cb)
-			return ns.out(new CstBytes(cb.value), null);
+			return new CstBytes(cb.value);
 		if (vb instanceof CstFloat cb)
-			return ns.out(new CstBytes(Double.doubleToLongBits(cb.value)), null);
-		return revOp(a, ns, vb, "rcast");
+			return new CstBytes(Double.doubleToLongBits(cb.value));
+		return null;
 	}
 
-	public static SignalError cast(NodeState a, NodeState ns) {
-		Value vb = ns.in(1).value;
+	public static Value cast(Arguments args, ScopeData scope) {
+		Value vb = args.in(1);
 		if (vb instanceof CstBytes cb)
-			return ns.out(vb, null);
+			return vb;
 		if (vb instanceof CstInt cb)
-			return ns.out(new CstBytes(cb.toString()), null);
+			return new CstBytes(cb.toString());
 		if (vb instanceof CstFloat cb)
-			return ns.out(new CstBytes(cb.toString()), null);
-		return revOp(a, ns, vb, "rcast");
+			return new CstBytes(cb.toString());
+		return null;
 	}
 
-	public static SignalError con(NodeState a, NodeState ns) {
-		CstBytes ca = (CstBytes)a.value;
-		Value vb = ns.in(1).value;
+	public static Value con(Arguments args, ScopeData scope) {
+		CstBytes ca = (CstBytes)args.in(0);
+		Value vb = args.in(1);
 		if (vb instanceof CstBytes cb) {
-			if (ca.len == 0) return ns.out(cb, null);
-			if (cb.len == 0) return ns.out(ca, null);
+			if (ca.len == 0) return cb;
+			if (cb.len == 0) return ca;
 			byte[] r = new byte[ca.len + cb.len];
 			System.arraycopy(ca.value, ca.ofs, r, 0, ca.len);
 			System.arraycopy(cb.value, cb.ofs, r, ca.len, cb.len);
-			return ns.out(new CstBytes(r), null);
+			return new CstBytes(r);
 		}
-		return revOp(a, ns, vb, "rcon");
+		return null;
 	}
 
-	public static SignalError get(NodeState a, NodeState ns) {
-		CstBytes ca = (CstBytes)a.value;
-		Value vb = ns.in(1).value;
-		if (ns.ins() > 2) {
-			Value vc = ns.in(2).value;
+	public static Value get(Arguments args, ScopeData scope) {
+		CstBytes ca = (CstBytes)args.in(0);
+		Value vb = args.in(1);
+		if (args.ins() > 2) {
+			Value vc = args.in(2);
 			if (vb instanceof CstInt cb && vc instanceof CstInt cc) {
 				int l = ca.len;
 				int idx0 = (int)cb.value, idx1 = (int)cc.value;
@@ -125,18 +124,18 @@ public class CstBytes extends Value {
 				if (idx1 < 0 && (idx1 += l) < 0) idx1 = 0;
 				else if (idx1 > ca.len) idx1 = l;
 				if (idx0 == 0 && idx1 == l)
-					return ns.out(ca, null);
+					return ca;
 				if (idx0 >= idx1)
-					return ns.out(EMPTY, null);
-				return ns.out(new CstBytes(ca.value, ca.ofs + idx0, idx1 - idx0), null);
+					return EMPTY;
+				return new CstBytes(ca.value, ca.ofs + idx0, idx1 - idx0);
 			}
 		} else if (vb instanceof CstInt cb) {
 			int idx = (int)cb.value;
 			if (idx == 0 || idx < 0 && (idx += ca.len) < 0)
-				ns.out(ca, null);
+				return ca;
 			else if (idx >= ca.len)
-				ns.out(EMPTY, null);
-			return ns.out(new CstBytes(ca.value, ca.ofs + idx, ca.len - idx), null);
+				return EMPTY;
+			return new CstBytes(ca.value, ca.ofs + idx, ca.len - idx);
 		} else if (vb instanceof CstBytes cb) {
 			int pos = -1, l = cb.len, j0 = cb.ofs;
 			byte[] x = ca.value, y = cb.value;
@@ -147,25 +146,25 @@ public class CstBytes extends Value {
 				pos = i0 - ca.ofs;
 				break outer;
 			}
-			return ns.out(new CstInt(pos), null);
+			return new CstInt(pos);
 		}
 		return new SignalError("invalid index type");
 	}
 
-	public static SignalError len(NodeState a, NodeState ns) {
-		CstBytes ca = (CstBytes)a.value;
-		return ns.out(new CstInt(ca.len), null);
+	public static Value len(Arguments args, ScopeData scope) {
+		CstBytes ca = (CstBytes)args.in(0);
+		return new CstInt(ca.len);
 	}
 
-	public static SignalError cmp(NodeState a, NodeState ns) {
-		CstBytes ca = (CstBytes)a.value;
-		Value vb = ns.in(1).value;
+	public static Value cmp(Arguments args, ScopeData scope) {
+		CstBytes ca = (CstBytes)args.in(0);
+		Value vb = args.in(1);
 		if (vb instanceof CstBytes cb)
-			return ns.out(new CstInt(Arrays.compare(
+			return new CstInt(Arrays.compare(
 				ca.value, ca.ofs, ca.ofs + ca.len,
 				cb.value, cb.ofs, cb.ofs + cb.len
-			)), null);
-		return revOp(a, ns, vb, "rcmp");
+			));
+		return null;
 	}
 
 	public static Value deserialize(Type type, byte[] data, Value[] elements) {

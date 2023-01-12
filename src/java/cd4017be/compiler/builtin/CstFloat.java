@@ -1,7 +1,6 @@
 package cd4017be.compiler.builtin;
 
 import static cd4017be.compiler.LoadingCache.CORE;
-import static cd4017be.compiler.VirtualMethod.revOp;
 import static java.lang.Double.doubleToRawLongBits;
 import static java.lang.Double.longBitsToDouble;
 
@@ -45,91 +44,91 @@ public class CstFloat extends Value {
 		return new CstBytes(doubleToRawLongBits(value));
 	}
 
-	public static SignalError bcast(NodeState a, NodeState ns) {
-		Value vb = ns.in(1).value;
+	public static Value bcast(Arguments args, ScopeData scope) {
+		Value vb = args.in(1);
 		if (vb instanceof CstFloat cb)
-			return ns.out(vb, null);
+			return vb;
 		if (vb instanceof CstInt cb)
-			return ns.out(new CstFloat(longBitsToDouble(cb.value)), null);
+			return new CstFloat(longBitsToDouble(cb.value));
 		if (vb instanceof CstBytes cb)
-			return ns.out(new CstFloat(longBitsToDouble(cb.toInt())), null);
-		return revOp(a, ns, vb, "rcast");
+			return new CstFloat(longBitsToDouble(cb.toInt()));
+		return null;
 	}
 
-	public static SignalError cast(NodeState a, NodeState ns) {
-		Value vb = ns.in(1).value;
+	public static Value cast(Arguments args, ScopeData scope) {
+		Value vb = args.in(1);
 		if (vb instanceof CstFloat cb)
-			return ns.out(vb, null);
+			return vb;
 		if (vb instanceof CstInt cb)
-			return ns.out(new CstFloat(cb.value), null);
+			return new CstFloat(cb.value);
 		if (vb instanceof CstBytes cb)
-			return ns.out(new CstFloat(cb.toString()), null);
-		return revOp(a, ns, vb, "rcast");
+			return new CstFloat(cb.toString());
+		return null;
 	}
 
-	public static SignalError add(NodeState a, NodeState ns) {
-		double x = ((CstFloat)a.value).value;
-		Value vb = ns.in(1).value;
+	public static Value add(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		Value vb = args.in(1);
 		if (vb instanceof CstFloat cb)
-			return ns.out(new CstFloat(x + cb.value), null);
+			return new CstFloat(x + cb.value);
 		if (vb instanceof CstInt cb)
-			return ns.out(new CstFloat(x + (double)cb.value), null);
-		return revOp(a, ns, vb, "radd");
+			return new CstFloat(x + (double)cb.value);
+		return null;
 	}
 
-	public static SignalError sub(NodeState a, NodeState ns) {
-		double x = ((CstFloat)a.value).value;
-		Value vb = ns.in(1).value;
+	public static Value sub(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		Value vb = args.in(1);
 		if (vb instanceof CstFloat cb)
-			return ns.out(new CstFloat(x - cb.value), null);
+			return new CstFloat(x - cb.value);
 		if (vb instanceof CstInt cb)
-			return ns.out(new CstFloat(x - (double)cb.value), null);
-		return revOp(a, ns, vb, "rsub");
+			return new CstFloat(x - (double)cb.value);
+		return null;
 	}
 
-	public static SignalError mul(NodeState a, NodeState ns) {
-		double x = ((CstFloat)a.value).value;
-		Value vb = ns.in(1).value;
+	public static Value mul(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		Value vb = args.in(1);
 		if (vb instanceof CstFloat cb)
-			return ns.out(new CstFloat(x * cb.value), null);
+			return new CstFloat(x * cb.value);
 		if (vb instanceof CstInt cb)
-			return ns.out(new CstFloat(x * (double)cb.value), null);
-		return revOp(a, ns, vb, "rmul");
+			return new CstFloat(x * (double)cb.value);
+		return null;
 	}
 
-	public static SignalError div(NodeState a, NodeState ns) {
-		double x = ((CstFloat)a.value).value;
-		Value vb = ns.in(1).value;
+	public static Value div(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		Value vb = args.in(1);
 		if (vb instanceof CstFloat cb)
-			return ns.out(new CstFloat(x / cb.value), null);
+			return new CstFloat(x / cb.value);
 		if (vb instanceof CstInt cb)
-			return ns.out(new CstFloat(x / (double)cb.value), null);
-		return revOp(a, ns, vb, "rdiv");
+			return new CstFloat(x / (double)cb.value);
+		return null;
 	}
 
-	public static SignalError mod(NodeState a, NodeState ns) {
-		double x = ((CstFloat)a.value).value;
-		Value vb = ns.in(1).value;
+	public static Value mod(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		Value vb = args.in(1);
 		if (vb instanceof CstFloat cb)
-			return ns.out(new CstFloat(x % cb.value), null);
+			return new CstFloat(x % cb.value);
 		if (vb instanceof CstInt cb)
-			return ns.out(new CstFloat(x % (double)cb.value), null);
-		return revOp(a, ns, vb, "rmod");
+			return new CstFloat(x % (double)cb.value);
+		return null;
 	}
 
-	public static SignalError neg(NodeState a, NodeState ns) {
-		double x = ((CstFloat)a.value).value;
-		return ns.out(new CstFloat(-x), null);
+	public static Value neg(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		return new CstFloat(-x);
 	}
 
-	public static SignalError cmp(NodeState a, NodeState ns) {
-		double x = ((CstFloat)a.value).value;
-		Value vb = ns.in(1).value;
+	public static Value cmp(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		Value vb = args.in(1);
 		if (vb instanceof CstFloat cb)
-			return ns.out(new CstInt(x < cb.value ? -1 : x > cb.value ? 1 : 0), null);
+			return new CstInt(x < cb.value ? -1 : x > cb.value ? 1 : 0);
 		if (vb instanceof CstInt cb)
-			return ns.out(new CstInt(x < (double)cb.value ? -1 : x > (double)cb.value ? 1 : 0), null);
-		return revOp(a, ns, vb, "rcmp");
+			return new CstInt(x < (double)cb.value ? -1 : x > (double)cb.value ? 1 : 0);
+		return null;
 	}
 
 	public static Value deserialize(Type type, byte[] data, Value[] elements) {

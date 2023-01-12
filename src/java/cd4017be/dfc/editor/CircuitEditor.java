@@ -5,6 +5,8 @@ import java.util.*;
 
 import cd4017be.compiler.*;
 import cd4017be.compiler.NodeAssembler.TextAutoComplete;
+import cd4017be.compiler.builtin.SignalError;
+import cd4017be.compiler.instr.ConstList;
 import cd4017be.util.*;
 
 import static cd4017be.compiler.LoadingCache.*;

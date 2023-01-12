@@ -24,8 +24,8 @@ public class Block extends IndexedSet.Element implements CircuitObject {
 	public short x, y, w, h;
 	private VertexArray va;
 
-	public Block(BlockInfo info) {
-		this(info.def, info.outs, info.ins.length, info.args);
+	public Block(BlockDesc info) {
+		this(info.def, info.outs.length, info.ins.length, info.args);
 	}
 
 	public Block(BlockDef def, int size) {

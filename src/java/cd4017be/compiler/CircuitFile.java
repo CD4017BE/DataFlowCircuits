@@ -128,13 +128,13 @@ public class CircuitFile {
 	}
 
 	public static void readLayout(ExtInputStream is, Module m, CircuitEditor cc) throws IOException {
-		BlockInfo[] circuit = readCircuit(is, m);
+		BlockDesc[] circuit = readCircuit(is, m);
 		is.readU8(LAYOUT_VERSION);
 		Trace[] traces = new Trace[is.readVarInt() + 1];
 		Block[] blocks = new Block[circuit.length];
 		int no = 1, ni = 1;
-		for (BlockInfo info : circuit)
-			ni += info.outs;
+		for (BlockDesc info : circuit)
+			ni += info.outs.length;
 		for (int i = 0; i < blocks.length; i++) {
 			Block block = blocks[i] = new Block(circuit[i]);
 			block.pos(is.readI16(), is.readI16(), cc);
@@ -153,7 +153,7 @@ public class CircuitFile {
 		for (Block block : blocks) block.add(cc);
 	}
 
-	public static BlockInfo[] readCircuit(ExtInputStream is, Module m) throws IOException {
+	public static BlockDesc[] readCircuit(ExtInputStream is, Module m) throws IOException {
 		checkMagic(is, GRAPH_MAGIC);
 		is.readU8(CIRCUIT_VERSION);
 		Module[] modules = new Module[is.readVarInt() + 1];
@@ -164,7 +164,7 @@ public class CircuitFile {
 			if (mod != null) mod.ensureLoaded();
 			else System.out.printf("missing module '%s'\n", name);
 		}
-		BlockInfo[] defs = new BlockInfo[is.readVarInt()];
+		BlockDesc[] defs = new BlockDesc[is.readVarInt()];
 		for (int i = 0; i < defs.length; i++) {
 			Module mod = modules[is.readInt(modules.length - 1)];
 			int out = is.readU8(), in = is.readU8(), arg = is.readU8();
@@ -172,21 +172,21 @@ public class CircuitFile {
 			BlockDef def = null;
 			if (mod != null && (def = mod.blocks.get(name)) == null)
 				System.out.printf("missing block '%s' in module '%s'\n", name, mod);
-			defs[i] = new BlockInfo(def != null ? def : LoadingCache.MISSING_BLOCK, out, in, arg);
+			defs[i] = new BlockDesc(def != null ? def : LoadingCache.MISSING_BLOCK, out, in, arg);
 		}
 		String[] args = new String[is.readVarInt()];
 		for (int i = 0; i < args.length; i++)
 			args[i] = is.readL16UTF8();
-		BlockInfo[] blocks = new BlockInfo[is.readVarInt()];
+		BlockDesc[] blocks = new BlockDesc[is.readVarInt()];
 		for (int i = 0; i < blocks.length; i++) {
-			BlockInfo def = defs[is.readInt(defs.length - 1)];
+			BlockDesc def = defs[is.readInt(defs.length - 1)];
 			int[] in = new int[def.ins.length];
 			for (int j = 0; j < in.length; j++)
 				in[j] = is.readInt(blocks.length) - 1 | is.readU8() << 16;
 			String[] arg = new String[def.args.length];
 			for (int j = 0; j < arg.length; j++)
 				arg[j] = args[is.readInt(args.length - 1)];
-			blocks[i] = new BlockInfo(def.def, def.outs, in, arg);
+			blocks[i] = new BlockDesc(def.def, def.outs.length, in, arg);
 		}
 		return blocks;
 	}
@@ -202,7 +202,7 @@ public class CircuitFile {
 		Path path = path(def);
 		createDirectories(path.getParent());
 		try(ExtOutputStream os = new ExtOutputStream(newOutputStream(path))) {
-			BlockInfo[] circuit = new BlockInfo[blocks.size()];
+			BlockDesc[] circuit = new BlockDesc[blocks.size()];
 			int no = 0, ni = 0;
 			for (int i = 0; i < circuit.length; i++) {
 				Block block = blocks.get(i);
@@ -220,7 +220,7 @@ public class CircuitFile {
 						}
 					in[j] = id;
 				}
-				circuit[i] = new BlockInfo(block.def, o, in, block.args);
+				circuit[i] = new BlockDesc(block.def, o, in, block.args);
 			}
 			ni = traces.size() + no;
 			writeCircuit(os, def.module, circuit);
@@ -248,13 +248,13 @@ public class CircuitFile {
 		}
 	}
 
-	public static void writeCircuit(ExtOutputStream os, Module m, BlockInfo[] blocks) throws IOException {
-		LinkedHashMap<BlockInfo, Integer> defs = new LinkedHashMap<>();
+	public static void writeCircuit(ExtOutputStream os, Module m, BlockDesc[] blocks) throws IOException {
+		LinkedHashMap<BlockDesc, Integer> defs = new LinkedHashMap<>();
 		LinkedHashMap<String, Integer> args = new LinkedHashMap<>();
 		LinkedHashMap<Module, Integer> modules = new LinkedHashMap<>();
 		int[][] blockIds = new int[blocks.length][];
 		for (int i = 0; i < blocks.length; i++) {
-			BlockInfo block = blocks[i];
+			BlockDesc block = blocks[i];
 			int[] ids = new int[block.args.length + 1];
 			ids[0] = index(defs, block);
 			int j = 1;
@@ -264,7 +264,7 @@ public class CircuitFile {
 		}
 		int[] defIds = new int[defs.size()];
 		int i = 0;
-		for (BlockInfo def : defs.keySet()) {
+		for (BlockDesc def : defs.keySet()) {
 			Module mod = def.def.module;
 			defIds[i++] = mod == null || mod == m ? 0 : index(modules, mod) + 1;
 		}
@@ -275,9 +275,9 @@ public class CircuitFile {
 			os.writeL8UTF8(m.name(mod));
 		os.writeVarInt(defIds.length);
 		i = 0;
-		for (BlockInfo def : defs.keySet()) {
+		for (BlockDesc def : defs.keySet()) {
 			os.writeInt(defIds[i++], modules.size());
-			os.write8(def.outs);
+			os.write8(def.outs.length);
 			os.write8(def.ins.length);
 			os.write8(def.args.length);
 			os.writeL8UTF8(def.def.id);
@@ -289,7 +289,7 @@ public class CircuitFile {
 		for (i = 0; i < blocks.length; i++) {
 			int[] ids = blockIds[i];
 			os.writeInt(ids[0], defs.size() - 1);
-			for (int in : blocks[i].ins) {
+			for (int in : blocks[i].inLinks) {
 				os.writeInt(in + 1, blocks.length);
 				os.write8(in >> 16);
 			}

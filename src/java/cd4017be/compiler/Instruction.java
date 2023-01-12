@@ -1,26 +1,19 @@
 package cd4017be.compiler;
 
-import java.util.Arrays;
-
-import cd4017be.compiler.builtin.Bundle;
-import cd4017be.compiler.builtin.CstFloat;
-import cd4017be.compiler.builtin.CstInt;
-import cd4017be.compiler.builtin.CstLoop;
-import cd4017be.compiler.builtin.DynOp;
+import cd4017be.compiler.builtin.ScopeData;
 
 /**
  * 
  * @author CD4017BE */
-@FunctionalInterface
-public interface NodeOperator {
+public interface Instruction {
 
-	SignalError compValue(NodeState ns);
+	/**@param args
+	 * @param scope
+	 * @return result */
+	Value eval(Arguments args, ScopeData scope);
 
-	interface Scoped extends NodeOperator {
-		void compScope(NodeState ns, Scope scope);
-	}
-
-	NodeOperator CONST = ns -> ns.out((Value)ns.data(), null);
+	/*
+		NodeOperator CONST = ns -> ns.out((Value)ns.data(), null);
 	NodeOperator INPUT = ns -> ns.out(ns.state.inVal((int)ns.data()));
 	NodeOperator PASS = ns -> ns.out(ns.in(0));
 	NodeOperator MACRO = ns -> new MacroState(ns, (Macro)ns.data()).errors;
@@ -196,5 +189,5 @@ public interface NodeOperator {
 				ns.scope(new CstLoop(scope, null), 0b001L);
 		}
 	};
-
+	 */
 }
