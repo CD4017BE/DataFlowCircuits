@@ -1,7 +1,5 @@
 package cd4017be.compiler.instr;
 
-import java.util.HashMap;
-
 import cd4017be.compiler.*;
 import cd4017be.compiler.builtin.ScopeData;
 import cd4017be.compiler.builtin.SwitchSelector;
@@ -10,7 +8,7 @@ import cd4017be.compiler.builtin.SwitchSelector;
 /**
  * 
  * @author CD4017BE */
-public class TypeSwitch implements Instruction, NodeAssembler {
+public class TypeSwitch implements Instruction, SwitchAssembler {
 
 	private final VTable[] cases;
 
@@ -19,13 +17,8 @@ public class TypeSwitch implements Instruction, NodeAssembler {
 	}
 
 	@Override
-	public void assemble(BlockDesc block, HashMap<String, Node> namedLinks) {
-		Node node = new Node(this, Node.INSTR, 1);
-		Node sel = new Node(CstSwitch.SELECT, Node.SWT, cases.length + 2);
-		block.setIns(sel);
-		block.makeOuts(sel);
-		sel.in[0].connect(node);
-		block.ins[0] = node.in[0];
+	public Node switchNode(BlockDesc block, NodeContext context) {
+		return new Node(this, Node.INSTR, 1);
 	}
 
 	@Override

@@ -11,11 +11,12 @@ import cd4017be.compiler.builtin.Bundle;
 import cd4017be.compiler.builtin.CstBytes;
 import cd4017be.compiler.builtin.CstFloat;
 import cd4017be.compiler.builtin.CstInt;
+import cd4017be.compiler.builtin.ScopeData;
 
 /**
  * 
  * @author CD4017BE */
-public class Value {
+public class Value implements Instruction {
 
 	public final Type type;
 
@@ -60,6 +61,17 @@ public class Value {
 			return (Value)type.vtable.deserializer.invokeExact(type, data, elements);
 		} catch(Throwable e) {
 			throw new IOException(e);
+		}
+	}
+
+	public static Value parse(String s, NodeContext context) {
+		try {
+			CharBuffer buf = CharBuffer.wrap(s);
+			Value val = parse(buf, context.def.module);
+			if (buf.hasRemaining()) throw new IllegalArgumentException("unexpected symbols " + buf);
+			return val;
+		} catch (RuntimeException e) {
+			throw new IllegalArgumentException("can't parse expression: " + e.getMessage());
 		}
 	}
 
@@ -178,6 +190,11 @@ public class Value {
 				s.position(s.position() - 1);
 				return;
 			}
+	}
+
+	@Override
+	public Value eval(Arguments args, ScopeData scope) {
+		return this;
 	}
 
 }

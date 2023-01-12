@@ -1,7 +1,5 @@
 package cd4017be.compiler.instr;
 
-import java.util.HashMap;
-
 import cd4017be.compiler.*;
 import cd4017be.compiler.builtin.ScopeData;
 import cd4017be.compiler.builtin.SignalError;
@@ -19,7 +17,7 @@ public class VirtualCall implements Instruction, NodeAssembler {
 	}
 
 	@Override
-	public void assemble(BlockDesc block, HashMap<String, Node> namedLinks) {
+	public void assemble(BlockDesc block, NodeContext context) {
 		Node node = new Node(this, Node.INSTR, block.ins.length);
 		block.setIns(node);
 		block.makeOuts(node);

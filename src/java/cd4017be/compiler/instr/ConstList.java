@@ -10,7 +10,7 @@ import cd4017be.util.Profiler;
 
 /**
  * @author CD4017BE */
-public class ConstList implements NodeAssembler.TextAutoComplete {
+public class ConstList implements NodeAssembler {
 
 	final BlockDef def;
 	HashMap<String, Value> signals;
@@ -30,7 +30,7 @@ public class ConstList implements NodeAssembler.TextAutoComplete {
 	}
 
 	@Override
-	public void assemble(BlockDesc block, HashMap<String, Node> namedLinks) {
+	public void assemble(BlockDesc block, NodeContext context) {
 		if (block.ins.length != 0) throw new IllegalArgumentException("wrong IO count");
 		ensureLoaded();
 		String name = block.args.length > 0 ? block.args[0] : def.outs[0];
@@ -42,7 +42,7 @@ public class ConstList implements NodeAssembler.TextAutoComplete {
 
 	@Override
 	public void
-	getAutoCompletions(EditorGraph state, BlockDesc desc, int arg, ArrayList<String> list) {
+	getAutoCompletions(BlockDesc desc, int arg, ArrayList<String> list, NodeContext context) {
 		ensureLoaded();
 		list.addAll(signals.keySet());
 	}

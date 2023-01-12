@@ -1,10 +1,7 @@
 package cd4017be.compiler;
 
-import java.util.HashMap;
-
 import cd4017be.compiler.Node.Vertex;
 import cd4017be.compiler.instr.GetElement;
-import cd4017be.compiler.instr.IO;
 
 /**
  * 
@@ -59,8 +56,10 @@ public class BlockDesc {
 			outs[i] = new GetElement(i).node(result);
 	}
 
-	public Node getIO(int arg, HashMap<String, Node> namedLinks) {
-		return namedLinks.computeIfAbsent(args[arg], n -> new Node(IO.INSTANCE, Node.INSTR, 1));
+	public void makeNode(Instruction instr) {
+		Node node = new Node(instr, Node.INSTR, ins.length);
+		setIns(node);
+		makeOuts(node);
 	}
 
 }

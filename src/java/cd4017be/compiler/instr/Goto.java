@@ -9,7 +9,8 @@ import cd4017be.compiler.builtin.*;
  * @author CD4017BE */
 public class Goto implements Instruction {
 
-	public static final Goto ELSE = new Goto(0);
+	public static final Goto BREAK = new Goto(0), CONTINUE = new Goto(1), ELSE = BREAK;
+
 
 	private final int path;
 
@@ -41,19 +42,6 @@ public class Goto implements Instruction {
 		for (int i = 0; i < in.length; i++)
 			node.in[i].connect(in[i]);
 		return node;
-	}
-
-	public static Node loop(Node in) {
-		Node node = new Node(LoopExit.LOOP, Node.END, 1);
-		node.in[0].connect(in);
-		return node;
-	}
-
-	public static Node begin(Node... in) {
-		Node node = new Goto(0).node(in);
-		Node node1 = new Node(LoopEntrance.DO, Node.BEGIN, 1);
-		node1.in[0].connect(node);
-		return node1;
 	}
 
 }

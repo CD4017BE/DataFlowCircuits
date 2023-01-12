@@ -1,7 +1,5 @@
 package cd4017be.compiler.instr;
 
-import java.util.HashMap;
-
 import cd4017be.compiler.*;
 import cd4017be.compiler.builtin.ScopeData;
 import cd4017be.compiler.builtin.SwitchSelector;
@@ -10,9 +8,7 @@ import cd4017be.compiler.builtin.SwitchSelector;
 /**
  * 
  * @author CD4017BE */
-public class CstSwitch implements Instruction, NodeAssembler {
-
-	public static final Instruction SELECT = (args, scope) -> args.in(((SwitchSelector)args.in(0)).path + 1);
+public class CstSwitch implements Instruction, SwitchAssembler {
 
 	private final Value[] cases;
 
@@ -21,13 +17,8 @@ public class CstSwitch implements Instruction, NodeAssembler {
 	}
 
 	@Override
-	public void assemble(BlockDesc block, HashMap<String, Node> namedLinks) {
-		Node node = new Node(this, Node.INSTR, 1);
-		Node sel = new Node(SELECT, Node.SWT, cases.length + 2);
-		block.setIns(sel);
-		block.makeOuts(sel);
-		sel.in[0].connect(node);
-		block.ins[0] = node.in[0];
+	public Node switchNode(BlockDesc block, NodeContext context) {
+		return new Node(this, Node.INSTR, 1);
 	}
 
 	@Override
@@ -42,7 +33,7 @@ public class CstSwitch implements Instruction, NodeAssembler {
 	public Node node(Node... in) {
 		Node node = new Node(this, Node.INSTR, 1);
 		node.in[0].connect(in[0]);
-		Node sel = new Node(SELECT, Node.SWT, cases.length + 2);
+		Node sel = new Node(SwitchAssembler.SELECT, Node.SWT, cases.length + 2);
 		sel.in[0].connect(node);
 		for (int i = 1; i < in.length; i++)
 			sel.in[i].connect(in[i]);
