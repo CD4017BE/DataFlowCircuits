@@ -1,9 +1,13 @@
 package cd4017be.dfc.editor;
 
 import static cd4017be.dfc.editor.Shaders.*;
+
+import java.util.ArrayList;
+import java.util.function.Consumer;
 import org.lwjgl.system.MemoryStack;
 
 import cd4017be.compiler.*;
+import cd4017be.compiler.builtin.Bundle;
 import cd4017be.util.IndexedSet;
 import cd4017be.util.VertexArray;
 
@@ -11,29 +15,26 @@ import cd4017be.util.VertexArray;
  * @author CD4017BE */
 public class Trace extends IndexedSet.Element implements CircuitObject {
 
-	public Block block;
-	public Trace from, to, adj;
+	public final Block block;
+	public Trace from, to, adj, src;
 	/**-1: trace, 0..outs-1: output, outs..: input */
 	public final int pin;
-	private int node = -1, color = VOID_COLOR;
 	private short x, y;
 	private VertexArray va;
 
 	public Trace() {
-		this(null, -1);
+		this.block = null;
+		this.pin = -1;
 	}
 
 	Trace(Block block, int pin) {
 		this.block = block;
 		this.pin = pin;
+		this.src = pin < block.outs() ? this : null;
 	}
 
 	public boolean isOut() {
-		return pin >= 0 && pin < block.outs;
-	}
-
-	public int node() {
-		return node;
+		return src == this;
 	}
 
 	@Override
@@ -76,7 +77,7 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 	@Override
 	public Trace place(CircuitEditor cc) {
 		for (Block block : cc.blocks)
-			for (int i = 0; i < block.outs; i++) {
+			for (int i = 0; i < block.outs(); i++) {
 				Trace tr = block.io[i];
 				if (tr.x == x && tr.y == y && tr != this)
 					return merge(tr, cc);
@@ -105,7 +106,7 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 				Trace[] io0 = block0.io, io1 = block1.io;
 				for (Trace out = tr; out.to != null;)
 					out.to.connect(this, cc);
-				for (int i = block0.outs, j = block1.outs; i < io0.length && j < io1.length; i++, j++)
+				for (int i = block0.outs(), j = block1.outs(); i < io0.length && j < io1.length; i++, j++)
 					io1[j].connect(io0[i].from, cc);
 				tr.block.remove(cc);
 				return this;
@@ -119,7 +120,7 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 	}
 
 	public void connect(Trace tr, CircuitEditor cc) {
-		if (from == tr) return;
+		if (from == tr || isOut()) return;
 		if (from != null) {
 			Trace t0 = null;
 			for (Trace t = from.to; t != this; t = t.adj) t0 = t;
@@ -129,30 +130,28 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		}
 		if (tr == this) tr = null;
 		from = tr;
+		Trace src;
 		if (tr != null) {
 			adj = tr.to;
 			tr.to = this;
+			src = tr.src;
+		} else src = null;
+		if (this.src != src) {
+			ArrayList<Trace> stack = new ArrayList<>();
+			stack.add(this);
+			forEachUser(stack, trace -> trace.updateSrc(src, cc));
 		}
-		cc.traceUpdates.add(this);
 		draw();
 	}
 
-	public void setNode(int node, CircuitEditor cc) {
-		if (node == this.node) return;
-		this.node = node;
-		if (block != null) {
-			int in = pin - block.outs;
-			if (in >= 0) {
-				cc.macro.connect(node, block.nodesIn[in]);
-				cc.runTypeCheck();
-			}
-		}
-		for (Trace to = this.to; to != null; to = to.adj)
-			cc.traceUpdates.add(to);
-	}
-
-	public void update(CircuitEditor cc) {
-		if (!isOut()) setNode(from == null ? -1 : from.node, cc);
+	private void updateSrc(Trace src, CircuitEditor cc) {
+		this.src = src;
+		if (pin < 0) return;
+		int i = pin - block.outs();
+		if (src != null)
+			block.connectIn(i, src.block, src.pin);
+		else block.connectIn(i, null, -1);
+		cc.reRunTypecheck = true;
 	}
 
 	@Override
@@ -181,7 +180,8 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		try (MemoryStack ms = MemoryStack.stackPush()) {
 			va.set(idx * 4, drawTrace(
 				ms.malloc(TRACE_PRIMLEN),
-				from.x, from.y, x, y, color
+				from.x, from.y, x, y,
+				src == null ? VOID_COLOR : src.block.colors[src.pin]
 			).flip());
 		}
 		Main.refresh(0);
@@ -205,19 +205,17 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		return x < x1 && y < y1 && x > x0 && y > y0;
 	}
 
-	public void updateColor(MacroState ms) {
-		Value s = value(ms);
-		int c = s == null ? VOID_COLOR : s.type.vtable.color;
-		if (c != color) {
-			color = c;
-			draw();
-		}
+	public Value value(Arguments state) {
+		return src == null ? Bundle.VOID : src.block.value(src.pin, state);
 	}
 
-	public Value value(MacroState ms) {
-		if (node < 0 || ms == null) return null;
-		NodeState ns = ms.states[node];
-		return ns == null ? null : ns.value;
+	public static void forEachUser(ArrayList<Trace> stack, Consumer<Trace> op) {
+		while(!stack.isEmpty()) {
+			Trace tr = stack.remove(stack.size() - 1);
+			op.accept(tr);
+			for (tr = tr.to; tr != null; tr = tr.adj)
+				stack.add(tr);
+		}
 	}
 
 }

@@ -9,7 +9,7 @@ import cd4017be.compiler.builtin.*;
  * @author CD4017BE */
 public class Goto implements Instruction {
 
-	public static final Goto BREAK = new Goto(0), CONTINUE = new Goto(1), ELSE = BREAK;
+	public static final Goto REPEAT = new Goto(0), BREAK = new Goto(1), ELSE = REPEAT;
 
 
 	private final int path;
@@ -24,24 +24,12 @@ public class Goto implements Instruction {
 		Value val;
 		if (n == 0) val = Bundle.VOID;
 		else if (n == 1) val = args.in(0);
-		else {
-			Value[] arr = new Value[n];
-			for (int i = 0; i < n; i++)
-				arr[i] = args.in(i);
-			val = new Bundle(arr);
-		}
+		else val = new Bundle(args.inArr(0));
 		return new SwitchSelector(path, val);
 	}
 
-	public Node node(int ins) {
-		return new Node(this, Node.INSTR, ins);
-	}
-
-	public Node node(Node... in) {
-		Node node = node(in.length);
-		for (int i = 0; i < in.length; i++)
-			node.in[i].connect(in[i]);
-		return node;
+	public Node node(int ins, int idx) {
+		return new Node(this, Node.INSTR, ins, idx);
 	}
 
 }

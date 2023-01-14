@@ -1,6 +1,5 @@
 package cd4017be.compiler.builtin;
 
-import static cd4017be.compiler.LoadingCache.CORE;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.util.Arrays;
@@ -11,7 +10,7 @@ import cd4017be.compiler.*;
  * @author CD4017BE */
 public class CstBytes extends Value {
 
-	public static final Type CST_BYTES = Type.of(CORE.findType("cbytes"), 0);
+	public static final Type CST_BYTES = Type.builtin("cbytes");
 	public static final CstBytes EMPTY = new CstBytes(new byte[0]);
 
 	public final byte[] value;
@@ -111,7 +110,7 @@ public class CstBytes extends Value {
 		return null;
 	}
 
-	public static Value get(Arguments args, ScopeData scope) {
+	public static Value get(Arguments args, ScopeData scope) throws SignalError {
 		CstBytes ca = (CstBytes)args.in(0);
 		Value vb = args.in(1);
 		if (args.ins() > 2) {
@@ -148,7 +147,7 @@ public class CstBytes extends Value {
 			}
 			return new CstInt(pos);
 		}
-		return new SignalError("invalid index type");
+		return args.error("invalid index type");
 	}
 
 	public static Value len(Arguments args, ScopeData scope) {

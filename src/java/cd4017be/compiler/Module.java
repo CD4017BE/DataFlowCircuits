@@ -3,15 +3,18 @@ package cd4017be.compiler;
 import static cd4017be.compiler.LoadingCache.CORE;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
+
+import org.lwjgl.system.MemoryStack;
+
 import cd4017be.compiler.builtin.Bundle;
-import cd4017be.util.ConfigFile;
+import cd4017be.util.*;
 import cd4017be.util.ConfigFile.KeyValue;
-import cd4017be.util.ConfigWriter;
 
 /**
  * 
@@ -26,6 +29,7 @@ public class Module {
 	public final HashMap<String, BlockModel> models = new HashMap<>();
 	public final HashMap<String, VTable> types = new HashMap<>();
 	private boolean loaded;
+	int trace0 = -1;
 
 	public Module(Path path) {
 		this.path = path;
@@ -42,10 +46,26 @@ public class Module {
 				| SecurityException | ClassCastException e
 			) { e.printStackTrace(); }
 		this.plugin = plugin;
+		loadTraces();
 		try {
 			loadModelDescriptions();
 		} catch(IOException e) {
 			models.clear();
+			e.printStackTrace();
+		}
+	}
+
+	public void loadTraces() {
+		if (LoadingCache.TRACES == null || trace0 >= 0) return;
+		Path path = this.path.resolve("traces.tga");
+		trace0 = 1;
+		if (Files.isReadable(path)) try (
+			InputStream is = Files.newInputStream(path);
+			MemoryStack ms = MemoryStack.stackPush();
+		) {
+			trace0 = LoadingCache.TRACES.load(GLUtils.readTGA(is, ms), this);
+			System.out.println("loaded traces for module " + this.path);
+		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
@@ -198,7 +218,6 @@ public class Module {
 						}
 						VTable vt = new VTable(this, kv1.key(), text, color, vc);
 						types.put(kv1.key(), vt);
-						vt.initInternal();
 						for (Object e2 : ops) {
 							KeyValue kv2 = (KeyValue)e2;
 							BlockDef def = blocks.get(kv2.value());
@@ -208,6 +227,8 @@ public class Module {
 					}}
 				}
 			}
+			for (VTable vt : types.values())
+				vt.initInternal();
 		} catch (ClassCastException e) {
 			throw new IOException(e);
 		}

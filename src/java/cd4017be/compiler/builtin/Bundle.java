@@ -1,6 +1,5 @@
 package cd4017be.compiler.builtin;
 
-import static cd4017be.compiler.LoadingCache.CORE;
 import java.util.Arrays;
 import cd4017be.compiler.*;
 
@@ -8,7 +7,7 @@ import cd4017be.compiler.*;
  * @author CD4017BE */
 public class Bundle extends Value {
 
-	public static final Type BUNDLE = Type.of(CORE.findType("bundle"), 0);
+	public static final Type BUNDLE = Type.builtin("bundle");
 	public static final Value[] EMPTY = {};
 	public static final Bundle VOID = new Bundle(EMPTY);
 
@@ -85,7 +84,7 @@ public class Bundle extends Value {
 		return new Bundle(elem);
 	}
 
-	public static Value get(Arguments args, ScopeData scope) {
+	public static Value get(Arguments args, ScopeData scope) throws SignalError {
 		Bundle ca = (Bundle)args.in(0);
 		Value vb = args.in(1);
 		Value[] xa = ca.values;
@@ -122,12 +121,12 @@ public class Bundle extends Value {
 					if (idx < 0) idx += xa.length;
 				} else if (vb instanceof CstBytes cb1) {
 					idx = ta.index(cb1.toString());
-				} else return new SignalError("invalid index type in element " + i);
+				} else return args.error("invalid index type in element " + i);
 				elem[i] = idx < 0 || idx >= xa.length ? VOID : xa[idx];
 			}
 			return new Bundle(ta, elem);
 		}
-		return new SignalError("invalid index type");
+		return args.error("invalid index type");
 	}
 
 	public static Value len(Arguments args, ScopeData scope) {

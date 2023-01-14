@@ -52,6 +52,11 @@ public class Value implements Instruction {
 		return null;
 	}
 
+	public int color() {
+		VTable vt = type.vtable;
+		return (vt.color + vt.module.trace0) * 2 - (getClass() == Value.class ? 1 : 2);
+	}
+
 	static final MethodType DESERIALIZER
 	= MethodType.methodType(Value.class, Type.class, byte[].class, Value[].class);
 
@@ -64,20 +69,20 @@ public class Value implements Instruction {
 		}
 	}
 
-	public static Value parse(String s, NodeContext context) {
+	public static Value parse(String s, NodeContext context, int idx, String name) throws SignalError {
 		try {
 			CharBuffer buf = CharBuffer.wrap(s);
 			Value val = parse(buf, context.def.module);
 			if (buf.hasRemaining()) throw new IllegalArgumentException("unexpected symbols " + buf);
 			return val;
 		} catch (RuntimeException e) {
-			throw new IllegalArgumentException("can't parse expression: " + e.getMessage());
+			throw new SignalError(idx, "can't parse " + name + ": " + e.getMessage(), e);
 		}
 	}
 
-	public static Value parse(CharBuffer s, Module module) {
+	private static Value parse(CharBuffer s, Module module) {
 		skipWhiteSpace(s);
-		if (!s.hasRemaining()) throw new IllegalArgumentException("unexpected end of input");
+		if (!s.hasRemaining()) throw new IllegalArgumentException("end of expression");
 		char c = s.get(s.position());
 		if (Character.isDigit(c) || "+-.".indexOf(c) >= 0) {
 			StringBuilder sb = new StringBuilder();
@@ -104,11 +109,11 @@ public class Value implements Instruction {
 			CharsetEncoder enc = StandardCharsets.UTF_8.newEncoder();
 			int p = s.position() + 1, q = p, l = s.limit();
 			for(;;) {
-				if (q >= l) throw new IllegalArgumentException("unexpected end of input");
+				if (q >= l) throw new IllegalArgumentException("end of expression");
 				char c1 = s.get(q);
 				if (c1 == '\\') {
 					buf = encode(enc, s, p, q, buf, false);
-					if (++q >= l-1) throw new IllegalArgumentException("unexpected end of input");
+					if (++q >= l-1) throw new IllegalArgumentException("end of expression");
 					switch(c1 = s.get(q)) {
 					case 'n' -> buf.put((byte)'\n');
 					case 'r' -> buf.put((byte)'\r');
@@ -136,11 +141,11 @@ public class Value implements Instruction {
 			ByteBuffer buf = ByteBuffer.allocate(16);
 			for(;;) {
 				if (!s.hasRemaining())
-					throw new IllegalArgumentException("unexpected end of input");
+					throw new IllegalArgumentException("end of expression");
 				if (Character.isWhitespace(c = s.get())) continue;
 				if (c == '#') break;
 				if (!s.hasRemaining())
-					throw new IllegalArgumentException("unexpected end of input");
+					throw new IllegalArgumentException("end of expression");
 				int d = Character.digit(c, 16) << 4 | Character.digit(s.get(), 16);
 				if (d < 0) throw new IllegalArgumentException("invalid hex byte: " + c + s.get(s.position() - 1));
 				if (!buf.hasRemaining()) buf = grow(buf);

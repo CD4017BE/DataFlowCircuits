@@ -1,7 +1,5 @@
 package cd4017be.compiler.builtin;
 
-import static cd4017be.compiler.LoadingCache.CORE;
-
 import cd4017be.compiler.Type;
 import cd4017be.compiler.Value;
 
@@ -10,7 +8,7 @@ import cd4017be.compiler.Value;
  * @author CD4017BE */
 public class SwitchSelector extends Value {
 
-	public static final Type SWITCH = Type.of(CORE.findType("switch"), 0);
+	public static final Type SWITCH = Type.builtin("switch");
 
 	public final Value value;
 	public final int path;

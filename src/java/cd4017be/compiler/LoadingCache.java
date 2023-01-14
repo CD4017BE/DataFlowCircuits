@@ -7,6 +7,7 @@ import java.util.WeakHashMap;
 
 import cd4017be.dfc.editor.Shaders;
 import cd4017be.util.IconAtlas;
+import cd4017be.util.TraceAtlas;
 
 /**
  * 
@@ -30,10 +31,15 @@ public class LoadingCache {
 	}
 
 	public static IconAtlas ATLAS;
+	public static TraceAtlas TRACES;
 
 	public static void initGraphics() {
 		if (ATLAS == null)
 			ATLAS = new IconAtlas(Shaders.blockP, 2, 32, 32, 256);
+		if (TRACES == null) {
+			TRACES = new TraceAtlas(Shaders.traceP, 8, 256);
+			CORE.loadTraces();
+		}
 	}
 
 //	public LoadingCache(boolean graphics) {

@@ -12,7 +12,7 @@ public class Node {
 	public final Instruction op;
 	public final Vertex[] in;
 	private Vertex out;
-	public final int mode;
+	public final int mode, idx;
 	private int wait;
 	int addr;
 
@@ -22,21 +22,15 @@ public class Node {
 	}
 
 	public Node() {
-		this(null, OUT, 1);
+		this(null, OUT, 1, Integer.MAX_VALUE);
 	}
 
 	public Node(int in) {
-		this(null, IN, 0);
+		this(null, IN, 0, Integer.MAX_VALUE);
 		addr = in + 1;
 	}
 
-	public Node(Instruction op, int mode, Node... ins) {
-		this(op, mode, ins.length);
-		for(int i = 0; i < ins.length; i++)
-			in[i].connect(ins[i]);
-	}
-
-	public Node(Instruction op, int mode, int ins) {
+	public Node(Instruction op, int mode, int ins, int idx) {
 		if (ins < switch(mode) {
 			case INSTR, END, IN -> 0;
 			case BEGIN, OUT -> 1;
@@ -46,8 +40,13 @@ public class Node {
 		this.op = op;
 		this.mode = mode;
 		this.in = new Vertex[ins];
+		this.idx = idx;
 		for (int i = 0; i < ins; i++)
 			in[i] = new Vertex(this, i);
+	}
+
+	public int addr() {
+		return addr;
 	}
 
 	public int computeScope(int nextAddr) {
@@ -99,14 +98,12 @@ public class Node {
 			nextAddr = node.computeScope(nextAddr);
 			for (Vertex in : node.in) {
 				Node from = in.from;
-				if (--from.wait == 0)
+				if (from != null && --from.wait == 0)
 					stack.add(from);
 			}
 		}
 		return nextAddr;
 	}
-
-	
 
 	@Override
 	public String toString() {

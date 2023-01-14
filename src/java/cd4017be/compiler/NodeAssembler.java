@@ -12,7 +12,7 @@ public interface NodeAssembler {
 	 * All connections to external nodes are established by assigning them to {@code block.ins[]} and {@code block.outs[]}
 	 * @param block to assemble
 	 * @param context in which it is assembled */
-	void assemble(BlockDesc block, NodeContext context);
+	void assemble(BlockDesc block, NodeContext context, int idx) throws SignalError;
 
 	/**Collect text argument auto-completion options
 	 * @param block to get auto-completions for

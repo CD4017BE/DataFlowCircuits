@@ -45,15 +45,16 @@ public class ScopeBranch extends Scope {
 		members.add(node);
 	}
 
-	public CodeBlock compile(CodeBlock skip, CodeBlock next, int loop) {
+	public CodeBlock compile(CodeBlock skip, CodeBlock next, int loop, int[] errLut) throws SignalError {
 		CodeBlock block, first;
 		if (loop >= 0) {
 			block = first = new CodeBlock(2).swt(addr, loop, skip);
-			first.br(0, next, -1);
+			first.br(1, next, -1);
 		} else block = first = new CodeBlock(0).next(addr, skip, next);
 		int i0 = 0;
 		for (int i1 = i0; i1 < members.size(); i1++) {
 			Node node = members.get(i1);
+			errLut[node.addr] = node.idx;
 			switch(node.mode) {
 				case Node.SWT -> {
 					block.ops(members.subList(i0, i0 = i1 + 1));
@@ -61,7 +62,7 @@ public class ScopeBranch extends Scope {
 					CodeBlock prev = new CodeBlock(node.in.length - 1).swt(addr, node.in[0].addr(), skip);
 					for (int i = node.in.length - 1; i > 0; i--) {
 						ScopeBranch br = (ScopeBranch)node.in[i].scope;
-						nxt = br.compile(block, nxt, -1);
+						nxt = br.compile(block, nxt, -1, errLut);
 						prev.br(i - 1, nxt, br.addr);
 					}
 					block = prev;
@@ -72,19 +73,19 @@ public class ScopeBranch extends Scope {
 					Node begin = null;
 					for (int i = br.members.size() - 1; i >= 0; i--) {
 						Node n = br.members.get(i);
-						if (n.mode == Node.BEGIN) {
-							begin = n;
-							break;
-						}
+						if (n.mode != Node.BEGIN) continue;
+						if (begin == null) begin = n;
+						else throw new SignalError(n.idx, "duplicate loop entrance");
 					}
+					if (begin == null) throw new SignalError(node.idx, "missing loop entrance");
 					CodeBlock prev = new CodeBlock(1).swt(addr, begin.in[0].addr(), skip);
-					prev.br(0, br.compile(block, block, node.in[0].addr()), br.addr);
+					prev.br(0, br.compile(block, block, node.in[0].addr(), errLut), br.addr);
 					block = prev;
 				}
 			}
 		}
 		block.ops(members.subList(i0, members.size()));
-		if (loop >= 0) first.br(1, block, addr);
+		if (loop >= 0) first.br(0, block, addr);
 		return block;
 	}
 

@@ -4,28 +4,25 @@ import static cd4017be.dfc.editor.Shaders.*;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 
 import org.lwjgl.system.MemoryStack;
 
 import cd4017be.compiler.*;
-import cd4017be.util.IndexedSet;
 import cd4017be.util.VertexArray;
 
 /**Represents an operand block.
  * @author CD4017BE */
-public class Block extends IndexedSet.Element implements CircuitObject {
+public class Block extends BlockDesc implements CircuitObject {
 
-	public final BlockDef def;
 	public final Trace[] io;
-	public final int[] nodesIn;
-	public final String[] args;
-	public final int outs;
+	protected final short[] colors;
 	public short x, y, w, h;
 	private VertexArray va;
 
-	public Block(BlockDesc info) {
-		this(info.def, info.outs.length, info.ins.length, info.args);
+	public Block(BlockDesc desc) {
+		this(desc.def, desc.outs.length, desc.ins.length, desc.args);
 	}
 
 	public Block(BlockDef def, int size) {
@@ -33,21 +30,16 @@ public class Block extends IndexedSet.Element implements CircuitObject {
 	}
 
 	public Block(BlockDef def, int outs, int ins, String[] args) {
-		this.def = def;
-		this.outs = outs;
-		this.nodesIn = new int[ins];
+		super(def, outs, new int[ins], args);
 		this.io = new Trace[outs + ins];
-		this.args = args;
+		this.colors = new short[outs];
 		for (int i = 0; i < io.length; i++)
 			io[i] = new Trace(this, i);
 		for (int i = 0; i < args.length; i++)
 			if (args[i] == null) args[i] = "";
+		Arrays.fill(colors, Trace.VOID_COLOR);
 		def.model.loadIcon();
 		updateSize();
-	}
-
-	public int ins() {
-		return nodesIn.length;
 	}
 
 	public boolean isInside(int x, int y) {
@@ -76,13 +68,14 @@ public class Block extends IndexedSet.Element implements CircuitObject {
 		if (s < 0)
 			if (s == ds) return this;
 			else s = 0;
-		Block block = new Block(def, def.outs(s), def.ins(s), Arrays.copyOf(args, def.args(s)));
+		Block block = new Block(def, s);
 		System.arraycopy(args, 0, block.args, 0, min(args.length, block.args.length));
-		for (int i = 0, l = min(outs, block.outs); i < l; i++) {
+		block.updateSize();
+		for (int i = 0, l = min(outs(), block.outs()); i < l; i++) {
 			Trace ta = io[i], tb = block.io[i];
 			while(ta.to != null) ta.to.connect(tb, cc);
 		}
-		for (int i = outs, j = block.outs, l = min(ins(), block.ins()); l > 0; i++, j++, l--) {
+		for (int i = outs(), j = block.outs(), l = min(ins(), block.ins()); l > 0; i++, j++, l--) {
 			Trace ta = io[i], tb = block.io[j];
 			while(ta.to != null) ta.to.connect(tb, cc);
 			tb.connect(ta.from, cc);
@@ -94,7 +87,7 @@ public class Block extends IndexedSet.Element implements CircuitObject {
 
 	public int size() {
 		return max(max(
-			outs - def.outs.length,
+			outs() - def.outs.length,
 			ins() - def.ins.length),
 			args.length - def.args.length
 		) + 1;
@@ -109,7 +102,7 @@ public class Block extends IndexedSet.Element implements CircuitObject {
 		}
 		w += model.tw;
 		h += model.th;
-		int n = max(-1, max(outs * 2 - model.outs.length, ins() * 2 - model.ins.length) >> 1) * model.rh;
+		int n = max(-1, max(outs() * 2 - model.outs.length, ins() * 2 - model.ins.length) >> 1) * model.rh;
 		this.w = (short)max(w, model.icon.w);
 		this.h = (short)max(h, model.icon.h + n);
 		draw();
@@ -117,9 +110,9 @@ public class Block extends IndexedSet.Element implements CircuitObject {
 
 	public void updatePins(CircuitEditor cc) {
 		BlockModel model = def.model;
-		for (int i = 0; i < outs; i++)
+		for (int i = 0; i < outs(); i++)
 			io[i].movePin(i, model.outs, x, y, w, h, model.rh, cc);
-		for (int i = outs, j = 0; i < io.length; i++, j++)
+		for (int i = outs(), j = 0; i < io.length; i++, j++)
 			io[i].movePin(j, model.ins, x, y, w, h, model.rh, cc);
 	}
 
@@ -189,23 +182,40 @@ public class Block extends IndexedSet.Element implements CircuitObject {
 	@Override
 	public void add(CircuitEditor cc) {
 		va = cc.blockVAO;
-		if (cc.blocks.add(this)) {
-			cc.macro.addBlock(this, cc);
+		if (cc.blocks.add(this))
 			for (Trace tr : io) tr.add(cc);
-		}
+		cc.reRunTypecheck = true;
 	}
 
 	@Override
 	public void remove(CircuitEditor cc) {
 		va = null;
 		cc.blocks.remove(this);
-		cc.macro.removeBlock(this, cc);
 		for (Trace tr : io) tr.remove(cc);
+		cc.reRunTypecheck = true;
 	}
 
 	@Override
 	public boolean inRange(int x0, int y0, int x1, int y1) { 
 		return x < x1 && y < y1 && x + w > x0 && y + h > y0;
+	}
+
+	public void updateColors(Arguments state) {
+		ArrayList<Trace> stack = new ArrayList<>();
+		for (int i = 0; i < colors.length; i++) {
+			Value s = value(i, state);
+			short c = s == null ? Trace.VOID_COLOR : (short)s.color();
+			if (c != colors[i]) {
+				colors[i] = (short)c;
+				stack.add(io[i]);
+				Trace.forEachUser(stack, Trace::draw);
+			}
+		}
+	}
+
+	public Value value(int pin, Arguments state) {
+		Node node = outs[pin];
+		return node == null || state == null ? null : state.get(node.addr());
 	}
 
 }

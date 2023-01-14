@@ -17,8 +17,8 @@ public class CstSwitch implements Instruction, SwitchAssembler {
 	}
 
 	@Override
-	public Node switchNode(BlockDesc block, NodeContext context) {
-		return new Node(this, Node.INSTR, 1);
+	public Node switchNode(BlockDesc block, NodeContext context, int idx) {
+		return new Node(this, Node.INSTR, 1, idx);
 	}
 
 	@Override
@@ -28,16 +28,6 @@ public class CstSwitch implements Instruction, SwitchAssembler {
 			if (cases[i].equals(val))
 				return new SwitchSelector(i + 1, val);
 		return new SwitchSelector(0, val);
-	}
-
-	public Node node(Node... in) {
-		Node node = new Node(this, Node.INSTR, 1);
-		node.in[0].connect(in[0]);
-		Node sel = new Node(SwitchAssembler.SELECT, Node.SWT, cases.length + 2);
-		sel.in[0].connect(node);
-		for (int i = 1; i < in.length; i++)
-			sel.in[i].connect(in[i]);
-		return sel;
 	}
 
 }

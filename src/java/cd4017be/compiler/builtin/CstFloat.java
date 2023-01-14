@@ -1,6 +1,5 @@
 package cd4017be.compiler.builtin;
 
-import static cd4017be.compiler.LoadingCache.CORE;
 import static java.lang.Double.doubleToRawLongBits;
 import static java.lang.Double.longBitsToDouble;
 
@@ -10,7 +9,7 @@ import cd4017be.compiler.*;
  * @author CD4017BE */
 public class CstFloat extends Value {
 
-	public static final Type CST_FLOAT = Type.of(CORE.findType("cfloat"), 0);
+	public static final Type CST_FLOAT = Type.builtin("cfloat");
 
 	public final double value;
 

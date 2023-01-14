@@ -83,7 +83,6 @@ public class Shaders {
 
 	/** default font texture for text rendering */
 	public static final int font_tex = texture2DMM(GL_LINEAR_MIPMAP_NEAREST, GL_NEAREST, GL_REPEAT, GL_R3_G3_B2, "font0", "font1");
-	public static final int trace_tex = texture2D(GL_NEAREST, GL_REPEAT, GL_RGB5_A1, "traces");
 	public static final VertexArray text_vao = genTextVAO(32);
 	public static final VertexArray sel_vao = genSelVAO(8);
 	public static final int palette_tex = genColorPalette(
@@ -98,8 +97,6 @@ public class Shaders {
 		initFont(font_tex, FONT_CW, FONT_CH);
 		glUniform1i(glGetUniformLocation(textP, "font"), 1);
 		glUniform1i(glGetUniformLocation(textP, "palette"), 0);
-		initTraces(trace_tex, 4, 2);
-		glUniform1i(glGetUniformLocation(traceP, "tex"), 2);
 	}
 	private static final byte X0Y0 = 0, X1Y0 = 1, X0Y1 = 2, X1Y1 = 3;
 	/**Color indices: index = BG_? | FG_? */
@@ -186,16 +183,6 @@ public class Shaders {
 		buf.putLong(pos).put((byte)type).put(X1Y1);
 		buf.putLong(pos).put((byte)type).put(X0Y1);
 		return buf;
-	}
-
-	public static void initTraces(int tex, int dx, int dy) {
-		glActiveTexture(GL_TEXTURE2);
-		glBindTexture(GL_TEXTURE_2D, tex);
-		int w = glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH);
-		int h = glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT);
-		glActiveTexture(GL_TEXTURE0);
-		glUseProgram(traceP);
-		glUniform2f(trace_texScale, (float)dx / (float)w, (float)dy / (float)h);
 	}
 
 	/**Used to render rectangular selections.

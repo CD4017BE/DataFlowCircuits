@@ -10,7 +10,6 @@ import java.lang.reflect.Method;
 import java.util.HashMap;
 
 import cd4017be.compiler.builtin.ScopeData;
-import cd4017be.compiler.builtin.SignalError;
 
 
 /**
@@ -42,9 +41,10 @@ public class VTable extends HashMap<String, Instruction> {
 		Lookup lu = MethodHandles.lookup();
 		for (Method meth : valueClass.getDeclaredMethods()) {
 			if (((PUBLIC | STATIC) & ~meth.getModifiers()) != 0) continue;
-			if (meth.getReturnType() != SignalError.class) continue;
+			if (meth.getReturnType() != Value.class) continue;
 			Class<?>[] par = meth.getParameterTypes();
 			if (par.length != 2 || par[0] != Arguments.class || par[1] != ScopeData.class) continue;
+			if (containsKey(meth.getName())) continue;
 			try {
 				put(meth.getName(), asInterfaceInstance(Instruction.class, lu.unreflect(meth)));
 			} catch(IllegalAccessException e) {

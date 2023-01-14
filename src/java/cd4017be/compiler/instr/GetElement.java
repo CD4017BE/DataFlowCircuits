@@ -19,8 +19,8 @@ public class GetElement implements Instruction {
 		return args.in(0).element(idx);
 	}
 
-	public Node node(Node in) {
-		Node node = new Node(this, Node.INSTR, 1);
+	public Node node(Node in, int idx) {
+		Node node = new Node(this, Node.INSTR, 1, idx);
 		node.in[0].connect(in);
 		return node;
 	}

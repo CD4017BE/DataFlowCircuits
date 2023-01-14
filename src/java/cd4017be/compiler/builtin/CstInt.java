@@ -1,13 +1,12 @@
 package cd4017be.compiler.builtin;
 
-import static cd4017be.compiler.LoadingCache.CORE;
 import cd4017be.compiler.*;
 
 /**
  * @author CD4017BE */
 public class CstInt extends Value {
 
-	public static final Type CST_INT = Type.of(CORE.findType("cint"), 0);
+	public static final Type CST_INT = Type.builtin("cint");
 
 	public final long value;
 
@@ -95,22 +94,22 @@ public class CstInt extends Value {
 		return null;
 	}
 
-	public static Value div(Arguments args, ScopeData scope) {
+	public static Value div(Arguments args, ScopeData scope) throws SignalError {
 		long x = ((CstInt)args.in(0)).value;
 		Value vb = args.in(1);
 		if (vb instanceof CstInt cb)
-			return cb.value == 0L ? new SignalError("div by 0")
+			return cb.value == 0L ? args.error("div by 0")
 				: new CstInt(x / cb.value);
 		if (vb instanceof CstFloat cb)
 			return new CstFloat((double)x / cb.value);
 		return null;
 	}
 
-	public static Value mod(Arguments args, ScopeData scope) {
+	public static Value mod(Arguments args, ScopeData scope) throws SignalError {
 		long x = ((CstInt)args.in(0)).value;
 		Value vb = args.in(1);
 		if (vb instanceof CstInt cb)
-			return cb.value == 0L ? new SignalError("div by 0")
+			return cb.value == 0L ? args.error("div by 0")
 				: new CstInt(x % cb.value);
 		if (vb instanceof CstFloat cb)
 			return new CstFloat((double)x % cb.value);

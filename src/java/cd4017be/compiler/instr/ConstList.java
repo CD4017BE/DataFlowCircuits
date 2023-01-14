@@ -30,13 +30,14 @@ public class ConstList implements NodeAssembler {
 	}
 
 	@Override
-	public void assemble(BlockDesc block, NodeContext context) {
-		if (block.ins.length != 0) throw new IllegalArgumentException("wrong IO count");
+	public void assemble(BlockDesc block, NodeContext context, int idx) throws SignalError {
+		if (block.ins.length != 0)
+			throw new SignalError(idx, "wrong IO count");
 		ensureLoaded();
 		String name = block.args.length > 0 ? block.args[0] : def.outs[0];
 		Value val = signals.get(name);
 		if (val == null) val = Bundle.VOID;
-		Node node = new Constant(val).node();
+		Node node = new Constant(val).node(idx);
 		block.setOuts(node);
 	}
 
@@ -47,12 +48,12 @@ public class ConstList implements NodeAssembler {
 		list.addAll(signals.keySet());
 	}
 
-	public SignalError compile() {
+	public void compile() throws IOException, SignalError {
 		Profiler p = new Profiler(System.out);
 		Function f = new Function(def);
 		String[] keys = f.compile();
 		p.end("compiled");
-		Value value = f.eval(new Arguments(), new ScopeData(null));
+		Value value = f.eval(Arguments.EMPTY, ScopeData.ROOT);
 		p.end("executed");
 		this.signals = new HashMap<>();
 		if (keys.length == 1)
@@ -66,7 +67,6 @@ public class ConstList implements NodeAssembler {
 			e.printStackTrace();
 		}
 		p.end("written to file");
-		return null;
 	}
 
 }

@@ -17,8 +17,8 @@ public class TypeSwitch implements Instruction, SwitchAssembler {
 	}
 
 	@Override
-	public Node switchNode(BlockDesc block, NodeContext context) {
-		return new Node(this, Node.INSTR, 1);
+	public Node switchNode(BlockDesc block, NodeContext context, int idx) {
+		return new Node(this, Node.INSTR, 1, idx);
 	}
 
 	@Override

@@ -10,7 +10,12 @@ public class Type {
 	private static final WeakHashMap<Type, WeakReference<Type>> CACHE = new WeakHashMap<>();
 	private static final String[] SINGLE = {"el"}, NONE = {};
 	private static final Type[] EMPTY = {};
-	//public static final Type VOID = new Type(new VTable(null, "void", "void", 2), 0);
+
+	public static Type builtin(String name) {
+		VTable vtable = LoadingCache.CORE.types.get(name);
+		if (vtable == null) throw new IllegalStateException("missing builtin type " + name);
+		return of(vtable, NONE, EMPTY, 0);
+	}
 
 	/**@param vtable behavior of the type
 	 * @param n arbitrary number
