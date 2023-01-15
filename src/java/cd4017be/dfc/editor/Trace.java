@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 import org.lwjgl.system.MemoryStack;
 
 import cd4017be.compiler.*;
+import cd4017be.compiler.Node.Vertex;
 import cd4017be.compiler.builtin.Bundle;
 import cd4017be.util.IndexedSet;
 import cd4017be.util.VertexArray;
@@ -151,7 +152,9 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		if (src != null)
 			block.connectIn(i, src.block, src.pin);
 		else block.connectIn(i, null, -1);
-		cc.reRunTypecheck = true;
+		Vertex v = block.ins[i];
+		if (v != null && v.scope() != null)
+			cc.reRunTypecheck = true;
 	}
 
 	@Override

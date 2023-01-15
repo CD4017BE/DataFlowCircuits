@@ -184,7 +184,7 @@ public class Block extends BlockDesc implements CircuitObject {
 		va = cc.blockVAO;
 		if (cc.blocks.add(this))
 			for (Trace tr : io) tr.add(cc);
-		cc.reRunTypecheck = true;
+		if (outs() == 0) cc.reRunTypecheck = true;
 	}
 
 	@Override
@@ -192,7 +192,10 @@ public class Block extends BlockDesc implements CircuitObject {
 		va = null;
 		cc.blocks.remove(this);
 		for (Trace tr : io) tr.remove(cc);
-		cc.reRunTypecheck = true;
+		if (cc.errorBlock == this) {
+			cc.errorBlock = null;
+			cc.reRunTypecheck = true;
+		}
 	}
 
 	@Override

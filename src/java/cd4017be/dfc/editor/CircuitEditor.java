@@ -208,7 +208,13 @@ public class CircuitEditor implements IGuiSection {
 
 	private void updateArg() {
 		if (editing == null || !textModified) return;
-		reRunTypecheck = true;
+		if (editing == errorBlock || editing.outs() == 0)
+			reRunTypecheck = true;
+		else for (Node n : editing.outs)
+			if (n != null && n.addr() > 0) {
+				reRunTypecheck = true;
+				break;
+			}
 		textModified = false;
 	}
 

@@ -15,6 +15,7 @@ public class Node {
 	public final int mode, idx;
 	private int wait;
 	int addr;
+	Node next;
 
 	public Node(Node out) {
 		this();
@@ -50,11 +51,17 @@ public class Node {
 	}
 
 	public int computeScope(int nextAddr) {
+		if (mode == OUT) {
+			in[0].scope = new ScopeBranch(null, this, 0).addr(0);
+			return nextAddr;
+		}
 		int l = 0;
-		for (Vertex v = out; v != null; v = v.next) l++;
+		for (Vertex v = out; v != null; v = v.next)
+			if (v.scope != null) l++;
+		if (l == 0) return nextAddr;
 		Scope[] src = new Scope[l]; l = 0;
 		for (Vertex v = out; v != null; v = v.next)
-			src[l++] = v.scope;
+			if (v.scope != null) src[l++] = v.scope;
 		Scope scope = ScopeUnion.union(src);
 		switch(mode) {
 			case INSTR -> {
@@ -83,9 +90,6 @@ public class Node {
 				scope.addMember(this);
 				in[0].scope = scope.parent;
 			}
-			case OUT -> {
-				in[0].scope = new ScopeBranch(null, this, 0).addr(0);
-			}
 		}
 		return nextAddr;
 	}
@@ -93,14 +97,34 @@ public class Node {
 	public static int evalScopes(Node root, int nextAddr) {
 		ArrayList<Node> stack = new ArrayList<>();
 		stack.add(root);
-		while(!stack.isEmpty()) {
-			Node node = stack.remove(stack.size() - 1);
-			nextAddr = node.computeScope(nextAddr);
-			for (Vertex in : node.in) {
-				Node from = in.from;
-				if (from != null && --from.wait == 0)
-					stack.add(from);
+		for (Node first = root, last = root; first != null;) {
+			while(!stack.isEmpty()) {
+				Node node = stack.remove(stack.size() - 1);
+				nextAddr = node.computeScope(nextAddr);
+				for (Vertex in : node.in) {
+					Node from = in.from;
+					if (from == null) continue;
+					if (--from.wait == 0) stack.add(from);
+					else if (from.next == null && from != last) {
+						last.next = from;
+						last = from;
+					}
+				}
 			}
+			while(first != null)
+				if (first.wait == 0) {
+					Node old = first;
+					first = old.next;
+					old.next = null;
+				} else {
+					Node node = first;
+					for (Vertex v = node.out; v != null;)
+						if (v.scope == null)
+							v = (node = v.to).out;
+						else v = v.next;
+					stack.add(node);
+					break;
+				}
 		}
 		return nextAddr;
 	}
