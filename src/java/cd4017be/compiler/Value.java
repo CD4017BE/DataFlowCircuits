@@ -182,9 +182,11 @@ public class Value implements Instruction {
 
 	private static ByteBuffer encode(CharsetEncoder enc, CharBuffer s, int p, int q, ByteBuffer buf, boolean end) {
 		if (q > p) {
+			int l = s.limit();
 			s.limit(q).position(p);
 			while(enc.encode(s, buf, end).isOverflow())
 				buf = grow(buf);
+			s.limit(l);
 		}
 		return end || buf.hasRemaining() ? buf : grow(buf);
 	}

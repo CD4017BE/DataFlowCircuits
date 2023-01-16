@@ -13,6 +13,7 @@ import java.util.HashMap;
 import org.lwjgl.system.MemoryStack;
 
 import cd4017be.compiler.builtin.Bundle;
+import cd4017be.compiler.builtin.IOStream;
 import cd4017be.util.*;
 import cd4017be.util.ConfigFile.KeyValue;
 
@@ -300,7 +301,10 @@ public class Module {
 	}
 
 	public Value signal(String name) {
-		return Bundle.VOID;
+		switch(name) {
+		case "stdout": return new IOStream(System.out);
+		default: return Bundle.VOID;
+		}
 	}
 
 	@Override

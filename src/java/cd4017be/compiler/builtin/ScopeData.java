@@ -20,7 +20,7 @@ public class ScopeData extends Value {
 	}
 
 	public ScopeData(ScopeData parent, int path, Value value) {
-		super(SCOPE, true);
+		super(SCOPE);
 		this.parent = parent;
 		this.path = path;
 		this.value = value;

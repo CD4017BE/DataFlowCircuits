@@ -24,25 +24,27 @@ public interface Plugin {
 		}
 	};
 	NodeAssembler ET = (block, context, idx) -> {
-		int l = block.args.length;
+		String[] args = context.args(block);
+		int l = args.length;
 		if (block.ins.length != 1 || l != block.outs.length)
 			throw new SignalError(idx, "wrong IO count");
 		if (l != 1) {
 			Node in = new Node(Instruction.PASS, Node.INSTR, 1, idx);
 			for (int i = 0; i < l; i++) {
-				Node node = new Node(new GetElementType(block.args[i]), Node.INSTR, 1, idx);
+				Node node = new Node(new GetElementType(args[i]), Node.INSTR, 1, idx);
 				block.outs[i] = node;
 				node.in[0].connect(in);
 			}
 			block.setIns(in);
-		} else block.makeNode(new GetElementType(block.args[0]), idx);
+		} else block.makeNode(new GetElementType(args[0]), idx);
 	};
 	NodeAssembler NT = new NodeAssembler() {
 		@Override
 		public void assemble(BlockDesc block, NodeContext context, int idx) throws SignalError {
-			if (block.ins.length != block.args.length - 1)
+			String[] args = context.args(block);
+			if (block.ins.length != args.length - 1)
 				throw new SignalError(idx, "wrong IO count");
-			block.makeNode(new NewType(block.args, context.def.module), idx);
+			block.makeNode(new NewType(args, context.def.module), idx);
 		}
 		@Override
 		public void getAutoCompletions(
@@ -52,14 +54,16 @@ public interface Plugin {
 		}
 	};
 	NodeAssembler OP = (block, context, idx) -> {
-		if (block.args.length != 1)
+		String[] args = context.args(block);
+		if (args.length != 1)
 			throw new SignalError(idx, "wrong IO count");
-		block.makeNode(new DynInstruction(block.args[0]), idx);
+		block.makeNode(new DynInstruction(args[0]), idx);
 	};
 	NodeAssembler ERR = (block, context, idx) -> {
-		if (block.args.length != 1)
+		String[] args = context.args(block);
+		if (args.length != 1)
 			throw new SignalError(idx, "wrong IO count");
-		block.makeNode(new Abort(block.args[0]), idx);
+		block.makeNode(new Abort(args[0]), idx);
 	};
 	NodeAssembler IO = new NodeAssembler() {
 		@Override
@@ -83,10 +87,11 @@ public interface Plugin {
 		}
 	};
 	NodeAssembler EXPR = (block, context, idx) -> {
-		if (block.ins.length != 0 || block.args.length != block.outs.length)
+		String[] args = context.args(block);
+		if (block.ins.length != 0 || args.length != block.outs.length)
 			throw new SignalError(idx, "wrong IO count");
-		for (int i = 0; i < block.args.length; i++)
-			block.outs[i] = new Node(Value.parse(block.args[i], context, idx, "value"), Node.INSTR, 0, idx);
+		for (int i = 0; i < args.length; i++)
+			block.outs[i] = new Node(Value.parse(args[i], context, idx, "value"), Node.INSTR, 0, idx);
 	};
 	NodeAssembler PACK = (block, context, idx) -> {
 		if (block.ins() != 1 && block.outs() != 1)
@@ -104,13 +109,14 @@ public interface Plugin {
 	SwitchAssembler TYPE_SWITCH = new SwitchAssembler() {
 		@Override
 		public Node switchNode(BlockDesc block, NodeContext context, int idx) throws SignalError {
-			if (block.args.length + 2 != block.ins.length)
+			String[] args = context.args(block);
+			if (args.length + 2 != block.ins.length)
 				throw new SignalError(idx, "wrong IO count");
 			var mod = context.def.module;
-			VTable[] cases = new VTable[block.args.length];
+			VTable[] cases = new VTable[args.length];
 			for (int i = 0; i < cases.length; i++)
-				if ((cases[i] = mod.findType(block.args[i])) == null)
-					throw new SignalError(idx, "invalid type name: " + block.args[i]);
+				if ((cases[i] = mod.findType(args[i])) == null)
+					throw new SignalError(idx, "invalid type name: " + args[i]);
 			return new TypeSwitch(cases).switchNode(block, context, idx);
 		}
 		@Override
@@ -124,11 +130,12 @@ public interface Plugin {
 		}
 	};
 	SwitchAssembler VALUE_SWITCH = (block, context, idx) -> {
-		if (block.args.length + 2 != block.ins.length)
+		String[] args = context.args(block);
+		if (args.length + 2 != block.ins.length)
 			throw new SignalError(idx, "wrong IO count");
-		Value[] cases = new Value[block.args.length];
+		Value[] cases = new Value[args.length];
 		for (int i = 0; i < cases.length; i++)
-			cases[i] = Value.parse(block.args[i], context, idx, "case" + i);
+			cases[i] = Value.parse(args[i], context, idx, "case" + i);
 		return new CstSwitch(cases).switchNode(block, context, idx);
 	};
 	NodeAssembler LOOP = (block, context, idx) -> {
@@ -170,12 +177,14 @@ public interface Plugin {
 			case "scope": return ScopeData.class;
 			case "switch": return SwitchSelector.class;
 			case "dyn": return DynOp.class;
+			case "io": return IOStream.class;
 			default: return Value.class;
 			}
 		}
 		@Override
 		public NodeAssembler assembler(String type, BlockDef def) {
 			switch(type) {
+			case "macro": return new Macro(def);
 			case "block": return new Function(def);
 			case "const": return new ConstList(def);
 			case "to": return new VirtualCall(def.id);

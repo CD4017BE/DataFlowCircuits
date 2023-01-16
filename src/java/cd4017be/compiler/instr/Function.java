@@ -57,7 +57,7 @@ public class Function implements Instruction, NodeAssembler {
 	public String[] compile() throws IOException, SignalError {
 		NodeContext cont = new NodeContext(def, false);
 		try (ExtInputStream is = CircuitFile.readBlock(def)) {
-			cont.build(CircuitFile.readCircuit(is, def.module));
+			cont.build(CircuitFile.readCircuit(is, def.module), true);
 		}
 		Node out = new Node();
 		String[] outs = cont.collectOutputs(out);

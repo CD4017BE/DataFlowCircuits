@@ -14,7 +14,7 @@ public class SwitchSelector extends Value {
 	public final int path;
 
 	public SwitchSelector(int path, Value value) {
-		super(SWITCH, true);
+		super(SWITCH);
 		this.path = path;
 		this.value = value;
 	}

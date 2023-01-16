@@ -33,15 +33,4 @@ public abstract class Scope {
 		return sb.toString();
 	}
 
-	public static void main(String[] args) {
-//		Scope
-//		a = new ScopeBranch(ROOT, 1, 0),
-//		b = new ScopeBranch(ROOT, 1, 1),
-//		c = new ScopeBranch(ROOT, 1, -2),
-//		u = union(a, b), v = union(b, c),
-//		d = new ScopeBranch(u, 2, 0),
-//		e = new ScopeBranch(u, 2, -1);
-//		System.out.println(union(v, d, e));
-	}
-
 }

@@ -31,14 +31,16 @@ public class ConstList implements NodeAssembler {
 
 	@Override
 	public void assemble(BlockDesc block, NodeContext context, int idx) throws SignalError {
-		if (block.ins.length != 0)
+		String[] args = context.args(block);
+		if (args.length == 0) args = def.outs;
+		if (block.ins() != 0 || block.outs() != args.length)
 			throw new SignalError(idx, "wrong IO count");
 		ensureLoaded();
-		String name = block.args.length > 0 ? block.args[0] : def.outs[0];
-		Value val = signals.get(name);
-		if (val == null) val = Bundle.VOID;
-		Node node = new Constant(val).node(idx);
-		block.setOuts(node);
+		for (int i = 0; i < args.length; i++) {
+			Value val = signals.get(args[i]);
+			if (val == null) throw new SignalError(idx, "invalid name " + args[i]);
+			block.outs[i] = new Node(val, Node.INSTR, 0, idx);
+		}
 	}
 
 	@Override
