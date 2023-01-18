@@ -147,6 +147,7 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 
 	private void updateSrc(Trace src, CircuitEditor cc) {
 		this.src = src;
+		draw();
 		if (pin < 0) return;
 		int i = pin - block.outs();
 		if (src != null)
@@ -184,7 +185,7 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 			va.set(idx * 4, drawTrace(
 				ms.malloc(TRACE_PRIMLEN),
 				from.x, from.y, x, y,
-				src == null ? VOID_COLOR : src.block.colors[src.pin]
+				src == null ? 1 : src.block.colors[src.pin]
 			).flip());
 		}
 		Main.refresh(0);

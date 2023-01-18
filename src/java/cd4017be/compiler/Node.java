@@ -14,8 +14,9 @@ public class Node {
 	private Vertex out;
 	public final int mode, idx;
 	private int wait;
-	int addr;
+	int addr = -1;
 	Node next;
+	boolean visited;
 
 	public Node(Node out) {
 		this();
@@ -50,7 +51,7 @@ public class Node {
 		return addr;
 	}
 
-	public int computeScope(int nextAddr) {
+	public int computeScope(int nextAddr) throws SignalError {
 		if (mode == OUT) {
 			in[0].scope = new ScopeBranch(null, this, 0).addr(0);
 			return nextAddr;
@@ -58,7 +59,10 @@ public class Node {
 		int l = 0;
 		for (Vertex v = out; v != null; v = v.next)
 			if (v.scope != null) l++;
-		if (l == 0) return nextAddr;
+		if (l == 0) {
+			addr = 0;
+			return nextAddr;
+		}
 		Scope[] src = new Scope[l]; l = 0;
 		for (Vertex v = out; v != null; v = v.next)
 			if (v.scope != null) src[l++] = v.scope;
@@ -85,7 +89,8 @@ public class Node {
 			}
 			case BEGIN -> {
 				while (!(scope instanceof ScopeBranch sb && sb.node.mode == END))
-					scope = scope.parent;
+					if ((scope = scope.parent) == null)
+						throw new SignalError(idx, "Loop entrance without exit");
 				addr = nextAddr++;
 				scope.addMember(this);
 				in[0].scope = scope.parent;
@@ -94,10 +99,12 @@ public class Node {
 		return nextAddr;
 	}
 
-	public static int evalScopes(Node root, int nextAddr) {
+	public static int evalScopes(Node root, int nextAddr) throws SignalError {
 		ArrayList<Node> stack = new ArrayList<>();
+		ArrayList<Node> waiting = new ArrayList<>();
 		stack.add(root);
-		for (Node first = root, last = root; first != null;) {
+		int p;
+		for(;;) {
 			while(!stack.isEmpty()) {
 				Node node = stack.remove(stack.size() - 1);
 				nextAddr = node.computeScope(nextAddr);
@@ -105,28 +112,39 @@ public class Node {
 					Node from = in.from;
 					if (from == null) continue;
 					if (--from.wait == 0) stack.add(from);
-					else if (from.next == null && from != last) {
-						last.next = from;
-						last = from;
+					else if (from.addr == -1) {
+						from.addr = -2;
+						waiting.add(from);
 					}
 				}
 			}
-			while(first != null)
-				if (first.wait == 0) {
-					Node old = first;
-					first = old.next;
-					old.next = null;
-				} else {
-					Node node = first;
-					for (Vertex v = node.out; v != null;)
-						if (v.scope == null)
-							v = (node = v.to).out;
-						else v = v.next;
+			for (p = waiting.size() - 1;;) {
+				if (p < 0) return nextAddr;
+				Node node = waiting.get(p);
+				if (node.wait == 0)
+					waiting.remove(p--);
+				else {
+					node.visited = true;
+					for (Vertex v = node.out; v != null;) {
+						Node next = v.to;
+						if (next.addr >= 0) {
+							v = v.next;
+							continue;
+						}
+						if (next.visited)
+							throw new SignalError(node.idx, "circular dependency");
+						waiting.add(next);
+						next.visited = true;
+						v = (node = next).out;
+					}
+					for (int i = waiting.size() - 1; i > p; i--)
+						waiting.remove(i).visited = false;
+					waiting.get(p).visited = false;
 					stack.add(node);
 					break;
 				}
+			}
 		}
-		return nextAddr;
 	}
 
 	@Override
