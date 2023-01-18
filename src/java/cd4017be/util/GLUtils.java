@@ -136,7 +136,7 @@ public class GLUtils {
 		if (vert >= 0) glAttachShader(p, vert);
 		if (frag >= 0) glAttachShader(p, frag);
 		glLinkProgram(p);
-		System.out.println(glGetProgramInfoLog(p));
+		//System.out.println(glGetProgramInfoLog(p));
 		return p;
 	}
 

@@ -1,15 +1,50 @@
 package cd4017be.compiler;
 
-import java.util.Arrays;
-import java.util.HashMap;
+import java.lang.ref.WeakReference;
+import java.util.*;
 
 /**
  * @author CD4017BE */
 public class Type {
 
+	private static final WeakHashMap<Type, WeakReference<Type>> CACHE = new WeakHashMap<>();
 	private static final String[] SINGLE = {"el"}, NONE = {};
 	private static final Type[] EMPTY = {};
-	//public static final Type VOID = new Type(new VTable(null, "void", "void", 2), 0);
+
+	public static Type builtin(String name) {
+		VTable vtable = LoadingCache.CORE.types.get(name);
+		if (vtable == null) throw new IllegalStateException("missing builtin type " + name);
+		return of(vtable, NONE, EMPTY, 0);
+	}
+
+	/**@param vtable behavior of the type
+	 * @param n arbitrary number
+	 * @return a new or existing Type with no elements */
+	public static Type of(VTable vtable, int n) {
+		return of(vtable, NONE, EMPTY, n);
+	}
+
+	/**@param vtable behavior of the type
+	 * @param elem type of the single element
+	 * @param n arbitrary number
+	 * @return a new or existing Type with just one element type named "el" */
+	public static Type of(VTable vtable, Type elem, int n) {
+		return of(vtable, SINGLE, new Type[] {elem}, n);
+	}
+
+	/**@param vtable behavior of the type
+	 * @param names element names
+	 * @param elem element types
+	 * @param n arbitrary number
+	 * @return a new or existing Type for the given arguments */
+	public static Type of(VTable vtable, String[] names, Type[] elem, int n) {
+		Type ntype = new Type(vtable, names, elem, n);
+		WeakReference<Type> ref = CACHE.get(ntype);
+		Type type = ref == null ? null : ref.get();
+		if (type == null) CACHE.put(type = ntype, new WeakReference<>(ntype));
+		return type;
+	}
+
 
 	private final String[] names;
 	private final Type[] elem;
@@ -20,26 +55,10 @@ public class Type {
 	private final int hash;
 	private String name;
 
-	/**@param vtable behavior of the new type
-	 * @param n arbitrary number */
-	public Type(VTable vtable, int n) {
-		this(vtable, NONE, EMPTY, n);
-	}
-
-	/**@param vtable behavior of the new type
-	 * @param elem type of the single element
-	 * @param n arbitrary number */
-	public Type(VTable vtable, Type elem, int n) {
-		this(vtable, SINGLE, new Type[] {elem}, n);
-	}
-
-	/**@param vtable behavior of the new type
-	 * @param names element names
-	 * @param elem element types
-	 * @param n arbitrary number */
-	public Type(VTable vtable, String[] names, Type[] elem, int n) {
+	private Type(VTable vtable, String[] names, Type[] elem, int n) {
+		if (vtable == null) throw new NullPointerException("vtable must not be null");
 		int l = names.length;
-		if (l != elem.length) throw new IllegalArgumentException();
+		if (l != elem.length) throw new IllegalArgumentException("names and elem must have same length");
 		this.names = names;
 		this.elem = elem;
 		this.vtable = vtable;
@@ -69,11 +88,6 @@ public class Type {
 
 	public Type elem(int i) {
 		return elem[i];
-	}
-
-	public Type unique(HashMap<Type, Type> set) {
-		Type type = set.putIfAbsent(this, this);
-		return type == null ? this : type;
 	}
 
 	@Override

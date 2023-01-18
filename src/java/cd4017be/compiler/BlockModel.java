@@ -34,10 +34,10 @@ public class BlockModel implements IconHolder {
 			InputStream is = Files.newInputStream(path);
 			MemoryStack ms = MemoryStack.stackPush();
 		) {
-			module.cache.icons.load(GLUtils.readTGA(is, ms), this);
+			LoadingCache.ATLAS.load(GLUtils.readTGA(is, ms), this);
 			System.out.println("loaded icon " + path);
 		} catch (IOException e) {
-			icon = module.cache.defaultModel.icon;
+			icon = LoadingCache.MISSING_MODEL.icon;
 			e.printStackTrace();
 		}
 	}

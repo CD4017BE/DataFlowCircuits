@@ -2,45 +2,23 @@ package cd4017be.compiler;
 
 /**
  * @author cd4017be */
-public class SignalError {
+@SuppressWarnings("serial")
+public class SignalError extends Exception {
 
-	public final String msg;
-	public final SignalError child;
-	public SignalError next;
-	SignalError prev;
-	public int nodeId;
+	public int pos;
 
-	public SignalError(Throwable cause) {
-		this(cause.toString());
+	public SignalError(int pos, String msg, Throwable cause) {
+		super(msg != null ? msg : cause.getMessage(), cause);
+		this.pos = pos;
 	}
 
-	public SignalError(String msg) {
-		this(msg, null);
+	public SignalError(int pos, String msg) {
+		this(pos, msg, null);
 	}
 
-	public SignalError(String msg, SignalError child) {
-		this.msg = msg;
-		this.child = child;
-	}
-
-	public void record(NodeState ns) {
-		nodeId = ns.node.idx;
-		MacroState ms = ns.state;
-		if (ns.error != null) ns.error.clear(ns);
-		if ((next = ms.errors) != null) next.prev = this;
-		ms.errors = ns.error = this;
-	}
-
-	public void clear(NodeState ns) {
-		if (next != null) next.prev = prev;
-		if (prev != null) prev.next = next;
-		else ns.state.errors = next;
-		ns.error = null;
-	}
-
-	@Override
-	public String toString() { 
-		return child == null ? msg : msg + "->" + child;
+	public SignalError resolvePos(int[] lut) {
+		if (pos < 0) pos = lut[~pos];
+		return this;
 	}
 
 }

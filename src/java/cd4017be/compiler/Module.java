@@ -1,14 +1,20 @@
 package cd4017be.compiler;
 
+import static cd4017be.compiler.LoadingCache.CORE;
+
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
-import cd4017be.util.ConfigFile;
+import org.lwjgl.system.MemoryStack;
+
+import cd4017be.compiler.builtin.Bundle;
+import cd4017be.compiler.builtin.IOStream;
+import cd4017be.util.*;
 import cd4017be.util.ConfigFile.KeyValue;
-import cd4017be.util.ConfigWriter;
 
 /**
  * 
@@ -16,7 +22,6 @@ import cd4017be.util.ConfigWriter;
 public class Module {
 
 	public final Path path;
-	public final LoadingCache cache;
 	public final Plugin plugin;
 	public final LinkedHashMap<String, Module> imports = new LinkedHashMap<>();
 	public final HashMap<Module, String> modNames = new HashMap<>();
@@ -24,9 +29,9 @@ public class Module {
 	public final HashMap<String, BlockModel> models = new HashMap<>();
 	public final HashMap<String, VTable> types = new HashMap<>();
 	private boolean loaded;
+	int trace0 = -1;
 
-	public Module(LoadingCache cache, Path path) {
-		this.cache = cache;
+	public Module(Path path) {
 		this.path = path;
 		Plugin plugin = Plugin.DEFAULT;
 		if (Files.isRegularFile(path.resolve("Plugin.class")))
@@ -41,10 +46,26 @@ public class Module {
 				| SecurityException | ClassCastException e
 			) { e.printStackTrace(); }
 		this.plugin = plugin;
-		if (cache.icons != null) try {
+		loadTraces();
+		try {
 			loadModelDescriptions();
 		} catch(IOException e) {
 			models.clear();
+			e.printStackTrace();
+		}
+	}
+
+	public void loadTraces() {
+		if (LoadingCache.TRACES == null || trace0 >= 0) return;
+		Path path = this.path.resolve("traces.tga");
+		trace0 = 1;
+		if (Files.isReadable(path)) try (
+			InputStream is = Files.newInputStream(path);
+			MemoryStack ms = MemoryStack.stackPush();
+		) {
+			trace0 = LoadingCache.TRACES.load(GLUtils.readTGA(is, ms), this);
+			System.out.println("loaded traces for module " + this.path);
+		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
@@ -116,6 +137,10 @@ public class Module {
 	private void load() throws IOException {
 		Object[] data = ConfigFile.parse(Files.newBufferedReader(path.resolve("module.cfg")));
 		try {
+			if (this != CORE) {
+				imports.put("core", CORE);
+				modNames.put(CORE, "core");
+			}
 			for (Object e0 : data) {
 				KeyValue kv0 = (KeyValue)e0;
 				switch(kv0.key()) {
@@ -123,7 +148,7 @@ public class Module {
 					for (Object e1 : (Object[])kv0.value()) {
 						KeyValue kv1 = (KeyValue)e1;
 						Path p = path.resolveSibling((String)kv1.value()).normalize();
-						Module m = cache.getModule(p);
+						Module m = LoadingCache.getModule(p);
 						imports.put(kv1.key(), m);
 						modNames.put(m, kv1.key());
 					}}
@@ -133,14 +158,13 @@ public class Module {
 						String type = null;
 						Object[] out = {}, in = out, arg = out;
 						String name = kv1.key();
-						BlockModel model = cache.defaultModel;
+						BlockModel model = LoadingCache.MISSING_MODEL;
 						int scale = 0;
 						for (Object e2 : (Object[])kv1.value()) {
 							KeyValue kv2 = (KeyValue)e2;
 							switch(kv2.key()) {
 							case "type" -> type = (String)kv2.value();
 							case "model" -> {
-								if (cache.icons == null) break;
 								String s = (String)kv2.value();
 								int i = s.indexOf(':');
 								Module m = this;
@@ -150,7 +174,7 @@ public class Module {
 										throw new IOException("module for block model not defined: " + s);
 									s = s.substring(i + 1);
 								}
-								model = m.models.getOrDefault(s, cache.defaultModel);
+								model = m.models.getOrDefault(s, LoadingCache.MISSING_MODEL);
 							}
 							case "name" -> name = (String)kv2.value();
 							case "in" -> in = (Object[])kv2.value();
@@ -182,25 +206,29 @@ public class Module {
 						Object[] ops = new Object[0];
 						String text = "";
 						int color = 0;
+						Class<? extends Value> vc = Value.class;
 						for (Object e2 : (Object[])kv1.value()) {
 							KeyValue kv2 = (KeyValue)e2;
 							switch(kv2.key()) {
 							case "text" -> text = (String)kv2.value();
 							case "color" -> color = ((Number)kv2.value()).intValue();
+							case "class" -> vc = plugin.valueClass((String)kv2.value());
 							case "ops" -> ops = (Object[])kv2.value();
 							}
 						}
-						VTable vt = new VTable(this, kv1.key(), text, color);
+						VTable vt = new VTable(this, kv1.key(), text, color, vc);
+						types.put(kv1.key(), vt);
 						for (Object e2 : ops) {
 							KeyValue kv2 = (KeyValue)e2;
 							BlockDef def = blocks.get(kv2.value());
-							if (def != null && def.assembler instanceof VirtualMethod vm)
+							if (def != null && def.assembler instanceof Instruction vm)
 								vt.put(kv2.key(), vm);
 						}
-						types.put(kv1.key(), vt);
 					}}
 				}
 			}
+			for (VTable vt : types.values())
+				vt.initInternal();
 		} catch (ClassCastException e) {
 			throw new IOException(e);
 		}
@@ -242,15 +270,6 @@ public class Module {
 		return arr;
 	}
 
-	public BlockDef findIO(String name) {
-		BlockDef def = getBlock(name);
-		if (def != null && def.assembler == NodeAssembler.IO) return def;
-		for (Module m : imports.values())
-			if ((def = m.getBlock(name)) != null && def.assembler == NodeAssembler.IO)
-				return def;
-		return null;
-	}
-
 	public VTable findType(String name) {
 		ensureLoaded();
 		VTable vt = types.get(name);
@@ -278,6 +297,13 @@ public class Module {
 			if ((ass = m.plugin.assembler(type, blockDef)) != null)
 				return ass;
 		return null;
+	}
+
+	public Value signal(String name) {
+		switch(name) {
+		case "stdout": return new IOStream(System.out);
+		default: return Bundle.VOID;
+		}
 	}
 
 	@Override
