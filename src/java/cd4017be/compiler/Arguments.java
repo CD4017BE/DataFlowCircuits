@@ -47,7 +47,7 @@ public class Arguments {
 	}
 
 	public CodeBlock run(CodeBlock block) throws SignalError {
-		if (--limit < 0) throw new SignalError(block.args[0][0], "compute limit exceeded");
+		if (--limit < 0) throw new SignalError(~block.args[0][0], "compute limit exceeded");
 		Value v = vars[block.scope[0]];
 		if (!(v instanceof ScopeData sd))
 			return block.next[0];
@@ -62,6 +62,7 @@ public class Arguments {
 			int j = block.scope[i];
 			if (j < 0) continue;
 			vars[j] = p >= 0 && p != i - 1 ? null
+				: ss.value == null ? sd
 				: new ScopeData(sd, i - 1, ss.value);
 		}
 		if (p >= block.next.length - 1)

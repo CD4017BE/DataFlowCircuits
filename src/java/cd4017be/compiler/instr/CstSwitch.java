@@ -1,5 +1,6 @@
 package cd4017be.compiler.instr;
 
+import java.util.Objects;
 import cd4017be.compiler.*;
 import cd4017be.compiler.builtin.ScopeData;
 import cd4017be.compiler.builtin.SwitchSelector;
@@ -25,9 +26,9 @@ public class CstSwitch implements Instruction, SwitchAssembler {
 	public Value eval(Arguments args, ScopeData scope) {
 		Value val = args.in(0);
 		for (int i = 0; i < cases.length; i++)
-			if (cases[i].equals(val))
-				return new SwitchSelector(i + 1, val);
-		return new SwitchSelector(0, val);
+			if (Objects.equals(cases[i], val))
+				return new SwitchSelector(i + 1, null);
+		return new SwitchSelector(0, null);
 	}
 
 }

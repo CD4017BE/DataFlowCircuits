@@ -18,7 +18,9 @@ public class DynInstruction implements Instruction {
 
 	@Override
 	public Value eval(Arguments args, ScopeData scope) {
-		return new DynOp(args.in(0).type, opCode, args.inArr(1));
+		DynOp op = new DynOp(args.in(0).type, opCode, args.inArr(1));
+		scope.dynOps.add(op);
+		return op;
 	}
 
 }

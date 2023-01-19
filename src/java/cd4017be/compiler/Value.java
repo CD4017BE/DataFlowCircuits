@@ -70,6 +70,7 @@ public class Value implements Instruction {
 	}
 
 	public static Value parse(String s, NodeContext context, int idx, String name) throws SignalError {
+		if (s.isBlank()) return null;
 		try {
 			CharBuffer buf = CharBuffer.wrap(s);
 			Value val = parse(buf, context.def.module);

@@ -50,12 +50,17 @@ public class ConstList implements NodeAssembler {
 		list.addAll(signals.keySet());
 	}
 
+	public Value getValue(String name) {
+		ensureLoaded();
+		return signals.get(name);
+	}
+
 	public void compile() throws IOException, SignalError {
 		Profiler p = new Profiler(System.out);
 		Function f = new Function(def);
 		String[] keys = f.compile();
 		p.end("compiled");
-		Value value = f.eval(Arguments.EMPTY, ScopeData.ROOT);
+		Value value = f.eval(Arguments.EMPTY.resetLimit(), ScopeData.ROOT);
 		p.end("executed");
 		this.signals = new HashMap<>();
 		if (keys.length == 1)

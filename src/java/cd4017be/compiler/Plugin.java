@@ -1,6 +1,7 @@
 package cd4017be.compiler;
 
 import java.util.ArrayList;
+import cd4017be.compiler.Module.SignalProvider;
 import cd4017be.compiler.builtin.*;
 import cd4017be.compiler.instr.*;
 
@@ -86,12 +87,28 @@ public interface Plugin {
 			list.addAll(context.links.keySet());
 		}
 	};
-	NodeAssembler EXPR = (block, context, idx) -> {
-		String[] args = context.args(block);
-		if (block.ins.length != 0 || args.length != block.outs.length)
-			throw new SignalError(idx, "wrong IO count");
-		for (int i = 0; i < args.length; i++)
-			block.outs[i] = new Node(Value.parse(args[i], context, idx, "value"), Node.INSTR, 0, idx);
+	NodeAssembler EXPR = new NodeAssembler() {
+		@Override
+		public void assemble(BlockDesc block, NodeContext context, int idx) throws SignalError {
+			String[] args = context.args(block);
+			if (block.ins.length != 0 || args.length != block.outs.length)
+				throw new SignalError(idx, "wrong IO count");
+			for (int i = 0; i < args.length; i++) {
+				Value val = Value.parse(args[i], context, idx, "value");
+				block.outs[i] = new Node(val != null ? val : (a, scope) -> null, Node.INSTR, 0, idx);
+			}
+		}
+		@Override
+		public void getAutoCompletions(
+			BlockDesc block, int arg, ArrayList<String> list,
+			NodeContext context
+		) {
+			for (SignalProvider sp : context.def.module.signals) {
+				ConstList cl = sp.signals();
+				if (cl != null)
+					cl.getAutoCompletions(block, arg, list, context);
+			}
+		}
 	};
 	NodeAssembler PACK = (block, context, idx) -> {
 		if (block.ins() != 1 && block.outs() != 1)
@@ -188,6 +205,7 @@ public interface Plugin {
 			case "block": return new Function(def);
 			case "const": return new ConstList(def);
 			case "to": return new VirtualCall(def.id);
+			case "type": return TYPE;
 			case "pack": return PACK;
 			case "ce": return EXPR;
 			case "io": return IO;

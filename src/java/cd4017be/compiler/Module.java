@@ -13,6 +13,7 @@ import org.lwjgl.system.MemoryStack;
 
 import cd4017be.compiler.builtin.Bundle;
 import cd4017be.compiler.builtin.IOStream;
+import cd4017be.compiler.instr.ConstList;
 import cd4017be.util.*;
 import cd4017be.util.ConfigFile.KeyValue;
 
@@ -28,6 +29,7 @@ public class Module {
 	public final LinkedHashMap<String, BlockDef> blocks = new LinkedHashMap<>();
 	public final HashMap<String, BlockModel> models = new HashMap<>();
 	public final HashMap<String, VTable> types = new HashMap<>();
+	public final ArrayList<SignalProvider> signals = new ArrayList<>();
 	private boolean loaded;
 	int trace0 = -1;
 
@@ -225,6 +227,18 @@ public class Module {
 								vt.put(kv2.key(), vm);
 						}
 					}}
+				case "signals" -> {
+					for (Object e1 : (Object[])kv0.value()) {
+						String name = (String)e1;
+						int i = name.indexOf(':');
+						Module m = this;
+						if (i >= 0) {
+							m = imports.get(name.substring(0, i));
+							name = name.substring(i + 1);
+						}
+						if (m != null)
+							signals.add(new SignalProvider(m, name));
+					}}
 				}
 			}
 			for (VTable vt : types.values())
@@ -300,6 +314,12 @@ public class Module {
 	}
 
 	public Value signal(String name) {
+		for (SignalProvider sp : signals) {
+			ConstList cl = sp.signals();
+			Value v;
+			if (cl != null && (v = cl.getValue(name)) != null)
+				return v;
+		}
 		switch(name) {
 		case "stdout": return new IOStream(System.out);
 		default: return Bundle.VOID;
@@ -309,6 +329,25 @@ public class Module {
 	@Override
 	public String toString() {
 		return path.toString();
+	}
+
+	static class SignalProvider {
+		final Module module;
+		final String name;
+		ConstList signals;
+
+		SignalProvider(Module module, String name) {
+			this.module = module;
+			this.name = name;
+		}
+
+		ConstList signals() {
+			if (signals != null) return signals;
+			BlockDef def = module.getBlock(name);
+			if (def != null && def.assembler instanceof ConstList cl)
+				return signals = cl;
+			return null;
+		}
 	}
 
 }

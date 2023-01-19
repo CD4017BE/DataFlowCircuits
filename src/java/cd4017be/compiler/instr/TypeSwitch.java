@@ -27,8 +27,8 @@ public class TypeSwitch implements Instruction, SwitchAssembler {
 		VTable type = val.type.vtable;
 		for (int i = 0; i < cases.length; i++)
 			if (cases[i] == type)
-				return new SwitchSelector(i + 1, val);
-		return new SwitchSelector(0, val);
+				return new SwitchSelector(i + 1, null);
+		return new SwitchSelector(0, null);
 	}
 
 }

@@ -12,11 +12,16 @@ public class DynOp extends Value {
 
 	public final String op;
 	public final Value[] args;
+	public String var;
+	public int uses;
 
 	public DynOp(Type type, String op, Value[] args) {
 		super(type, true);
 		this.op = op;
 		this.args = args;
+		for (Value v : args)
+			if (v instanceof DynOp o)
+				o.uses++;
 	}
 
 	@Override

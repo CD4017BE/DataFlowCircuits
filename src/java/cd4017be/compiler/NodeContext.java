@@ -1,6 +1,8 @@
 package cd4017be.compiler;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import cd4017be.compiler.builtin.Bundle;
 import cd4017be.compiler.builtin.ScopeData;
 import cd4017be.compiler.instr.ConstList;
 import cd4017be.compiler.instr.Function;
@@ -19,7 +21,11 @@ public class NodeContext {
 
 	public NodeContext(BlockDef def, boolean env) {
 		this.def = def;
-		this.env = env ? new Arguments(new Value[def.ins.length]) : null;
+		if (env) {
+			Value[] arr = new Value[def.ins.length];
+			this.env = new Arguments(arr);
+			Arrays.fill(arr, Bundle.VOID);
+		} else this.env = null;
 	}
 
 	public Node getIO(String name) {
