@@ -59,15 +59,19 @@ public class ConstList implements NodeAssembler {
 		Profiler p = new Profiler(System.out);
 		Function f = new Function(def);
 		String[] keys = f.compile();
+		p.end("built");
+		ScopeData root = new ScopeData(Bundle.VOID);
+		Value value = f.eval(Arguments.EMPTY.resetLimit(), root);
+		p.end("evaluated");
+		root.compile(def);
 		p.end("compiled");
-		Value value = f.eval(Arguments.EMPTY.resetLimit(), ScopeData.ROOT);
-		p.end("executed");
 		this.signals = new HashMap<>();
 		if (keys.length == 1)
 			signals.put(keys[0], value);
 		else if (value instanceof Bundle b)
 			for (int i = 0; i < keys.length; i++)
-			signals.put(keys[i], b.values[i]);
+				signals.put(keys[i], b.values[i]);
+		
 		try {
 			CircuitFile.writeSignals(def, signals);
 		} catch (IOException e) {

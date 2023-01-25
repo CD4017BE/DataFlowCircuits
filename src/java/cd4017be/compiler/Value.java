@@ -30,10 +30,6 @@ public class Value implements Instruction {
 		this.type = type;
 	}
 
-	public SideEffects effect(SideEffects... args) {
-		return new SideEffects(SideEffects.combine(args), null, this);
-	}
-
 	@Override
 	public String toString() {
 		return type.toString();
@@ -50,6 +46,16 @@ public class Value implements Instruction {
 	/**@return bytes to serialize this value to a file */
 	public CstBytes data() {
 		return null;
+	}
+
+	@Override
+	public int hashCode() {
+		return type.hashCode();
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		return obj == this || obj.getClass() == this.getClass() && ((Value)obj).type == this.type;
 	}
 
 	public int color() {

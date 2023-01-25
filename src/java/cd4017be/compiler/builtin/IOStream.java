@@ -14,8 +14,8 @@ public class IOStream extends Value {
 
 	private final OutputStream out;
 
-	public IOStream(OutputStream out) {
-		super(IO);
+	public IOStream(Type type, OutputStream out) {
+		super(type, true);
 		this.out = out;
 	}
 

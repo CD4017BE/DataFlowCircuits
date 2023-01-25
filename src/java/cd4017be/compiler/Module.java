@@ -321,7 +321,7 @@ public class Module {
 				return v;
 		}
 		switch(name) {
-		case "stdout": return new IOStream(System.out);
+		case "stdout": return new IOStream(IOStream.IO, System.out);
 		default: return Bundle.VOID;
 		}
 	}

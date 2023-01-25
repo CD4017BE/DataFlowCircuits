@@ -55,10 +55,41 @@ public interface Plugin {
 		}
 	};
 	NodeAssembler OP = (block, context, idx) -> {
+		String[] args = context.args(block);//TODO convert args to constants
+		block.makeNode((a, scope) -> new DynOp(a.in(0).type, a.inArr(1)), idx);
+	};
+	NodeAssembler SET_EL = (block, context, idx) -> {
 		String[] args = context.args(block);
-		if (args.length != 1)
+		if (args.length != 1 || block.ins() != 2)
 			throw new SignalError(idx, "wrong IO count");
-		block.makeNode(new DynInstruction(args[0]), idx);
+		try {
+			block.makeNode(new SetElement(Integer.parseUnsignedInt(args[0])), idx);
+		} catch (NumberFormatException e) {
+			throw new SignalError(idx, "can't parse index");
+		}
+	};
+	NodeAssembler GLOBAL = (block, context, idx) -> {//TODO turn this into a scope END
+		block.makeNode((args, scope) -> {
+			Value val = args.in(0), name = args.in(1);
+			for (int i = scope.dynOps.size() - 1; i >= 0; i--)
+				if (scope.dynOps.get(i) == val) {
+					scope.dynOps.remove(i);
+					break;
+				}
+			Value old = scope.globals.putIfAbsent(name, val);
+			if (old != null)
+				return val.equals(old) ? old : args.error("global name conflict: " + name);
+			for (ScopeData parent; (parent = scope.parent) != null; scope = parent);
+			scope.dynOps.add(val);
+			return val;
+		}, 0);
+	};
+	NodeAssembler USE_COUNT = (block, context, idx) -> {
+		if (block.ins() != 1) throw new SignalError(idx, "wrong IO count");
+		block.makeNode((args, scope) ->
+			args.in(0) instanceof DynOp op ? new CstInt(op.uses)
+				: args.error("dynamic value expected")
+		, idx);
 	};
 	NodeAssembler ERR = (block, context, idx) -> {
 		String[] args = context.args(block);

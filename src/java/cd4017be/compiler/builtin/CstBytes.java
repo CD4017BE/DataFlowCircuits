@@ -87,6 +87,8 @@ public class CstBytes extends Value {
 
 	public static Value cast(Arguments args, ScopeData scope) {
 		Value vb = args.in(1);
+		if (vb.getClass() == Value.class)
+			return new CstBytes(vb.type.toString());
 		if (vb instanceof CstBytes cb)
 			return vb;
 		if (vb instanceof CstInt cb)

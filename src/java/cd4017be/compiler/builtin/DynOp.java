@@ -1,45 +1,36 @@
 package cd4017be.compiler.builtin;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
+import java.util.Arrays;
 
-import cd4017be.compiler.Type;
-import cd4017be.compiler.Value;
+import cd4017be.compiler.*;
 
 
 /**
  * @author CD4017BE */
-public class DynOp extends Value {
+public class DynOp extends Bundle {
 
-	public final String op;
-	public final Value[] args;
-	public String var;
 	public int uses;
 
-	public DynOp(Type type, String op, Value[] args) {
-		super(type, true);
-		this.op = op;
-		this.args = args;
+	public DynOp(Type type, Value[] args) {
+		super(type, args);
 		for (Value v : args)
 			if (v instanceof DynOp o)
 				o.uses++;
 	}
 
 	@Override
-	public int elCount() {
-		return args.length;
+	public int hashCode() {
+		return Arrays.hashCode(values) * 31 + type.hashCode();
 	}
 
 	@Override
-	public Value element(int i) {
-		return args[i];
-	}
-
-	@Override
-	public CstBytes data() {
-		return new CstBytes(op);
+	public boolean equals(Object obj) {
+		return obj == this || obj instanceof DynOp other
+		&& this.type == other.type
+		&& Arrays.equals(this.values, other.values);
 	}
 
 	public static Value deserialize(Type type, byte[] data, Value[] elements) {
-		return new DynOp(type, new String(data, UTF_8), elements);
+		return new DynOp(type, elements);
 	}
 }
