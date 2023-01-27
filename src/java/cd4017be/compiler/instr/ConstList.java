@@ -63,8 +63,6 @@ public class ConstList implements NodeAssembler {
 		ScopeData root = new ScopeData(Bundle.VOID);
 		Value value = f.eval(Arguments.EMPTY.resetLimit(), root);
 		p.end("evaluated");
-		root.compile(def);
-		p.end("compiled");
 		this.signals = new HashMap<>();
 		if (keys.length == 1)
 			signals.put(keys[0], value);
@@ -78,6 +76,8 @@ public class ConstList implements NodeAssembler {
 			e.printStackTrace();
 		}
 		p.end("written to file");
+		root.compile(def);
+		p.end("compiled");
 	}
 
 }

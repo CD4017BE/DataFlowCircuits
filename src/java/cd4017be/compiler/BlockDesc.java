@@ -1,5 +1,6 @@
 package cd4017be.compiler;
 
+import static java.lang.Math.min;
 import cd4017be.compiler.Node.Vertex;
 import cd4017be.compiler.instr.GetElement;
 import cd4017be.util.IndexedSet;
@@ -70,6 +71,16 @@ public class BlockDesc extends IndexedSet.Element {
 	public void makeNode(Instruction instr, int idx) {
 		Node node = new Node(instr, Node.INSTR, ins.length, idx);
 		setIns(node);
+		makeOuts(node, idx);
+	}
+
+	public void makeArgNode(Instruction instr, NodeContext context, int idx) throws SignalError {
+		String[] args = context.args(this);
+		Node node = new Node(instr, Node.INSTR, ins.length + args.length, idx);
+		for (int i = 0; i < args.length; i++)
+			node.in[i].connect(new Node(Value.parse(args[i], context, idx, def.args[min(i, def.args.length - 1)]), Node.INSTR, 0, idx));
+		for (int i = 0, j = args.length; i < ins.length; i++, j++)
+			ins[i] = node.in[j];
 		makeOuts(node, idx);
 	}
 

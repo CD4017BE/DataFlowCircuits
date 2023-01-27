@@ -71,7 +71,7 @@ public class NodeContext {
 		Function f = def.assembler instanceof Function ff ? ff : new Function(def);
 		f.define(out);
 		p.end("compiled");
-		state = new Arguments(f, env.resetLimit(), ScopeData.ROOT);
+		state = new Arguments(f, env.resetLimit(), new ScopeData(Bundle.VOID));
 		try {
 			for (CodeBlock block = f.first; block != null;)
 				block = state.run(block);

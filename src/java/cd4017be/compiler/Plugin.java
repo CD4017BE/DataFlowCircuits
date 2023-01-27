@@ -54,9 +54,36 @@ public interface Plugin {
 			list.addAll(context.def.module.types.keySet());
 		}
 	};
-	NodeAssembler OP = (block, context, idx) -> {
-		String[] args = context.args(block);//TODO convert args to constants
-		block.makeNode((a, scope) -> new DynOp(a.in(0).type, a.inArr(1)), idx);
+	NodeAssembler OP = new NodeAssembler() {
+		@Override
+		public void assemble(BlockDesc block, NodeContext context, int idx)
+		throws SignalError {
+			String[] arg = context.args(block);
+			if (arg.length != 1) throw new SignalError(idx, "wrong IO count");
+			block.makeNode(
+				arg[0].startsWith("g")
+				? (args, scope) -> {
+					DynOp op = new DynOp(args.in(0).type, args.inArr(1), true);
+					Value old = scope.globals.putIfAbsent(op.values[0], op);
+					if (old != null)
+						return op.equals(old) ? old : args.error("global name conflict: " + op.values[0]);
+					for (ScopeData parent; (parent = scope.parent) != null; scope = parent);
+					scope.dynOps.add(op);
+					return op;
+				} : (args, scope) -> {
+					DynOp op = new DynOp(args.in(0).type, args.inArr(1), false);
+					scope.dynOps.add(op);
+					return op;
+				}, idx
+			);
+		}
+		@Override
+		public void getAutoCompletions(
+			BlockDesc block, int arg, ArrayList<String> list, NodeContext context
+		) {
+			list.add("g");
+			list.add("l");
+		}
 	};
 	NodeAssembler SET_EL = (block, context, idx) -> {
 		String[] args = context.args(block);
@@ -67,22 +94,6 @@ public interface Plugin {
 		} catch (NumberFormatException e) {
 			throw new SignalError(idx, "can't parse index");
 		}
-	};
-	NodeAssembler GLOBAL = (block, context, idx) -> {//TODO turn this into a scope END
-		block.makeNode((args, scope) -> {
-			Value val = args.in(0), name = args.in(1);
-			for (int i = scope.dynOps.size() - 1; i >= 0; i--)
-				if (scope.dynOps.get(i) == val) {
-					scope.dynOps.remove(i);
-					break;
-				}
-			Value old = scope.globals.putIfAbsent(name, val);
-			if (old != null)
-				return val.equals(old) ? old : args.error("global name conflict: " + name);
-			for (ScopeData parent; (parent = scope.parent) != null; scope = parent);
-			scope.dynOps.add(val);
-			return val;
-		}, 0);
 	};
 	NodeAssembler USE_COUNT = (block, context, idx) -> {
 		if (block.ins() != 1) throw new SignalError(idx, "wrong IO count");
@@ -140,6 +151,13 @@ public interface Plugin {
 					cl.getAutoCompletions(block, arg, list, context);
 			}
 		}
+	};
+	NodeAssembler STRING = (block, context, idx) -> {
+		String[] args = context.args(block);
+		if (block.ins.length != 0 || args.length != block.outs.length)
+			throw new SignalError(idx, "wrong IO count");
+		for (int i = 0; i < args.length; i++)
+			block.outs[i] = new Node(args[i].isEmpty() ? CstBytes.EMPTY : new CstBytes(args[i]), Node.INSTR, 0, idx);
 	};
 	NodeAssembler PACK = (block, context, idx) -> {
 		if (block.ins() != 1 && block.outs() != 1)
@@ -239,10 +257,13 @@ public interface Plugin {
 			case "type": return TYPE;
 			case "pack": return PACK;
 			case "ce": return EXPR;
+			case "str": return STRING;
 			case "io": return IO;
 			case "et": return ET;
 			case "nt": return NT;
 			case "op": return OP;
+			case "se": return SET_EL;
+			case "uc": return USE_COUNT;
 			case "mv": return TYPE_SWITCH;
 			case "cv": return CMP_VTABLE;
 			case "ct": return CMP_TYPES;

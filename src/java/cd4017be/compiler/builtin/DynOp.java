@@ -10,9 +10,11 @@ import cd4017be.compiler.*;
 public class DynOp extends Bundle {
 
 	public int uses;
+	public final boolean isGlobal;
 
-	public DynOp(Type type, Value[] args) {
+	public DynOp(Type type, Value[] args, boolean isGlobal) {
 		super(type, args);
+		this.isGlobal = isGlobal;
 		for (Value v : args)
 			if (v instanceof DynOp o)
 				o.uses++;
@@ -31,6 +33,6 @@ public class DynOp extends Bundle {
 	}
 
 	public static Value deserialize(Type type, byte[] data, Value[] elements) {
-		return new DynOp(type, elements);
+		return new DynOp(type, elements, data[0] != 0);
 	}
 }

@@ -6,6 +6,7 @@ import java.util.*;
 import cd4017be.compiler.*;
 import cd4017be.compiler.instr.ConstList;
 import cd4017be.compiler.instr.Function;
+import cd4017be.compiler.instr.Macro;
 import cd4017be.util.*;
 
 import static cd4017be.compiler.LoadingCache.*;
@@ -232,6 +233,9 @@ public class CircuitEditor implements IGuiSection {
 				editing = block;
 				editArg = row;
 				autoComplete.clear();
+				if (context.def.assembler instanceof Macro)
+					for (String s : context.def.args)
+						autoComplete.add(s);
 				block.def.assembler.getAutoCompletions(block, row, autoComplete, context);
 				Collections.sort(autoComplete);
 				refresh(0);
@@ -481,6 +485,8 @@ public class CircuitEditor implements IGuiSection {
 						cl.compile();
 						info += " compiled!";
 					} catch (SignalError e) {
+						lastError = e;
+						errorBlock = e.pos >= 0 && e.pos < blocks.size() ? blocks.get(e.pos) : null;
 						info += " " + e.getMessage();
 					}
 				}

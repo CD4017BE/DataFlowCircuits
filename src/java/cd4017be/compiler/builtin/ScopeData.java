@@ -76,8 +76,8 @@ public class ScopeData extends Value {
 		for (int i = 2; i < elements.length; i++) {
 			Value v = elements[i];
 			val.dynOps.add(v);
-			if (v instanceof DynOp o && o.var != null)
-				val.globals.put(o.var, o);
+			if (v instanceof DynOp o && o.isGlobal)
+				val.globals.put(o.values[0], o);
 		}
 		return val;
 	}
