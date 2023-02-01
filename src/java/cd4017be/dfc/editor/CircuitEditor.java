@@ -71,7 +71,7 @@ public class CircuitEditor implements IGuiSection {
 		} catch(IOException e) {
 			e.printStackTrace();
 		}
-		if (blocks.isEmpty() && def.type.equals("block")) {
+		if (blocks.isEmpty() && !def.type.equals("const")) {
 			int i = 0;
 			for (String s : def.outs) {
 				Block block = new Block(OUT_BLOCK, 1);

@@ -56,7 +56,7 @@ public class ScopeData extends Value {
 		Instruction ins = comp.get("compile");
 		if (ins == null) return;
 		Value val = new IOStream(Type.of(comp, 0), System.out);
-		ins.eval(new Arguments(val, new Bundle(dynOps.toArray(Value[]::new))), this);
+		ins.eval(new Arguments(val, new Bundle(dynOps.toArray(Value[]::new))).resetLimit(), this);
 	}
 
 	public static Value rcast(Arguments args, ScopeData scope) {

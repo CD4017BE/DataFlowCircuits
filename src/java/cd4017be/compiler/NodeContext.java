@@ -38,15 +38,18 @@ public class NodeContext {
 
 	public void build(IndexedSet<? extends BlockDesc> blocks, boolean addIns) throws SignalError {
 		links.clear();
-		if (addIns)
-			for (int i = 0; i < def.ins.length; i++)
-				links.put(def.ins[i], new Node(i));
 		for (int i = 0; i < blocks.size(); i++) {
 			BlockDesc block = blocks.get(i);
 			block.def.assembler.assemble(block, this, i);
 		}
 		for (BlockDesc block : blocks)
 			block.connect();
+		if (addIns)
+			for (int i = 0; i < def.ins.length; i++) {
+				Node node = links.get(def.ins[i]);
+				if (node == null || node.in[0].from != null) continue;
+				node.in[0].connect(new Node(i));
+			}
 	}
 
 	public String[] collectOutputs(Node out) {

@@ -362,8 +362,9 @@ public class CircuitFile {
 			os.write8(SIGNAL_VERSION);
 			//write module descriptions
 			os.writeVarInt(modules.size());
+			Path root = def.module.path.getParent();
 			for (Module module : modules.keySet())
-				os.writeUTF8(module.toString());
+				os.writeUTF8(module == LoadingCache.CORE ? "" : root.relativize(module.path).toString());
 			//write V-table descriptions
 			os.writeVarInt(vtables.size());
 			for (VTable vtable : vtables.keySet()) {
@@ -435,13 +436,18 @@ public class CircuitFile {
 			is.readU8(SIGNAL_VERSION);
 			//read module descriptions
 			Module[] modules = new Module[is.readVarInt()];
-			for (int i = 0; i < modules.length; i++)
-				modules[i] = LoadingCache.getModule(Path.of(is.readUTF8())).ensureLoaded();
+			for (int i = 0; i < modules.length; i++) {
+				String p = is.readUTF8();
+				modules[i] = p.isEmpty() ? LoadingCache.CORE
+					: LoadingCache.getModule(def.module.path.resolveSibling(p)).ensureLoaded();
+			}
 			//read V-table descriptions
 			VTable[] vtables = new VTable[is.readVarInt()];
 			for (int i = 0; i < vtables.length; i++) {
 				Module m = modules[is.readInt(modules.length - 1)];
-				vtables[i] = m.types.get(is.readUTF8());
+				String name = is.readUTF8();
+				if ((vtables[i] = m.types.get(name)) == null)
+					throw new IOException("missing type " + name + " in module " + m);
 			}
 			//read type tree
 			String[] names = new String[is.readVarInt()];

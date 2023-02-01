@@ -23,7 +23,7 @@ public class IOStream extends Value {
 		try {
 			IOStream io = (IOStream)args.in(0);
 			CstBytes data = args.in(1).data();
-			io.out.write(data.value, data.ofs, data.len);
+			if (data.len > 0) io.out.write(data.value, data.ofs, data.len);
 			return io;
 		} catch(IOException e) {
 			return args.error(null, e);

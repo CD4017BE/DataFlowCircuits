@@ -9,6 +9,8 @@ import cd4017be.compiler.*;
  * @author CD4017BE */
 public class DynOp extends Bundle {
 
+	private static final CstBytes TRUE = new CstBytes(new byte[] {1}), FALSE = new CstBytes(new byte[] {0});
+
 	public int uses;
 	public final boolean isGlobal;
 
@@ -30,6 +32,11 @@ public class DynOp extends Bundle {
 		return obj == this || obj instanceof DynOp other
 		&& this.type == other.type
 		&& Arrays.equals(this.values, other.values);
+	}
+
+	@Override
+	public CstBytes data() {
+		return isGlobal ? TRUE : FALSE;
 	}
 
 	public static Value deserialize(Type type, byte[] data, Value[] elements) {

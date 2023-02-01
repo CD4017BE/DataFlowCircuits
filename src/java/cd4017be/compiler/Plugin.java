@@ -207,8 +207,14 @@ public interface Plugin {
 	NodeAssembler LOOP = (block, context, idx) -> {
 		if (block.ins() != 1)
 			throw new SignalError(idx, "wrong IO count");
+		Node pop = new Node((args, scope) -> {
+			scope.parent.dynOps.addAll(scope.dynOps);
+			scope.dynOps.clear();
+			return args.in(0);
+		}, Node.INSTR, 1, idx);
+		block.setIns(pop);
 		Node node = new Node((args, scope) -> ((SwitchSelector)args.in(0)).value, Node.END, 1, idx);
-		block.setIns(node);
+		node.in[0].connect(pop);
 		block.makeOuts(node, idx);
 	};
 	NodeAssembler DO = (block, context, idx) -> {
