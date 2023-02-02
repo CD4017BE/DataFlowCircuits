@@ -4,6 +4,9 @@ import java.io.*;
 import java.util.*;
 
 import cd4017be.compiler.*;
+import cd4017be.compiler.builtin.Bundle;
+import cd4017be.compiler.builtin.IOStream;
+import cd4017be.compiler.builtin.ScopeData;
 import cd4017be.compiler.instr.ConstList;
 import cd4017be.compiler.instr.Function;
 import cd4017be.compiler.instr.Macro;
@@ -178,7 +181,7 @@ public class CircuitEditor implements IGuiSection {
 			drawSel(ofsX, -ofsY, 0.5F * scaleX, -0.5F * scaleY, 0F, 1F);
 			drawText(ofsX, scaleY * -.25F - ofsY, scaleX * 0.5F, scaleY * -0.5F);
 		}
-		print(info, FG_YELLOW_L, 0, -1, 1, 1);
+		print(info, FG_YELLOW_L, 16, -1, 1, 1);
 		drawText(-1F, -1F, 16F / (float)WIDTH, -24F / (float)HEIGHT);
 	}
 
@@ -481,18 +484,27 @@ public class CircuitEditor implements IGuiSection {
 				info = "saved!";
 				if (def.assembler instanceof Function m) m.reset();
 				else if (def.assembler instanceof ConstList cl) {
-					try {
-						cl.compile();
-						info += " compiled!";
-					} catch (SignalError e) {
-						lastError = e;
-						errorBlock = e.pos >= 0 && e.pos < blocks.size() ? blocks.get(e.pos) : null;
-						info += " " + e.getMessage();
-					}
+					ScopeData root = null;
+					root = cl.compile();
+					info += " compiled!";
+					if (shift) {
+						VTable comp = def.module.findType("compiler");
+						Instruction ins = comp == null ? null : comp.get("compile");
+						if (ins instanceof Function f) {
+							open(f.def);
+							Value[] env = context.env();
+							env[0] = new IOStream(Type.of(comp, 0), System.out);
+							env[1] = new Bundle(root.dynOps.toArray(Value[]::new));
+						}
+					} else root.compile(def);
 				}
 			} catch(IOException e) {
 				e.printStackTrace();
 				info = e.toString();
+			} catch (SignalError e) {
+				lastError = e;
+				errorBlock = e.pos >= 0 && e.pos < blocks.size() ? blocks.get(e.pos) : null;
+				info += " " + e.getMessage();
 			}
 			refresh(0);
 			break;

@@ -55,7 +55,7 @@ public class ConstList implements NodeAssembler {
 		return signals.get(name);
 	}
 
-	public void compile() throws IOException, SignalError {
+	public ScopeData compile() throws IOException, SignalError {
 		Profiler p = new Profiler(System.out);
 		Function f = new Function(def);
 		String[] keys = f.compile();
@@ -76,8 +76,7 @@ public class ConstList implements NodeAssembler {
 			e.printStackTrace();
 		}
 		p.end("written to file");
-		root.compile(def);
-		p.end("compiled");
+		return root;
 	}
 
 }

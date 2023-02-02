@@ -23,9 +23,13 @@ public class NodeContext {
 		this.def = def;
 		if (env) {
 			Value[] arr = new Value[def.ins.length];
-			this.env = new Arguments(arr);
 			Arrays.fill(arr, Bundle.VOID);
+			this.env = new Arguments(arr);
 		} else this.env = null;
+	}
+
+	public Value[] env() {
+		return env.vars;
 	}
 
 	public Node getIO(String name) {

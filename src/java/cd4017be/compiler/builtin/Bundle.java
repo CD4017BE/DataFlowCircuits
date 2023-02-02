@@ -54,6 +54,8 @@ public class Bundle extends Value {
 		if (vb.type == ta) return vb;
 		if (vb instanceof Bundle cb)
 			return new Bundle(ta, cb.values);
+		if (vb instanceof MutMap cb)
+			return new Bundle(ta, cb.map.values().toArray(Value[]::new));
 		return new Bundle(ta, new Value[] {vb});
 	}
 

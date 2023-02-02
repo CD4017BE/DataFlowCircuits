@@ -9,14 +9,10 @@ import cd4017be.compiler.*;
  * @author CD4017BE */
 public class DynOp extends Bundle {
 
-	private static final CstBytes TRUE = new CstBytes(new byte[] {1}), FALSE = new CstBytes(new byte[] {0});
-
 	public int uses;
-	public final boolean isGlobal;
 
-	public DynOp(Type type, Value[] args, boolean isGlobal) {
+	public DynOp(Type type, Value[] args) {
 		super(type, args);
-		this.isGlobal = isGlobal;
 		for (Value v : args)
 			if (v instanceof DynOp o)
 				o.uses++;
@@ -34,12 +30,7 @@ public class DynOp extends Bundle {
 		&& Arrays.equals(this.values, other.values);
 	}
 
-	@Override
-	public CstBytes data() {
-		return isGlobal ? TRUE : FALSE;
-	}
-
 	public static Value deserialize(Type type, byte[] data, Value[] elements) {
-		return new DynOp(type, elements, data[0] != 0);
+		return new DynOp(type, elements);
 	}
 }

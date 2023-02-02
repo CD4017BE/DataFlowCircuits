@@ -15,6 +15,10 @@ public interface Plugin {
 	Class<? extends Value> valueClass(String type);
 
 
+	NodeAssembler DEPEND = (block, context, idx) -> {
+		if (block.ins() == 0) throw new SignalError(idx, "wrong IO count");
+		block.makeNode(Instruction.PASS, 0);
+	};
 	NodeAssembler TYPE = (block, context, idx) -> {
 		if (block.ins.length != block.outs.length)
 			throw new SignalError(idx, "wrong IO count");
@@ -54,35 +58,40 @@ public interface Plugin {
 			list.addAll(context.def.module.types.keySet());
 		}
 	};
+	NodeAssembler SCOPE = (block, context, idx) -> {
+		if (block.ins() != 0) throw new SignalError(idx, "wrong IO count");
+		block.makeNode((args, scope) -> scope, idx);
+	};
+	NodeAssembler DRAIN_SCOPE = (block, context, idx) -> {
+		block.makeNode((args, scope) -> {
+			Bundle b = new Bundle(scope.dynOps.toArray(Value[]::new));
+			scope.dynOps.clear();
+			return b;
+		}, idx);
+	};
 	NodeAssembler OP = new NodeAssembler() {
 		@Override
 		public void assemble(BlockDesc block, NodeContext context, int idx)
 		throws SignalError {
 			String[] arg = context.args(block);
-			if (arg.length != 1) throw new SignalError(idx, "wrong IO count");
+			if (block.ins() < 1 || arg.length != 1)
+				throw new SignalError(idx, "wrong IO count");
 			block.makeNode(
-				arg[0].startsWith("g")
+				arg[0].startsWith("a")
 				? (args, scope) -> {
-					DynOp op = new DynOp(args.in(0).type, args.inArr(1), true);
-					Value old = scope.globals.putIfAbsent(op.values[0], op);
-					if (old != null)
-						return op.equals(old) ? old : args.error("global name conflict: " + op.values[0]);
-					for (ScopeData parent; (parent = scope.parent) != null; scope = parent);
+					DynOp op = new DynOp(args.in(0).type, args.inArr(1));
 					scope.dynOps.add(op);
 					return op;
-				} : (args, scope) -> {
-					DynOp op = new DynOp(args.in(0).type, args.inArr(1), false);
-					scope.dynOps.add(op);
-					return op;
-				}, idx
+				} : (args, scope) -> new DynOp(args.in(0).type, args.inArr(1))
+				, idx
 			);
 		}
 		@Override
 		public void getAutoCompletions(
 			BlockDesc block, int arg, ArrayList<String> list, NodeContext context
 		) {
-			list.add("g");
-			list.add("l");
+			list.add("a");
+			list.add("m");
 		}
 	};
 	NodeAssembler SET_EL = (block, context, idx) -> {
@@ -250,6 +259,7 @@ public interface Plugin {
 			case "switch": return SwitchSelector.class;
 			case "dyn": return DynOp.class;
 			case "io": return IOStream.class;
+			case "map": return MutMap.class;
 			default: return Value.class;
 			}
 		}
@@ -260,8 +270,11 @@ public interface Plugin {
 			case "block": return new Function(def);
 			case "const": return new ConstList(def);
 			case "to": return new VirtualCall(def.id);
+			case "scope": return SCOPE;
+			case "drain": return DRAIN_SCOPE;
 			case "type": return TYPE;
 			case "pack": return PACK;
+			case "dep": return DEPEND;
 			case "ce": return EXPR;
 			case "str": return STRING;
 			case "io": return IO;

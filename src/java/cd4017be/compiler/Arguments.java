@@ -7,7 +7,7 @@ public class Arguments {
 	public static final int COMPUTE_LIMIT = 1000000;
 	public static final Arguments EMPTY = new Arguments();
 
-	private final Value[] vars;
+	final Value[] vars;
 	private int[] args;
 	private int limit;
 

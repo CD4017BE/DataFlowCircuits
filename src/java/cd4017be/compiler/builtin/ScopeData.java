@@ -16,7 +16,6 @@ public class ScopeData extends Value {
 	public final Value value;
 	public final int path;
 	public final ArrayList<Value> dynOps = new ArrayList<>();
-	public final HashMap<Value, Value> globals;
 
 	public ScopeData(Value value) {
 		this(null, 0, value);
@@ -28,7 +27,6 @@ public class ScopeData extends Value {
 		this.parent = parent;
 		this.path = path;
 		this.value = value;
-		this.globals = parent != null ? parent.globals : new HashMap<>();
 	}
 
 	@Override
@@ -68,17 +66,32 @@ public class ScopeData extends Value {
 			: null;
 	}
 
+	public static Value get(Arguments args, ScopeData scope) throws SignalError {
+		Value a = args.in(0), b = args.in(1);
+		if (!(a instanceof ScopeData sda)) return null;
+		Type type = b.type;
+		while(sda.value.type != type)
+			if ((sda = sda.parent) == null)
+				return args.error("scope type not found");
+		return sda;
+	}
+
+	public static Value con(Arguments args, ScopeData scope) {
+		Value a = args.in(0), b = args.in(1);
+		if (!(a instanceof ScopeData sda)) return null;
+		if (b instanceof ScopeData sdb)
+			sda.dynOps.addAll(sdb.dynOps);
+		else sda.dynOps.add(b);
+		return b;
+	}
+
 	public static Value deserialize(Type type, byte[] data, Value[] elements) {
 		ScopeData val = new ScopeData(
 			elements[0] instanceof ScopeData sd ? sd : null,
 			data[0] & 0xff | data[1] << 8, elements[1]
 		);
-		for (int i = 2; i < elements.length; i++) {
-			Value v = elements[i];
-			val.dynOps.add(v);
-			if (v instanceof DynOp o && o.isGlobal)
-				val.globals.put(o.values[0], o);
-		}
+		for (int i = 2; i < elements.length; i++)
+			val.dynOps.add(elements[i]);
 		return val;
 	}
 }
