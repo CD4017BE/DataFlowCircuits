@@ -111,7 +111,7 @@ public class Bundle extends Value {
 				return VOID;
 			return xa[idx];
 		} else if (vb instanceof CstBytes cb) {
-			int idx = ta.index(cb.toString());
+			int idx = ta.index(cb.string());
 			return idx < 0 || idx >= xa.length ? VOID : xa[idx];
 		} else if (vb instanceof Bundle cb) {
 			Value[] elem = new Value[cb.values.length];
@@ -122,7 +122,7 @@ public class Bundle extends Value {
 					idx = (int)cb1.value;
 					if (idx < 0) idx += xa.length;
 				} else if (vb instanceof CstBytes cb1) {
-					idx = ta.index(cb1.toString());
+					idx = ta.index(cb1.string());
 				} else return args.error("invalid index type in element " + i);
 				elem[i] = idx < 0 || idx >= xa.length ? VOID : xa[idx];
 			}

@@ -22,7 +22,7 @@ public class NodeContext {
 	public NodeContext(BlockDef def, boolean env) {
 		this.def = def;
 		if (env) {
-			Value[] arr = new Value[def.ins.length];
+			Value[] arr = new Value[def.assembler instanceof Function f ? f.par : def.ins.length];
 			Arrays.fill(arr, Bundle.VOID);
 			this.env = new Arguments(arr);
 		} else this.env = null;
@@ -48,12 +48,21 @@ public class NodeContext {
 		}
 		for (BlockDesc block : blocks)
 			block.connect();
-		if (addIns)
-			for (int i = 0; i < def.ins.length; i++) {
-				Node node = links.get(def.ins[i]);
-				if (node == null || node.in[0].from != null) continue;
-				node.in[0].connect(new Node(i));
+		if (addIns) {
+			int i = 0;
+			for (String arg : def.args) {
+				Node node = links.get(arg);
+				if (node != null && node.in[0].from == null)
+					node.in[0].connect(new Node(i));
+				i++;
 			}
+			for (String in : def.ins) {
+				Node node = links.get(in);
+				if (node != null && node.in[0].from == null)
+					node.in[0].connect(new Node(i));
+				i++;
+			}
+		}
 	}
 
 	public String[] collectOutputs(Node out) {

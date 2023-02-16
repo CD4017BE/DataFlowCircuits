@@ -7,6 +7,7 @@ import cd4017be.compiler.*;
 public class CstInt extends Value {
 
 	public static final Type CST_INT = Type.builtin("cint");
+	public static final CstInt FALSE = new CstInt(0), TRUE = new CstInt(-1);
 
 	public final long value;
 
@@ -60,7 +61,7 @@ public class CstInt extends Value {
 		if (vb instanceof CstFloat cb)
 			return new CstInt((long)cb.value);
 		if (vb instanceof CstBytes cb)
-			return new CstInt(cb.toString());
+			return new CstInt(cb.string());
 		return null;
 	}
 
@@ -148,6 +149,46 @@ public class CstInt extends Value {
 	public static Value not(Arguments args, ScopeData scope) {
 		long x = ((CstInt)args.in(0)).value;
 		return new CstInt(~x);
+	}
+
+	public static Value eq(Arguments args, ScopeData scope) {
+		long x = ((CstInt)args.in(0)).value;
+		Value vy = args.in(1);
+		if (vy instanceof CstInt cy)
+			return x == cy.value ? TRUE : FALSE;
+		if (vy instanceof CstFloat cy)
+			return (double)x == cy.value ? TRUE : FALSE;
+		return null;
+	}
+
+	public static Value ne(Arguments args, ScopeData scope) {
+		long x = ((CstInt)args.in(0)).value;
+		Value vy = args.in(1);
+		if (vy instanceof CstInt cy)
+			return x != cy.value ? TRUE : FALSE;
+		if (vy instanceof CstFloat cy)
+			return (double)x != cy.value ? TRUE : FALSE;
+		return null;
+	}
+
+	public static Value lt(Arguments args, ScopeData scope) {
+		long x = ((CstInt)args.in(0)).value;
+		Value vy = args.in(1);
+		if (vy instanceof CstInt cy)
+			return x < cy.value ? TRUE : FALSE;
+		if (vy instanceof CstFloat cy)
+			return (double)x < cy.value ? TRUE : FALSE;
+		return null;
+	}
+
+	public static Value le(Arguments args, ScopeData scope) {
+		long x = ((CstInt)args.in(0)).value;
+		Value vy = args.in(1);
+		if (vy instanceof CstInt cy)
+			return x <= cy.value ? TRUE : FALSE;
+		if (vy instanceof CstFloat cy)
+			return (double)x <= cy.value ? TRUE : FALSE;
+		return null;
 	}
 
 	public static Value cmp(Arguments args, ScopeData scope) {

@@ -1,5 +1,7 @@
 package cd4017be.compiler.builtin;
 
+import static cd4017be.compiler.builtin.CstInt.FALSE;
+import static cd4017be.compiler.builtin.CstInt.TRUE;
 import static java.lang.Double.doubleToRawLongBits;
 import static java.lang.Double.longBitsToDouble;
 
@@ -61,7 +63,7 @@ public class CstFloat extends Value {
 		if (vb instanceof CstInt cb)
 			return new CstFloat(cb.value);
 		if (vb instanceof CstBytes cb)
-			return new CstFloat(cb.toString());
+			return new CstFloat(cb.string());
 		return null;
 	}
 
@@ -118,6 +120,46 @@ public class CstFloat extends Value {
 	public static Value neg(Arguments args, ScopeData scope) {
 		double x = ((CstFloat)args.in(0)).value;
 		return new CstFloat(-x);
+	}
+
+	public static Value eq(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		Value vy = args.in(1);
+		if (vy instanceof CstInt cy)
+			return x == (double)cy.value ? TRUE : FALSE;
+		if (vy instanceof CstFloat cy)
+			return x == cy.value ? TRUE : FALSE;
+		return null;
+	}
+
+	public static Value ne(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		Value vy = args.in(1);
+		if (vy instanceof CstInt cy)
+			return x != (double)cy.value ? TRUE : FALSE;
+		if (vy instanceof CstFloat cy)
+			return x != cy.value ? TRUE : FALSE;
+		return null;
+	}
+
+	public static Value lt(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		Value vy = args.in(1);
+		if (vy instanceof CstInt cy)
+			return x < (double)cy.value ? TRUE : FALSE;
+		if (vy instanceof CstFloat cy)
+			return x < cy.value ? TRUE : FALSE;
+		return null;
+	}
+
+	public static Value le(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		Value vy = args.in(1);
+		if (vy instanceof CstInt cy)
+			return x <= (double)cy.value ? TRUE : FALSE;
+		if (vy instanceof CstFloat cy)
+			return x <= cy.value ? TRUE : FALSE;
+		return null;
 	}
 
 	public static Value cmp(Arguments args, ScopeData scope) {

@@ -4,11 +4,13 @@ import java.io.*;
 import java.util.*;
 
 import cd4017be.compiler.*;
+import cd4017be.compiler.Node.Vertex;
 import cd4017be.compiler.builtin.Bundle;
 import cd4017be.compiler.builtin.IOStream;
 import cd4017be.compiler.builtin.ScopeData;
 import cd4017be.compiler.instr.ConstList;
 import cd4017be.compiler.instr.Function;
+import cd4017be.compiler.instr.GetElement;
 import cd4017be.compiler.instr.Macro;
 import cd4017be.util.*;
 
@@ -513,6 +515,19 @@ public class CircuitEditor implements IGuiSection {
 			break;
 		case GLFW_KEY_D:
 			if (ctrl) cleanUpTraces();
+			break;
+		case GLFW_KEY_O:
+			if (ctrl && selBlock != null && selBlock.def.assembler instanceof Function) {
+				Node node = selBlock.outs[0];
+				while (node.op instanceof GetElement) node = node.in[0].from();
+				Value[] ins = new Value[node.in.length];
+				for (int i = 0; i < ins.length; i++) {
+					Vertex v = node.in[i];
+					ins[i] = context.state.get(v == null ? -1 : v.addr());
+				}
+				open(selBlock.def);
+				System.arraycopy(ins, 0, context.env(), 0, ins.length);
+			}
 			break;
 //		case GLFW_KEY_T:
 //			if (!ctrl) break;

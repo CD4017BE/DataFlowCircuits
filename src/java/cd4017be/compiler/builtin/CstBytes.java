@@ -57,9 +57,22 @@ public class CstBytes extends Value {
 		return true;
 	}
 
+	public String string() {
+		return new String(value, ofs, len, UTF_8);
+	}
+
+	static final char[] HEX = "0123456789ABCDEF".toCharArray();
+
 	@Override
 	public String toString() {
-		return new String(value, ofs, len, UTF_8);
+		StringBuilder sb = new StringBuilder(len + 2);
+		sb.append('"');
+		for (int i = 0, j = ofs; i < len; i++, j++) {
+			char c = (char)(value[j] & 0xff);
+			if (c >= 32 && c < 128) sb.append(c);
+			else sb.append('\\').append(HEX[c >> 4]).append(HEX[c & 15]);
+		}
+		return sb.append('"').toString();
 	}
 
 	public long toInt() {

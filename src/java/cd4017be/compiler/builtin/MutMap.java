@@ -42,15 +42,29 @@ public class MutMap extends Value {
 		return CstBytes.EMPTY;
 	}
 
+	public static Value cast(Arguments args, ScopeData scope) {
+		Value a = args.in(0), b = args.in(1);
+		if (b instanceof MutMap mb)
+			return mb;
+		if (b.type == a.type) return new MutMap();
+		if (b instanceof Bundle bb) {
+			MutMap mb = new MutMap();
+			for (Value v : bb.values)
+				mb.map.put(v, v);
+			return mb;
+		}
+		return null;
+	}
+
 	public static Value con(Arguments args, ScopeData scope) {
-		Value a = args.in(0), vb = args.in(1);
+		Value a = args.in(0), b = args.in(1);
 		MutMap ma = a instanceof MutMap m ? m : new MutMap();
-		if (vb instanceof MutMap mb) {
+		if (b instanceof MutMap mb) {
 			ma.arr = null;
 			ma.map.putAll(mb.map);
 			return ma;
 		}
-		return null;
+		return b.type == a.type ? ma : null;
 	}
 
 	public static Value get(Arguments args, ScopeData scope) throws SignalError {

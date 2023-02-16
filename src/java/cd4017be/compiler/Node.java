@@ -192,6 +192,10 @@ public class Node {
 			return scope;
 		}
 
+		public Node from() {
+			return from;
+		}
+
 	}
 
 }
