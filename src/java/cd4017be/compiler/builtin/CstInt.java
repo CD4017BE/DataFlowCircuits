@@ -117,9 +117,47 @@ public class CstInt extends Value {
 		return null;
 	}
 
+	public static Value min(Arguments args, ScopeData scope) throws SignalError {
+		long x = ((CstInt)args.in(0)).value;
+		Value vb = args.in(1);
+		if (vb instanceof CstInt cb)
+			return new CstInt(x <= cb.value ? x : cb.value);
+		if (vb instanceof CstFloat cb)
+			return new CstFloat((double)x <= cb.value ? (double)x : cb.value);
+		return null;
+	}
+
+	public static Value max(Arguments args, ScopeData scope) throws SignalError {
+		long x = ((CstInt)args.in(0)).value;
+		Value vb = args.in(1);
+		if (vb instanceof CstInt cb)
+			return new CstInt(x >= cb.value ? x : cb.value);
+		if (vb instanceof CstFloat cb)
+			return new CstFloat((double)x >= cb.value ? (double)x : cb.value);
+		return null;
+	}
+
+	public static Value mix(Arguments args, ScopeData scope) throws SignalError {
+		long x = ((CstInt)args.in(0)).value;
+		Value vb = args.in(1), vc = args.in(2);
+		if (vb instanceof CstInt cb && vc instanceof CstInt cc)
+			return new CstInt(x & cc.value | ~x & cb.value);
+		return null;
+	}
+
 	public static Value neg(Arguments args, ScopeData scope) {
 		long x = ((CstInt)args.in(0)).value;
 		return new CstInt(-x);
+	}
+
+	public static Value abs(Arguments args, ScopeData scope) {
+		long x = ((CstInt)args.in(0)).value;
+		return new CstInt(x < 0 ? -x : x);
+	}
+
+	public static Value sign(Arguments args, ScopeData scope) {
+		long x = ((CstInt)args.in(0)).value;
+		return new CstInt(x < 0 ? -1 : x > 0 ? 1 : 0);
 	}
 
 	public static Value and(Arguments args, ScopeData scope) {
@@ -149,6 +187,16 @@ public class CstInt extends Value {
 	public static Value not(Arguments args, ScopeData scope) {
 		long x = ((CstInt)args.in(0)).value;
 		return new CstInt(~x);
+	}
+
+	public static Value any(Arguments args, ScopeData scope) {
+		long x = ((CstInt)args.in(0)).value;
+		return new CstInt(x != 0 ? -1 : 0);
+	}
+
+	public static Value all(Arguments args, ScopeData scope) {
+		long x = ((CstInt)args.in(0)).value;
+		return new CstInt(x == -1 ? -1 : 0);
 	}
 
 	public static Value eq(Arguments args, ScopeData scope) {

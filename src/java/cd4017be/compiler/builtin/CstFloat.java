@@ -117,9 +117,57 @@ public class CstFloat extends Value {
 		return null;
 	}
 
+	public static Value min(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		Value vb = args.in(1);
+		if (vb instanceof CstFloat cb)
+			return new CstFloat(x > cb.value ? cb.value : x);
+		if (vb instanceof CstInt cb)
+			return new CstFloat(x > (double)cb.value ? (double)cb.value : x);
+		return null;
+	}
+
+	public static Value max(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		Value vb = args.in(1);
+		if (vb instanceof CstFloat cb)
+			return new CstFloat(x < cb.value ? cb.value : x);
+		if (vb instanceof CstInt cb)
+			return new CstFloat(x < (double)cb.value ? (double)cb.value : x);
+		return null;
+	}
+
+	public static Value mix(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		Value vb = args.in(1), vc = args.in(2);
+		if (vb instanceof CstFloat cb && vc instanceof CstFloat cc)
+			return new CstFloat(x * cc.value + (1.0 - x) * cb.value);
+		return null;
+	}
+
 	public static Value neg(Arguments args, ScopeData scope) {
 		double x = ((CstFloat)args.in(0)).value;
 		return new CstFloat(-x);
+	}
+
+	public static Value abs(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		return new CstFloat(Math.abs(x));
+	}
+
+	public static Value sign(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		return new CstFloat(Math.signum(x));
+	}
+
+	public static Value floor(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		return new CstFloat(Math.floor(x));
+	}
+
+	public static Value ceil(Arguments args, ScopeData scope) {
+		double x = ((CstFloat)args.in(0)).value;
+		return new CstFloat(Math.ceil(x));
 	}
 
 	public static Value eq(Arguments args, ScopeData scope) {
