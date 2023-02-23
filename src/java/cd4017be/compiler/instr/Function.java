@@ -21,7 +21,7 @@ public class Function implements Instruction, NodeAssembler {
 
 	public Function(BlockDef def) {
 		this.def = def;
-		this.par = def.ins.length + def.args.length;
+		this.par = def.ins.length + (def.assembler instanceof ConstList ? 0 : def.args.length);
 	}
 
 	public Function(int par) {

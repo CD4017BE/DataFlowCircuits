@@ -9,7 +9,7 @@ import cd4017be.compiler.builtin.ScopeData;
  * @author CD4017BE */
 public class VirtualCall implements Instruction, NodeAssembler {
 
-	private final String name;
+	public final String name;
 
 	public VirtualCall(String name) {
 		this.name = name;

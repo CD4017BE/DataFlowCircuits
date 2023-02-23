@@ -4,6 +4,7 @@ import cd4017be.compiler.Arguments;
 import cd4017be.compiler.Instruction;
 import cd4017be.compiler.Type;
 import cd4017be.compiler.Value;
+import cd4017be.compiler.builtin.CstInt;
 import cd4017be.compiler.builtin.ScopeData;
 
 
@@ -25,7 +26,7 @@ public class GetElementType implements Instruction {
 	public Value eval(Arguments args, ScopeData scope) {
 		Type t = args.in(0).type;
 		int i = name != null ? t.index(name) : index;
-		return new Value(i < 0 ? t : t.elem(i));
+		return i < 0 ? new CstInt(t.n) : new Value(t.elem(i));
 	}
 
 }

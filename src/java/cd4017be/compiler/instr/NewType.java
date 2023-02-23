@@ -7,8 +7,7 @@ import cd4017be.compiler.Module;
 import cd4017be.compiler.Type;
 import cd4017be.compiler.VTable;
 import cd4017be.compiler.Value;
-import cd4017be.compiler.builtin.Bundle;
-import cd4017be.compiler.builtin.ScopeData;
+import cd4017be.compiler.builtin.*;
 
 
 public class NewType implements Instruction {
@@ -24,16 +23,17 @@ public class NewType implements Instruction {
 			this.n = Integer.parseInt(arg.substring(i + 1));
 			arg = arg.substring(0, i);
 		} else this.n = 0;
-		VTable vt = m.types.get(arg);
-		this.vtable = vt != null ? vt : Bundle.BUNDLE.vtable;
+		this.vtable = m.types.get(arg);
 		this.names = Arrays.copyOfRange(args, 1, args.length);
 	}
 
 	@Override
 	public Value eval(Arguments args, ScopeData scope) {
+		VTable vtable = this.vtable != null ? this.vtable : args.in(0).type.vtable;
+		int n = args.in(1) instanceof CstInt ci ? (int)ci.value : this.n;
 		Type[] elem = new Type[names.length];
 		for (int j = 0; j < elem.length; j++)
-			elem[j] = args.in(j).type;
+			elem[j] = args.in(j + 2).type;
 		return new Value(Type.of(vtable, names, elem, n));
 	}
 

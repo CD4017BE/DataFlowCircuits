@@ -47,7 +47,7 @@ public interface Plugin {
 		@Override
 		public void assemble(BlockDesc block, NodeContext context, int idx) throws SignalError {
 			String[] args = context.args(block);
-			if (block.ins.length != args.length - 1)
+			if (block.ins.length != args.length + 1)
 				throw new SignalError(idx, "wrong IO count");
 			block.makeNode(new NewType(args, context.def.module), idx);
 		}
@@ -110,6 +110,14 @@ public interface Plugin {
 			args.in(0) instanceof DynOp op ? new CstInt(op.uses)
 				: args.error("dynamic value expected")
 		, idx);
+	};
+	NodeAssembler USE_INC = (block, context, idx) -> {
+		if (block.ins() != 1) throw new SignalError(idx, "wrong IO count");
+		block.makeNode((args, scope) -> {
+			Value val = args.in(0);
+			if (val instanceof DynOp op) op.uses++;
+			return val;
+		}, idx);
 	};
 	NodeAssembler ERR = (block, context, idx) -> {
 		String[] args = context.args(block);
@@ -174,11 +182,11 @@ public interface Plugin {
 		block.makeNode(block.ins() == 1 ? Instruction.PASS : Instruction.PACK, idx);
 	};
 	SwitchAssembler CMP_TYPES = (block, context, idx) -> new Node(
-		(args, scope) -> new SwitchSelector(args.in(0).type == args.in(1).type ? 1 : 0, null),
+		(args, scope) -> new SwitchSelector(args.in(0).type == args.in(1).type ? 0 : 1, null),
 		Node.INSTR, 2, idx
 	);
 	SwitchAssembler CMP_VTABLE = (block, context, idx) -> new Node(
-		(args, scope) -> new SwitchSelector(args.in(0).type.vtable == args.in(1).type.vtable ? 1 : 0, null),
+		(args, scope) -> new SwitchSelector(args.in(0).type.vtable == args.in(1).type.vtable ? 0 : 1, null),
 		Node.INSTR, 2, idx
 	);
 	SwitchAssembler TYPE_SWITCH = new SwitchAssembler() {
@@ -283,6 +291,7 @@ public interface Plugin {
 			case "op": return OP;
 			case "se": return SET_EL;
 			case "uc": return USE_COUNT;
+			case "ui": return USE_INC;
 			case "mv": return TYPE_SWITCH;
 			case "cv": return CMP_VTABLE;
 			case "ct": return CMP_TYPES;

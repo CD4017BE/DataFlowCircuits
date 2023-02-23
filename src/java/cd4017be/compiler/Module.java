@@ -26,10 +26,11 @@ public class Module {
 	public final Plugin plugin;
 	public final LinkedHashMap<String, Module> imports = new LinkedHashMap<>();
 	public final HashMap<Module, String> modNames = new HashMap<>();
-	public final LinkedHashMap<String, BlockDef> blocks = new LinkedHashMap<>();
+	public final HashMap<String, BlockDef> blocks = new LinkedHashMap<>();
 	public final HashMap<String, BlockModel> models = new HashMap<>();
 	public final HashMap<String, VTable> types = new HashMap<>();
 	public final ArrayList<SignalProvider> signals = new ArrayList<>();
+	public final ArrayList<PaletteGroup> groups = new ArrayList<>();
 	private boolean loaded;
 	int trace0 = -1;
 
@@ -155,6 +156,12 @@ public class Module {
 						modNames.put(m, kv1.key());
 					}}
 				case "blocks" -> {
+					PaletteGroup pg;
+					if (kv0.value() instanceof KeyValue kv) {
+						pg = new PaletteGroup(kv.key());
+						kv0 = kv;
+					} else pg = new PaletteGroup("");
+					groups.add(pg);
 					for (Object e1 : (Object[])kv0.value()) {
 						KeyValue kv1 = (KeyValue)e1;
 						String type = null;
@@ -201,6 +208,7 @@ public class Module {
 						);
 						def.name = name;
 						blocks.put(def.id, def);
+						pg.blocks().add(def);
 					}}
 				case "types" -> {
 					for (Object e1 : (Object[])kv0.value()) {
@@ -348,6 +356,10 @@ public class Module {
 				return signals = cl;
 			return null;
 		}
+	}
+
+	public static record PaletteGroup(String name, ArrayList<BlockDef> blocks) {
+		public PaletteGroup(String name) {this(name, new ArrayList<>());}
 	}
 
 }

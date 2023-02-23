@@ -8,10 +8,7 @@ import cd4017be.compiler.Node.Vertex;
 import cd4017be.compiler.builtin.Bundle;
 import cd4017be.compiler.builtin.IOStream;
 import cd4017be.compiler.builtin.ScopeData;
-import cd4017be.compiler.instr.ConstList;
-import cd4017be.compiler.instr.Function;
-import cd4017be.compiler.instr.GetElement;
-import cd4017be.compiler.instr.Macro;
+import cd4017be.compiler.instr.*;
 import cd4017be.util.*;
 
 import static cd4017be.compiler.LoadingCache.*;
@@ -183,7 +180,7 @@ public class CircuitEditor implements IGuiSection {
 			drawSel(ofsX, -ofsY, 0.5F * scaleX, -0.5F * scaleY, 0F, 1F);
 			drawText(ofsX, scaleY * -.25F - ofsY, scaleX * 0.5F, scaleY * -0.5F);
 		}
-		print(info, FG_YELLOW_L, 16, -1, 1, 1);
+		print(info, FG_YELLOW_L, 0, -1, 1, 1);
 		drawText(-1F, -1F, 16F / (float)WIDTH, -24F / (float)HEIGHT);
 	}
 
@@ -191,9 +188,7 @@ public class CircuitEditor implements IGuiSection {
 		try {
 			lastError = null;
 			errorBlock = null;
-			Arguments args = context.typeCheck(blocks);
-			for (Block block : blocks)
-				block.updateColors(args);
+			context.typeCheck(blocks);
 		} catch(SignalError e) {
 			int i = e.pos;
 			lastError = e;
@@ -202,6 +197,10 @@ public class CircuitEditor implements IGuiSection {
 		} catch (Throwable e) {
 			e.printStackTrace();
 			info = e.getMessage();
+		}
+		if (context.state != null) {
+			for (Block block : blocks)
+				block.updateColors(context.state);
 		}
 		reRunTypecheck = false;
 	}
@@ -517,15 +516,21 @@ public class CircuitEditor implements IGuiSection {
 			if (ctrl) cleanUpTraces();
 			break;
 		case GLFW_KEY_O:
-			if (ctrl && selBlock != null && selBlock.def.assembler instanceof Function) {
-				Node node = selBlock.outs[0];
-				while (node.op instanceof GetElement) node = node.in[0].from();
-				Value[] ins = new Value[node.in.length];
-				for (int i = 0; i < ins.length; i++) {
-					Vertex v = node.in[i];
-					ins[i] = context.state.get(v == null ? -1 : v.addr());
-				}
-				open(selBlock.def);
+			if (!(ctrl && selBlock != null && selBlock.def.assembler instanceof Instruction instr)) break;
+			Node node = selBlock.outs() > 0 ? selBlock.outs[0] : null;
+			while (node != null && node.op instanceof GetElement) node = node.in[0].from();
+			Value[] ins = new Value[node == null ? 0 : node.in.length];
+			for (int i = 0; i < ins.length; i++) {
+				Vertex v = node.in[i];
+				ins[i] = context.state.get(v == null ? -1 : v.addr());
+			}
+			if (instr instanceof VirtualCall vc) {
+				instr = ins[0] == null ? null : ins[0].type.vtable.get(vc.name);
+				if (instr == null && ins.length == 2)
+					instr = ins[1] == null ? null : ins[1].type.vtable.get("r" + vc.name);
+			}
+			if (instr instanceof Function f) {
+				open(f.def);
 				System.arraycopy(ins, 0, context.env(), 0, ins.length);
 			}
 			break;
@@ -558,6 +563,7 @@ public class CircuitEditor implements IGuiSection {
 			else sb.append("[not evaluated]");
 		}
 		info = sb.toString();
+		if (info.length() > WIDTH / 8) info = info.substring(0, WIDTH / 8);
 		refresh(0);
 		return true;
 	}
