@@ -3,15 +3,14 @@ package cd4017be.dfc.editor;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
-
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.system.MemoryUtil;
-
-import cd4017be.compiler.LoadingCache;
+import cd4017be.dfc.lang.LoadingCache;
 
 /**
  * @author CD4017BE */
@@ -70,6 +69,7 @@ public class Main {
 		}
 	}
 
+	private static final ArrayDeque<Runnable> ASYNC_EVENTS = new ArrayDeque<>();
 	public static final ArrayList<IGuiSection> GUI = new ArrayList<>();
 	private static IGuiSection inFocus;
 	private static boolean redraw = true, lock;
@@ -91,7 +91,7 @@ public class Main {
 		LoadingCache.initGraphics();
 		new CircuitEditor().open(
 			LoadingCache.getModule(Path.of("src/dfc/test"))
-			.getBlock("test")
+			.getBlock("test2")
 		);
 	}
 
@@ -105,12 +105,23 @@ public class Main {
 			}
 			checkGLErrors();
 			glfwWaitEvents();
+			synchronized(ASYNC_EVENTS) {
+				while(!ASYNC_EVENTS.isEmpty())
+					ASYNC_EVENTS.poll().run();
+			}
 		}
 	}
 
 	static void close(long window) {
 		for (IGuiSection gs : GUI) gs.close();
 		Shaders.deleteAll();
+	}
+
+	public static void runAsync(Runnable r) {
+		synchronized(ASYNC_EVENTS) {
+			ASYNC_EVENTS.add(r);
+			glfwPostEmptyEvent();
+		}
 	}
 
 	public static void lockFocus(IGuiSection gui) {

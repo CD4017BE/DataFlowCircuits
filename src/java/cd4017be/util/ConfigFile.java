@@ -56,7 +56,11 @@ public class ConfigFile {
 			if (!hex) sb.append((char)c);
 			while(numberPart(c = r.read()))
 				if (c != '_') sb.append((char)c);
-			stack.push(parseNumber(sb.toString(), hex));
+			try {
+				stack.push(parseNumber(sb.toString(), hex));
+			} catch(NumberFormatException e) {
+				throw new IOException(e);
+			}
 			sb.delete(0, sb.length());
 		} else if (identifierStart(c)) {
 			sb.append((char)c);

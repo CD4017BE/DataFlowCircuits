@@ -106,6 +106,16 @@ public class ExtInputStream extends FilterInputStream {
 		return rangeCheck(readI32(), min, max);
 	}
 
+	/**@return the next signed 64-bit value read from this stream
+	 * @throws IOException on I/O error or EOF */
+	public long readI64() throws IOException {
+		int b0 = in.read(), b1 = in.read(), b2 = in.read(), b3 = in.read();
+		int b4 = in.read(), b5 = in.read(), b6 = in.read(), b7 = in.read();
+		if ((b0 | b1 | b2 | b3 | b4 | b5 | b6 | b7) < 0) throw new EOFException();
+		return (long)b0  | (long)b1 <<  8 | (long)b2 << 16 | (long)b3 << 24
+		| (long)b4 << 32 | (long)b5 << 40 | (long)b6 << 48 | (long)b7 << 56;
+	}
+
 	private final byte[] buf = new byte[255];
 
 	public String readUTF8() throws IOException {

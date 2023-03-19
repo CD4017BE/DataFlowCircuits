@@ -5,7 +5,7 @@ import static org.lwjgl.opengl.GL20C.*;
 
 import java.nio.ByteBuffer;
 import org.lwjgl.system.MemoryUtil;
-import cd4017be.compiler.Module;
+import cd4017be.dfc.lang.Module;
 
 /**
  * 
@@ -54,14 +54,14 @@ public class TraceAtlas {
 	public int load(ByteBuffer img, Module module) {
 		glBindTexture(GL_TEXTURE_2D, texId);
 		int w = img.getShort(), h = img.getShort();
-		ensureSize(traceCount * 4 + h);
+		ensureSize(traceCount * 2 + h);
 		glTexSubImage2D(
-			GL_TEXTURE_2D, 0, 0, traceCount << 2, w, h,
+			GL_TEXTURE_2D, 0, 0, traceCount * 2, w, h,
 			img.getChar(), img.getChar(), img
 		);
 		glBindTexture(GL_TEXTURE_2D, 0);
 		checkGLErrors();
-		int i = traceCount; traceCount += h >> 2;
+		int i = traceCount; traceCount += h >> 1;
 		return i;
 	}
 

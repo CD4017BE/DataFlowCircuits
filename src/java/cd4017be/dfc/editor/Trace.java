@@ -5,10 +5,8 @@ import static cd4017be.dfc.editor.Shaders.*;
 import java.util.ArrayList;
 import java.util.function.Consumer;
 import org.lwjgl.system.MemoryStack;
-
-import cd4017be.compiler.*;
-import cd4017be.compiler.Node.Vertex;
-import cd4017be.compiler.builtin.Bundle;
+import cd4017be.dfc.lang.*;
+import cd4017be.dfc.lang.Node.Vertex;
 import cd4017be.util.IndexedSet;
 import cd4017be.util.VertexArray;
 
@@ -209,8 +207,8 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		return x < x1 && y < y1 && x > x0 && y > y0;
 	}
 
-	public Value value(Arguments state) {
-		return src == null ? Bundle.VOID : src.block.value(src.pin, state);
+	public Value value(Value[] state) {
+		return src == null ? null : src.block.value(src.pin, state);
 	}
 
 	public static void forEachUser(ArrayList<Trace> stack, Consumer<Trace> op) {

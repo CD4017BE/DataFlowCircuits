@@ -8,8 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 import org.lwjgl.system.MemoryStack;
-
-import cd4017be.compiler.*;
+import cd4017be.dfc.lang.*;
 import cd4017be.util.VertexArray;
 
 /**Represents an operand block.
@@ -203,11 +202,11 @@ public class Block extends BlockDesc implements CircuitObject {
 		return x < x1 && y < y1 && x + w > x0 && y + h > y0;
 	}
 
-	public void updateColors(Arguments state) {
+	public void updateColors(Value[] state) {
 		ArrayList<Trace> stack = new ArrayList<>();
 		for (int i = 0; i < colors.length; i++) {
 			Value s = value(i, state);
-			short c = s == null ? Trace.VOID_COLOR : (short)s.color();
+			short c = s == null ? Trace.VOID_COLOR : (short)s.type.color(s);
 			if (c != colors[i]) {
 				colors[i] = (short)c;
 				stack.add(io[i]);
@@ -216,11 +215,11 @@ public class Block extends BlockDesc implements CircuitObject {
 		}
 	}
 
-	public Value value(int pin, Arguments state) {
+	public Value value(int pin, Value[] state) {
 		if (state == null) return null;
 		Node node = outs[pin];
-		return node == null || node.addr() <= 0
-			? null : state.get(node.addr());
+		return node == null || node.addr(0) <= 0
+			? null : state[node.addr(0)];
 	}
 
 }

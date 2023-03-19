@@ -30,6 +30,17 @@ public class ExtOutputStream extends FilterOutputStream {
 		out.write(v >> 24);
 	}
 
+	public void write64(long v) throws IOException {
+		out.write((int)v);
+		out.write((int)(v >> 8));
+		out.write((int)(v >> 16));
+		out.write((int)(v >> 24));
+		out.write((int)(v >> 32));
+		out.write((int)(v >> 40));
+		out.write((int)(v >> 48));
+		out.write((int)(v >> 56));
+	}
+
 	public void writeUTF8(String s) throws IOException {
 		if (s == null || s.isEmpty()) {
 			writeVarInt(0);

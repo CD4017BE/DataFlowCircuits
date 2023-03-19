@@ -2,18 +2,18 @@ package cd4017be.dfc.editor;
 
 import java.io.*;
 import java.util.*;
-
-import cd4017be.compiler.*;
-import cd4017be.compiler.Node.Vertex;
-import cd4017be.compiler.builtin.Bundle;
-import cd4017be.compiler.builtin.IOStream;
-import cd4017be.compiler.builtin.ScopeData;
-import cd4017be.compiler.instr.*;
+import cd4017be.dfc.lang.*;
+import cd4017be.dfc.lang.Interpreter.Task;
+import cd4017be.dfc.lang.Node.Vertex;
+import cd4017be.dfc.lang.builders.BasicConstructs;
+import cd4017be.dfc.lang.builders.ConstList;
+import cd4017be.dfc.lang.builders.Function;
+import cd4017be.dfc.lang.builders.Macro;
+import cd4017be.dfc.lang.instructions.*;
 import cd4017be.util.*;
-
-import static cd4017be.compiler.LoadingCache.*;
 import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
+import static cd4017be.dfc.lang.LoadingCache.*;
 import static java.lang.Math.*;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL20C.*;
@@ -34,6 +34,7 @@ public class CircuitEditor implements IGuiSection {
 	final VertexArray blockVAO, traceVAO;
 	final TextField text = new TextField(this::setText);
 	final ArrayList<String> autoComplete = new ArrayList<>();
+	final Interpreter ip;
 	/** mouse grid offset and zoom */
 	int ofsX, ofsY, zoom = 16, dSize;
 	boolean panning = false;
@@ -48,6 +49,7 @@ public class CircuitEditor implements IGuiSection {
 	boolean textModified, reRunTypecheck;
 	String info = "";
 	NodeContext context;
+	Task result;
 
 	public CircuitEditor() {
 		this.blockVAO = genBlockVAO(64);
@@ -55,6 +57,7 @@ public class CircuitEditor implements IGuiSection {
 		this.blocks = new IndexedSet<>(new Block[64]);
 		this.traces = new IndexedSet<>(new Trace[64]);
 		this.palette = new Palette(this);
+		this.ip = new Interpreter();
 		Main.GUI.add(this);
 		Main.GUI.add(palette);
 		
@@ -66,12 +69,16 @@ public class CircuitEditor implements IGuiSection {
 	public void open(BlockDef def) {
 		clear();
 		palette.setModule(def.module);
+		ip.cancel();
+		result = ip.new Task(null, task -> {});
 		context = new NodeContext(def, true);
 		reRunTypecheck = true;
-		try {
-			CircuitFile.readLayout(CircuitFile.readBlock(def), def.module, this);
-		} catch(IOException e) {
-			e.printStackTrace();
+		synchronized(def) {
+			try {
+				CircuitFile.readLayout(CircuitFile.readBlock(def), def.module, this);
+			} catch(IOException e) {
+				e.printStackTrace();
+			}
 		}
 		if (blocks.isEmpty() && !def.type.equals("const")) {
 			int i = 0;
@@ -106,8 +113,10 @@ public class CircuitEditor implements IGuiSection {
 
 	@Override
 	public void redraw() {
-		if (reRunTypecheck)
-			runTypeCheck();
+		if (reRunTypecheck) {
+			context.typeCheck(ip, blocks, task -> Main.runAsync(() -> applyResult(task)));
+			reRunTypecheck = false;
+		}
 		//draw frame
 		float scaleX = (float)(zoom * 2) / (float)WIDTH;
 		float scaleY = (float)(zoom * 2) / (float)HEIGHT;
@@ -180,34 +189,43 @@ public class CircuitEditor implements IGuiSection {
 			drawSel(ofsX, -ofsY, 0.5F * scaleX, -0.5F * scaleY, 0F, 1F);
 			drawText(ofsX, scaleY * -.25F - ofsY, scaleX * 0.5F, scaleY * -0.5F);
 		}
-		print(info, FG_YELLOW_L, 0, -1, 1, 1);
+		print(info, FG_YELLOW_L, 16, -1, 1, 1);
 		drawText(-1F, -1F, 16F / (float)WIDTH, -24F / (float)HEIGHT);
 	}
 
-	private void runTypeCheck() {
-		try {
-			lastError = null;
+	private void applyResult(Task task) {
+		result = task;
+		task.log();
+		lastError = task.error;
+		if (lastError == null) {
 			errorBlock = null;
-			context.typeCheck(blocks);
-		} catch(SignalError e) {
-			int i = e.pos;
-			lastError = e;
+		} else {
+			int i = lastError.pos;
 			errorBlock = i >= 0 && i < blocks.size() ? blocks.get(i) : null;
-			info = e.getMessage();
-		} catch (Throwable e) {
-			e.printStackTrace();
-			info = e.getMessage();
+			info = lastError.getMessage();
 		}
-		if (context.state != null) {
+		if (task.vars != null)
 			for (Block block : blocks)
-				block.updateColors(context.state);
-		}
-		reRunTypecheck = false;
+				block.updateColors(task.vars);
 	}
 
 	private void setText(String text) {
+		Block editing = this.editing;
 		editing.args[editArg] = text;
+		int dw = -editing.w;
 		editing.updateSize();
+		if ((dw += editing.w) > 0) {
+			int l = 32768, r = 32768;
+			for (Block block : blocks) {
+				if (block.y + block.h <= editing.y || block.y >= editing.y + editing.h || block == editing) continue;
+				if (block.x < editing.x)
+					l = min(l, editing.x - (block.x + block.w));
+				else r = min(r, block.x - (editing.x + editing.w));
+			}
+			dw = min(-r, l);
+		}
+		if (dw > 0) editing.pos(editing.x - dw, editing.y, this);
+		else editing.updatePins(this);
 		textModified = true;
 	}
 
@@ -216,7 +234,7 @@ public class CircuitEditor implements IGuiSection {
 		if (editing == errorBlock || editing.outs() == 0)
 			reRunTypecheck = true;
 		else for (Node n : editing.outs)
-			if (n != null && n.addr() > 0) {
+			if (n != null && n.addr(0) > 0) {
 				reRunTypecheck = true;
 				break;
 			}
@@ -452,7 +470,7 @@ public class CircuitEditor implements IGuiSection {
 		if (action == GLFW_RELEASE) return;
 		if (editing != null && text.onKeyInput(key, mods)) return;
 		boolean ctrl = (mods & GLFW_MOD_CONTROL) != 0;
-		boolean shift = (mods & GLFW_MOD_SHIFT) != 0;
+		//boolean shift = (mods & GLFW_MOD_SHIFT) != 0;
 		switch(key) {
 		case GLFW_KEY_PAGE_UP:
 			if (editing != null)
@@ -484,21 +502,8 @@ public class CircuitEditor implements IGuiSection {
 				CircuitFile.writeLayout(def, blocks, traces);
 				info = "saved!";
 				if (def.assembler instanceof Function m) m.reset();
-				else if (def.assembler instanceof ConstList cl) {
-					ScopeData root = null;
-					root = cl.compile();
-					info += " compiled!";
-					if (shift) {
-						VTable comp = def.module.findType("compiler");
-						Instruction ins = comp == null ? null : comp.get("compile");
-						if (ins instanceof Function f) {
-							open(f.def);
-							Value[] env = context.env();
-							env[0] = new IOStream(Type.of(comp, 0), System.out);
-							env[1] = new Bundle(root.dynOps.toArray(Value[]::new));
-						}
-					} else root.compile(def);
-				}
+				else if (def.assembler instanceof ConstList cl)
+					cl.compile(ip);
 			} catch(IOException e) {
 				e.printStackTrace();
 				info = e.toString();
@@ -516,22 +521,38 @@ public class CircuitEditor implements IGuiSection {
 			if (ctrl) cleanUpTraces();
 			break;
 		case GLFW_KEY_O:
-			if (!(ctrl && selBlock != null && selBlock.def.assembler instanceof Instruction instr)) break;
+			if (!(ctrl && selBlock != null)) break;
+			BlockDef def = selBlock.def;
 			Node node = selBlock.outs() > 0 ? selBlock.outs[0] : null;
-			while (node != null && node.op instanceof GetElement) node = node.in[0].from();
+			while (node != null && node.op instanceof UnpackIns) node = node.in[0].from();
 			Value[] ins = new Value[node == null ? 0 : node.in.length];
-			for (int i = 0; i < ins.length; i++) {
-				Vertex v = node.in[i];
-				ins[i] = context.state.get(v == null ? -1 : v.addr());
+			Value[] state = result.vars;
+			if (state != null)
+				for (int i = 0; i < ins.length; i++) {
+					Vertex v = node.in[i];
+					ins[i] = state[v == null ? 0 : v.addr(0)];
+				}
+			resolve: while (def.assembler == BasicConstructs.VIRTUAL) {
+				if (ins.length == 1) {
+					if (ins[0] == null) break;
+					BlockDef def1 = ins[0].type.get(def.id);
+					if (def1 != null) {
+						def = def1;
+						continue resolve;
+					}
+				} else for (int i = 0; i < ins.length; i++) {
+					if (ins[i] == null) continue;
+					BlockDef def1 = ins[i].type.get(def.id + "@" + i);
+					if (def1 != null) {
+						def = def1;
+						continue resolve;
+					}
+				}
+				break;
 			}
-			if (instr instanceof VirtualCall vc) {
-				instr = ins[0] == null ? null : ins[0].type.vtable.get(vc.name);
-				if (instr == null && ins.length == 2)
-					instr = ins[1] == null ? null : ins[1].type.vtable.get("r" + vc.name);
-			}
-			if (instr instanceof Function f) {
+			if (def.assembler instanceof Function f) {
 				open(f.def);
-				System.arraycopy(ins, 0, context.env(), 0, ins.length);
+				System.arraycopy(ins, 0, context.env, 0, ins.length);
 			}
 			break;
 //		case GLFW_KEY_T:
@@ -558,7 +579,7 @@ public class CircuitEditor implements IGuiSection {
 			sb.append(i < 0 ? "?" : names[i]).append(": ");
 		}
 		if (t != null) {
-			Value v = t.value(context.state);
+			Value v = t.value(result.vars);
 			if (v != null) sb.append(v.toString());
 			else sb.append("[not evaluated]");
 		}
@@ -590,6 +611,7 @@ public class CircuitEditor implements IGuiSection {
 	public void close() {
 		glDeleteBuffers(blockVAO.buffer);
 		glDeleteBuffers(traceVAO.buffer);
+		ip.terminate();
 	}
 
 	private void clear() {

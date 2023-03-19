@@ -1,19 +1,19 @@
 package cd4017be.dfc.editor;
 
-import static cd4017be.compiler.LoadingCache.ATLAS;
 import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
+import static cd4017be.dfc.lang.LoadingCache.ATLAS;
 import static java.lang.Math.*;
 import static org.lwjgl.glfw.GLFW.*;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Map.Entry;
 
 import org.lwjgl.system.MemoryStack;
-
-import cd4017be.compiler.BlockDef;
-import cd4017be.compiler.Module;
-import cd4017be.compiler.Module.PaletteGroup;
+import cd4017be.dfc.lang.BlockDef;
+import cd4017be.dfc.lang.Module;
+import cd4017be.dfc.lang.Module.PaletteGroup;
 import cd4017be.util.*;
 
 /**
@@ -23,8 +23,9 @@ public class Palette implements IGuiSection {
 	public String[] modNames;
 	public Module[] modules;
 	public PaletteGroup palette;
-	int msel, gsel, mhvr = -1, bhvr = -1;
-	int bw = 1, bh = 1, nw, nh, scroll;
+	int[] positions, indices, widths;
+	int msel, gsel, mhvr = -1, bhvr = -1, brow = -1;
+	int scroll;
 	int blockBuf;
 	final VertexArray blockVAO;
 	final CircuitEditor circuit;
@@ -58,35 +59,62 @@ public class Palette implements IGuiSection {
 		Module m = modules[msel].ensureLoaded();
 		gsel = i;
 		palette = i < m.groups.size() ? m.groups.get(i) : new PaletteGroup("");
-		bw = bh = 1;
-		for (BlockDef def : palette.blocks()) {
+		var blocks = palette.blocks();
+		final int rw = 16;
+		int nr = 1, nc = 0, w = 0;
+		int l = blocks.size();
+		//pass 1: count rows and init icons
+		for (BlockDef def : blocks) {
 			def.model.loadIcon();
 			AtlasSprite icon = def.model.icon;
-			bw = max(bw, icon.w);
-			bh = max(bh, icon.h);
+			if ((++nc) * (w = max(w, icon.w)) > rw) {
+				nr++;
+				nc = 1;
+				w = icon.w;
+			}
 		}
+		positions = new int[nr + 1];
+		indices = new int[nr + 1];
+		widths = new int[nr];
+		//pass 2: calculate layout
+		positions[0] = 0;
+		indices[0] = 0;
+		nr = 0; nc = 0; w = 0;
+		int h = 0, y = 0;
+		for (int j = 0; j < l; j++) {
+			AtlasSprite icon = blocks.get(j).model.icon;
+			int w1 = max(w, icon.w);
+			if (++nc * w1 > rw) {
+				widths[nr++] = w;
+				indices[nr] = j;
+				positions[nr] = y += h;
+				nc = 1; h = 0;
+				w = icon.w;
+			} else w = w1;
+			h = max(h, icon.h);
+		}
+		widths[nr++] = w;
+		indices[nr] = l;
+		positions[nr] = y += h;
+		//pass 3: render
 		blockVAO.clear();
-		nw = 16;
-		var blocks = palette.blocks();
-		int x = 0, y = 0, l = blocks.size();
 		try(MemoryStack ms = MemoryStack.stackPush()) {
 			ByteBuffer buf = ms.malloc(l * BLOCK_PRIMLEN);
-			for (BlockDef def : blocks) {
-				AtlasSprite icon = def.model.icon;
-				drawBlock(buf,
-					x + (bw - icon.w >> 1),
-					y + (bh - icon.h >> 1),
-					icon.w, icon.h, icon
-				);
-				if ((x += bw) > nw - bw) {
-					x = 0;
-					y += bh;
+			for (int ir = 0, j = 0; ir < nr; ir++) {
+				y = positions[ir];
+				w = widths[ir];
+				h = positions[ir + 1] - y;
+				for (int x = 0, i1 = indices[ir + 1]; j < i1; j++, x += w) {
+					AtlasSprite icon = blocks.get(j).model.icon;
+					drawBlock(buf,
+						x + (w - icon.w >> 1),
+						y + (h - icon.h >> 1),
+						icon.w, icon.h, icon
+					);
 				}
 			}
 			blockVAO.append(buf.flip());
 		}
-		nw /= bw;
-		nh = y;
 		bhvr = -1;
 		refresh(0);
 	}
@@ -101,7 +129,7 @@ public class Palette implements IGuiSection {
 		float scaleY = -8F / (float)HEIGHT;
 		int l = modNames.length;
 		var blocks = palette.blocks();
-		addSel(0, 0, 32, l * 5 + 15 + ((blocks.size() - 1) / nw + 1) * bh * 2, BG_BLACK | FG_GRAY_D);
+		addSel(0, 0, 32, l * 5 + 15 + positions[positions.length - 1] * 2, BG_BLACK | FG_GRAY_D);
 		print("Module:", FG_WHITE, 1, 1, 2, 3);
 		for (int i = 0; i < l; i++) {
 			String name = modNames[i];
@@ -110,7 +138,8 @@ public class Palette implements IGuiSection {
 		}
 		print("Blocks: " + palette.name(), FG_WHITE, 1, l * 5 + 6, 2, 3);
 		if (bhvr >= 0) {
-			addSel((bhvr % nw) * bw * 2, (bhvr / nw) * bh * 2 + l * 5 + 15, bw * 2, bh * 2, FG_GREEN_L);
+			int w = widths[brow], y0 = positions[brow], y1 = positions[brow + 1];
+			addSel((bhvr - indices[brow]) * w * 2, y0 * 2 + l * 5 + 15, w * 2, (y1 - y0) * 2, FG_GREEN_L);
 			print(blocks.get(bhvr).name, FG_GREEN_XL, 1, l * 5 + 10, 2, 3);
 		}
 		drawSel(-1F, 1F, scaleX, scaleY, 0F, 1F);
@@ -129,9 +158,14 @@ public class Palette implements IGuiSection {
 		if (inrange && my >= 5.0 && my < (l + 1) * 5.0)
 			mhvr = (int)floor(my / 5.0 - 1.0);
 		if (inrange && my >= (l + 2) * 5.0) {
-			bhvr = (int)floor((my - (l + 3) * 5.0) / (double)(bh*2)) * nw
-			     + (int)floor(mx / (double)(bw*2));
-			if (bhvr >= palette.blocks().size()) bhvr = -1;
+			int y = (int)floor((my - (l + 3) * 5.0) * 0.5);
+			int brow = Arrays.binarySearch(positions, y);
+			if (brow < 0) brow = ~brow - 1;
+			this.brow = brow;
+			if (brow >= 0 && brow < positions.length - 1) {
+				bhvr = indices[brow] + (int)floor(mx / (double)(widths[brow]*2));
+				if (bhvr >= indices[brow + 1]) bhvr = -1;
+			}
 		}
 		if (
 			this.mhvr != (this.mhvr = mhvr) |
