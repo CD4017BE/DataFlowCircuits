@@ -1,5 +1,6 @@
 package cd4017be.dfc.lang;
 
+import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 
 /**
@@ -25,6 +26,10 @@ public interface NodeAssembler {
 
 	default Instruction makeVirtual(BlockDef def) {
 		return null;
+	}
+
+	default void setIntrinsic(MethodHandle impl) {
+		throw new UnsupportedOperationException();
 	}
 
 }

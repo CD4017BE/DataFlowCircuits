@@ -218,8 +218,8 @@ public class Block extends BlockDesc implements CircuitObject {
 	public Value value(int pin, Value[] state) {
 		if (state == null) return null;
 		Node node = outs[pin];
-		return node == null || node.addr(0) <= 0
-			? null : state[node.addr(0)];
+		int addr = node == null ? 0 : node.addr(0);
+		return addr <= 0 || addr >= state.length ? null : state[addr];
 	}
 
 }

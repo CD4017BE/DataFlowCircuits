@@ -19,14 +19,14 @@ import cd4017be.util.ExtInputStream;
 public class Function implements NodeAssembler {
 		public final BlockDef def;
 		public final int par;
-		public MethodHandle intrinsic;
+		private MethodHandle intrinsic;
 		public Instruction[] code;
 		public int[] vars;
 		public int ret;
 
 		public Function(BlockDef def) {
 			this.def = def;
-			this.par = def.ins.length + def.args.length;
+			this.par = def.ins.length + def.args.length - (def.assembler instanceof SwitchBuilder ? 1 : 0);
 		}
 
 		public void reset() {
@@ -80,6 +80,11 @@ public class Function implements NodeAssembler {
 				e.printStackTrace();
 			}
 			return new FunctionIns(this);
+		}
+
+		@Override
+		public void setIntrinsic(MethodHandle impl) {
+			intrinsic = impl;
 		}
 
 	}

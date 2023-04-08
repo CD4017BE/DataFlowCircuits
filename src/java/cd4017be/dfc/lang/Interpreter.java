@@ -115,6 +115,7 @@ public class Interpreter extends Thread {
 			ids = Arrays.copyOf(ids, l * 2);
 			j = l;
 		}
+		free[j >> 6] ^= 1L << j;
 		resources[j] = r;
 		return j | (long)(ids[j] = ++lastId) << 32;
 	}

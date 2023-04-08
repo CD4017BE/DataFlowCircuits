@@ -9,7 +9,8 @@ public abstract class Instruction {
 	public abstract void eval(Interpreter ip, Value[] vars) throws SignalError;
 
 	protected static void checkIO(int[] io, int expLen) throws SignalError {
-		if (io.length != expLen) throw new SignalError(io[0], "wrong IO count");
+		if (io.length != expLen)
+			throw new SignalError(io[0], "wrong IO count");
 	}
 
 }

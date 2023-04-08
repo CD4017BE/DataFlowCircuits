@@ -37,7 +37,7 @@ public class LoadingCache {
 
 	public static void initGraphics() {
 		if (ATLAS == null)
-			ATLAS = new IconAtlas(Shaders.blockP, 2, 32, 32, 256);
+			ATLAS = new IconAtlas(Shaders.blockP, 2, 16, 16, 256);
 		if (TRACES == null) {
 			TRACES = new TraceAtlas(Shaders.traceP, 8, 256);
 			CORE.loadTraces();

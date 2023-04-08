@@ -27,7 +27,6 @@ import cd4017be.dfc.lang.Module;
 import cd4017be.dfc.lang.SignalError;
 import cd4017be.dfc.lang.Type;
 import cd4017be.dfc.lang.Value;
-import cd4017be.dfc.lang.builders.Function;
 
 /**
  * @author cd4017be */
@@ -301,10 +300,10 @@ public class IntrinsicLoader {
 				continue;
 			}
 			BlockDef def = mod.blocks.get(m.getName());
-			if (def == null || !(def.assembler instanceof Function f)) continue;
+			if (def == null) continue;
 			if (DEBUG) System.out.printf("link: %s -> %s\n", def.name, m);
 			try {
-				f.intrinsic = linkIntrinsic(m, an);
+				def.assembler.setIntrinsic(linkIntrinsic(m, an));
 			} catch (RuntimeException e) {
 				System.err.printf("failed to link intrinsic for %s : %s\n", def, e);
 			}

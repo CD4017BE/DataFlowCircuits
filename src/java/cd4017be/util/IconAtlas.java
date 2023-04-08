@@ -17,28 +17,15 @@ public class IconAtlas {
 	private final ArrayList<IconHolder> loaded;
 	private AtlasSprite atlas;
 	public final int levels, shader;
-	private final int texScale, texId, idBuf;
+	private final int texScale;
+	private int texId, idBuf;
 
 	public IconAtlas(int shader, int levels, int w0, int h0, int n0) {
 		this.loaded = new ArrayList<>();
 		this.atlas = new AtlasSprite(w0, h0);
 		this.levels = levels;
-		glBindTexture(GL_TEXTURE_1D, this.idBuf = glGenTextures());
-		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-		glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA16, n0 * 2, 0, GL_RGBA, GL_UNSIGNED_SHORT, MemoryUtil.NULL);
-		checkGLErrors();
-		glBindTexture(GL_TEXTURE_2D, this.texId = glGenTextures());
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-		//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-		//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, levels);
-		//glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w0 << levels, h0 << levels, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, MemoryUtil.NULL);
-		checkGLErrors();
+		genIndexTexture(n0);
+		genAtlasTexture(w0 << levels, h0 << levels);
 		this.shader = shader;
 		this.texScale = glGetUniformLocation(shader, "texScale");
 		updateShader();
@@ -46,6 +33,30 @@ public class IconAtlas {
 		glUniform1i(glGetUniformLocation(shader, "atlas"), 1);
 		glBindTexture(GL_TEXTURE_1D, 0);
 		glBindTexture(GL_TEXTURE_2D, 0);
+		checkGLErrors();
+	}
+
+	private void genIndexTexture(int n) {
+		if (idBuf != 0) glDeleteTextures(idBuf);
+		glBindTexture(GL_TEXTURE_1D, idBuf = glGenTextures());
+		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA16, n << 1, 0, GL_RGBA, GL_UNSIGNED_SHORT, MemoryUtil.NULL);
+		checkGLErrors();
+	}
+
+	private void genAtlasTexture(int w, int h) {
+		if (texId != 0) glDeleteTextures(texId);
+		glBindTexture(GL_TEXTURE_2D, texId = glGenTextures());
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+		//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, levels);
+		//glTexParameteri(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, MemoryUtil.NULL);
 		checkGLErrors();
 	}
 
@@ -63,6 +74,8 @@ public class IconAtlas {
 	protected void finalize() {
 		glDeleteTextures(texId);
 		glDeleteTextures(idBuf);
+		texId = 0;
+		idBuf = 0;
 	}
 
 	public void bind() {
@@ -73,12 +86,17 @@ public class IconAtlas {
 		glUseProgram(shader);
 	}
 
-	/**@return {short scanline, byte[bpp]... pixels} */
-	public ByteBuffer getData(MemoryStack ms, int level, int format, int type, int bpp) {
+	/**@param level mip-map level to read
+	 * @param format GL color format
+	 * @param type pixel data type
+	 * @param bpp bytes per pixel
+	 * @return {short scanline, byte[bpp]... pixels}
+	 * must be {@link MemoryUtil#memFree(java.nio.Buffer) freed} after use. */
+	public ByteBuffer getData(int level, int format, int type, int bpp) {
 		glBindTexture(GL_TEXTURE_2D, texId);
 		int tw = glGetTexLevelParameteri(GL_TEXTURE_2D, level, GL_TEXTURE_WIDTH);
 		int th = glGetTexLevelParameteri(GL_TEXTURE_2D, level, GL_TEXTURE_HEIGHT);
-		ByteBuffer buf = ms.malloc(tw * th * bpp + 2);
+		ByteBuffer buf = MemoryUtil.memAlloc(tw * th * bpp + 2);
 		buf.putShort((short)(tw * bpp));
 		glGetTexImage(GL_TEXTURE_2D, level, format, type, buf);
 		glBindTexture(GL_TEXTURE_2D, 0);
@@ -114,15 +132,15 @@ public class IconAtlas {
 	}
 
 	private void enlargeAtlas() {
+		ByteBuffer old = getData(0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, 4);
 		try (MemoryStack ms = MemoryStack.stackPush()) {
-			ByteBuffer old = getData(ms, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, 4), buf;
 			int s = old.getShort();
 			int w = s >> 2, h = old.remaining() / s;
 			if (w > h) h <<= 1; else w <<= 1;
 			System.out.printf("enlarging icon atlas to %d x %d\n", w, h);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, MemoryUtil.NULL);
+			genAtlasTexture(w, h);
 			Collections.sort(loaded, (a, b)-> b.icon().A() - a.icon().A());
-			{
+			ByteBuffer buf; {
 				int max = 0;
 				for (IconHolder holder : loaded) {
 					AtlasSprite icon = holder.icon();
@@ -148,10 +166,11 @@ public class IconAtlas {
 				ns.id = icon.id;
 				updateId(ns, holder.icon(ns));
 			}
+		} finally {
+			MemoryUtil.memFree(old);
 		}
 		updateShader();
 		checkGLErrors();
-		//FIXME why is texture size going back to pre-expanded values later on? This is cursed!
 	}
 
 	private void enlargeIndices() {
@@ -159,7 +178,7 @@ public class IconAtlas {
 		try(MemoryStack ms = MemoryStack.stackPush()) {
 			ByteBuffer buf = ms.malloc(n * 8);
 			glGetTexImage(GL_TEXTURE_1D, 0, GL_RGBA, GL_UNSIGNED_SHORT, buf);
-			glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA16, n << 1, 0, GL_RGBA, GL_UNSIGNED_SHORT, MemoryUtil.NULL);
+			genIndexTexture(n);
 			glTexSubImage1D(GL_TEXTURE_1D, 0, 0, n, GL_RGBA, GL_UNSIGNED_SHORT, buf);
 		}
 		updateShader();

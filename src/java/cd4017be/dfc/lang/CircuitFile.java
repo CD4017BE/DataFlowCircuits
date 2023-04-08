@@ -12,6 +12,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.*;
 import java.util.*;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 
 import cd4017be.dfc.editor.*;
 import cd4017be.util.*;
@@ -63,8 +64,8 @@ public class CircuitFile {
 	}
 
 	private static void writeIcon(ExtOutputStream os, IconAtlas icons, AtlasSprite icon) throws IOException {
+		ByteBuffer pixels = icons.getData(0, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, 2);
 		try (MemoryStack ms = MemoryStack.stackPush()) {
-			ByteBuffer pixels = icons.getData(ms, 0, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, 2);
 			int scan = pixels.getShort();
 			pixels.position(2 + icon.x * 8 + icon.y * 4 * scan);
 			int w = icon.w * 4, h = icon.h * 4;
@@ -113,6 +114,8 @@ public class CircuitFile {
 					os.write(buf);
 				}
 			}
+		} finally {
+			MemoryUtil.memFree(pixels);
 		}
 	}
 
