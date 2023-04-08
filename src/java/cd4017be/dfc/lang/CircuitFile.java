@@ -1,19 +1,11 @@
 package cd4017be.dfc.lang;
 
-import static java.lang.Integer.numberOfLeadingZeros;
-import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.nio.file.Files.*;
-import static org.lwjgl.opengl.GL12C.GL_BGRA;
-import static org.lwjgl.opengl.GL12C.GL_UNSIGNED_SHORT_1_5_5_5_REV;
-
-import java.io.IOException;
-import java.nio.BufferOverflowException;
-import java.nio.ByteBuffer;
+import java.io.*;
+import java.net.URL;
+import java.net.URLConnection;
 import java.nio.file.*;
 import java.util.*;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.system.MemoryUtil;
-
 import cd4017be.dfc.editor.*;
 import cd4017be.util.*;
 
@@ -23,99 +15,30 @@ import cd4017be.util.*;
 public class CircuitFile {
 	private static final int
 	GRAPH_MAGIC = 'd' | 'f' << 8 | 'c' << 16 | 'G' << 24,
-	MODEL_MAGIC = 'd' | 'f' << 8 | 'c' << 16 | 'M' << 24,
 	SIGNAL_MAGIC= 'd' | 'f' << 8 | 'c' << 16 | 'S' << 24,
-	CIRCUIT_VERSION = 1, LAYOUT_VERSION = 0, MODEL_VERSION = 0, SIGNAL_VERSION = 0;
+	CIRCUIT_VERSION = 1, LAYOUT_VERSION = 0, SIGNAL_VERSION = 0;
 
 	private static void checkMagic(ExtInputStream eis, int magic) throws IOException {
 		if (eis.readI32() != magic) throw new IOException("wrong file format");
 	}
 
-	public static void readModel(BlockModel model, IconAtlas icons) throws IOException {
-		try (ExtInputStream is = new ExtInputStream(newInputStream(model.module.path.resolve("models/" + model.name + ".dfcm")))) {
-			checkMagic(is, MODEL_MAGIC);
-			is.readU8(MODEL_VERSION);
-			is.readAll(model.outs = new byte[is.readU8() * 2]);
-			is.readAll(model.ins = new byte[is.readU8() * 2]);
-			model.tx = is.readI8();
-			model.ty = is.readI8();
-			model.tw = is.readI8();
-			model.th = is.readI8();
-			try(MemoryStack ms = MemoryStack.stackPush()) {
-				icons.load(GLUtils.readImage(is, ms), model);
-			}
-		}
-	}
-
-	public static void writeModel(BlockModel model, IconAtlas icons) throws IOException {
-		try (ExtOutputStream os = new ExtOutputStream(Files.newOutputStream(model.module.path.resolve("models/" + model.name + ".dfcm")))) {
-			os.write16(MODEL_MAGIC);
-			os.write8(MODEL_VERSION);
-			os.write8(model.outs.length);
-			os.write(model.outs);
-			os.write8(model.ins.length);
-			os.write(model.ins);
-			os.write8(model.tx);
-			os.write8(model.ty);
-			os.write8(model.tw);
-			os.write8(model.th);
-			writeIcon(os, icons, model.icon);
-		}
-	}
-
-	private static void writeIcon(ExtOutputStream os, IconAtlas icons, AtlasSprite icon) throws IOException {
-		ByteBuffer pixels = icons.getData(0, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, 2);
-		try (MemoryStack ms = MemoryStack.stackPush()) {
-			int scan = pixels.getShort();
-			pixels.position(2 + icon.x * 8 + icon.y * 4 * scan);
-			int w = icon.w * 4, h = icon.h * 4;
-			try {
-				int l = w * h, palLen = Math.min(512, l * 2);
-				//create color palette
-				ByteBuffer palette = ByteBuffer.allocate(palLen).order(LITTLE_ENDIAN);
-				byte[] indices = new byte[l];
-				for (int y = 0, i = 0, p = pixels.mark().position(); y < h; y++, p += scan) {
-					pixels.position(p);
-					for (int x = 0, j; x < w; x++, i++) {
-						short c = pixels.getShort();
-						for (j = 0; j < palette.position(); j+=2)
-							if (palette.getShort(j) == c) break;
-						if (j == palette.position())
-							palette.putShort(c); //may throw BufferOverflowException
-						indices[i] = (byte)(j >> 1);
-					}
-				}
-				//write header
-				os.write8(0b10_0111_01);
-				os.write8(w - 1);
-				os.write8(h - 1);
-				//write palette
-				int p = (palette.position() >> 1) - 1;
-				os.write8(p);
-				os.write(palette.array(), 0, palette.position());
-				//write indices
-				int bits = 32 - numberOfLeadingZeros(p), d = 0, b = 0;
-				for (int i = 0; i < l; i++) {
-					d |= (indices[i] & 0xff) << b;
-					if ((b += bits) > 8) {
-						os.write8(d);
-						d >>>= 8; b -= 8;
-					}
-				}
-				os.write8(d);
-			} catch(BufferOverflowException e) {
-				//palette too big -> save raw
-				os.write8(0b00_0111_01);
-				os.write8(w - 1);
-				os.write8(h - 1);
-				byte[] buf = new byte[w * 2];
-				for (int y = 0, p = pixels.reset().position(); y < h; y++, p += scan) {
-					pixels.get(p, buf);
-					os.write(buf);
-				}
-			}
-		} finally {
-			MemoryUtil.memFree(pixels);
+	/**Completely load a resource into a byte array.
+	 * @param url the resource to load
+	 * @param maxLen resource size limit in bytes
+	 * (to protect against excessive memory allocation)
+	 * @return the resource data
+	 * @throws IOException on I/O error or in case of invalid size */
+	public static byte[] loadResource(URL url, int maxLen) throws IOException {
+		URLConnection con = url.openConnection();
+		int len = con.getContentLength();
+		if (len < 0 || len > maxLen)
+			throw new IOException("invalid resource size: " + len);
+		try (InputStream is = con.getInputStream()) {
+			byte[] data = new byte[len];
+			for (int i = 0, n; len > 0; i += n, len -= n)
+				if ((n = is.read(data, i, len)) < 0)
+					throw new EOFException();
+			return data;
 		}
 	}
 

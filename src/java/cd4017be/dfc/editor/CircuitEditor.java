@@ -152,7 +152,7 @@ public class CircuitEditor implements IGuiSection {
 		if (selBlock != null) {
 			int h = selBlock.h * 2;
 			if (mode == M_BLOCK_SCALE) {
-				h += dSize * selBlock.def.model.rh * 2;
+				h += dSize * selBlock.def.model.rh() * 2;
 				String s = "size " + (dSize + selBlock.size());
 				print(s, FG_BLUE_L, selBlock.x * 2 + selBlock.w - s.length(), selBlock.y * 2 + h, 2, 3);
 			}
@@ -354,7 +354,7 @@ public class CircuitEditor implements IGuiSection {
 			return;
 		case M_BLOCK_SCALE:
 			glfwSetCursor(WINDOW, VRESIZE_CURSOR);
-			if (dSize != (dSize = floorDiv(my - lmy + 2, selBlock.def.model.rh * 2)))
+			if (dSize != (dSize = floorDiv(my - lmy + 2, selBlock.def.model.rh() * 2)))
 				refresh(0);
 			return;
 		default: return;

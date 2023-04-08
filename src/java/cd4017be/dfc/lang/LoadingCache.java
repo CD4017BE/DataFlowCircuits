@@ -5,8 +5,8 @@ import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.WeakHashMap;
 import cd4017be.dfc.editor.Shaders;
+import cd4017be.dfc.graphics.IconAtlas;
 import cd4017be.dfc.modules.core.Intrinsics;
-import cd4017be.util.IconAtlas;
 import cd4017be.util.TraceAtlas;
 
 /**
@@ -16,7 +16,6 @@ public class LoadingCache {
 
 	private static final WeakHashMap<Path, WeakReference<Module>> MODULES = new WeakHashMap<>();
 	public static final Module CORE;
-	public static final BlockModel MISSING_MODEL;
 	public static final BlockDef MISSING_BLOCK, IN_BLOCK, OUT_BLOCK;
 	static {
 		try {
@@ -26,7 +25,6 @@ public class LoadingCache {
 		} catch(URISyntaxException e) {
 			throw new RuntimeException(e);
 		}
-		MISSING_MODEL = CORE.models.get("missing");
 		MISSING_BLOCK = CORE.getBlock("missing");
 		IN_BLOCK = CORE.getBlock("in");
 		OUT_BLOCK = CORE.getBlock("out");

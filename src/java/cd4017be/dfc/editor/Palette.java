@@ -65,8 +65,7 @@ public class Palette implements IGuiSection {
 		int l = blocks.size();
 		//pass 1: count rows and init icons
 		for (BlockDef def : blocks) {
-			def.model.loadIcon();
-			AtlasSprite icon = def.model.icon;
+			AtlasSprite icon = def.loadModel().icon;
 			if ((++nc) * (w = max(w, icon.w)) > rw) {
 				nr++;
 				nc = 1;

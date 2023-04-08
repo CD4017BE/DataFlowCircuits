@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 import org.lwjgl.system.MemoryStack;
+
+import cd4017be.dfc.graphics.SpriteModel;
 import cd4017be.dfc.lang.*;
 import cd4017be.util.VertexArray;
 
@@ -37,7 +39,7 @@ public class Block extends BlockDesc implements CircuitObject {
 		for (int i = 0; i < args.length; i++)
 			if (args[i] == null) args[i] = "";
 		Arrays.fill(colors, Trace.VOID_COLOR);
-		def.model.loadIcon();
+		def.loadModel();
 		updateSize();
 	}
 
@@ -93,26 +95,26 @@ public class Block extends BlockDesc implements CircuitObject {
 	}
 
 	public void updateSize() {
-		BlockModel model = def.model;
+		SpriteModel model = def.model;
 		int w = 0, h = 0;
 		for (String s : args) {
 			w = max(w, s.length());
 			h += 2;
 		}
-		w += model.tw;
-		h += model.th;
-		int n = max(-1, max(outs() * 2 - model.outs.length, ins() * 2 - model.ins.length) >> 1) * model.rh;
+		w += model.tw();
+		h += model.th();
+		int n = max(-1, max(outs() - model.outs.length, ins() - model.ins.length)) * model.rh();
 		this.w = (short)max(w, model.icon.w);
 		this.h = (short)max(h, model.icon.h + n);
 		draw();
 	}
 
 	public void updatePins(CircuitEditor cc) {
-		BlockModel model = def.model;
+		SpriteModel model = def.model;
 		for (int i = 0; i < outs(); i++)
-			io[i].movePin(i, model.outs, x, y, w, h, model.rh, cc);
+			io[i].movePin(i, model.outs, x, y, w, h, model.rh(), cc);
 		for (int i = outs(), j = 0; i < io.length; i++, j++)
-			io[i].movePin(j, model.ins, x, y, w, h, model.rh, cc);
+			io[i].movePin(j, model.ins, x, y, w, h, model.rh(), cc);
 	}
 
 	@Override
@@ -135,11 +137,11 @@ public class Block extends BlockDesc implements CircuitObject {
 	}
 
 	public int textX() {
-		return x * 2 + w + def.model.tx;
+		return x * 2 + w + def.model.tx();
 	}
 
 	public int textY() {
-		return y * 2 + def.model.ty;
+		return y * 2 + def.model.ty();
 	}
 
 	public void printText() {

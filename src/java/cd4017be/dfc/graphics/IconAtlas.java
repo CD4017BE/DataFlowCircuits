@@ -1,27 +1,37 @@
-package cd4017be.util;
+package cd4017be.dfc.graphics;
 
 import static cd4017be.dfc.editor.Main.checkGLErrors;
-import static java.lang.Math.min;
-import static java.lang.Math.scalb;
+import static java.lang.Math.*;
 import static org.lwjgl.opengl.GL20C.*;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.lang.ref.WeakReference;
+import java.net.URL;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
+import java.util.*;
+
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
+
+import cd4017be.dfc.lang.CircuitFile;
+import cd4017be.util.AtlasSprite;
+import cd4017be.util.GLUtils;
 
 /**
  * @author cd4017be */
 public class IconAtlas {
 
-	private final ArrayList<IconHolder> loaded;
+	private final HashMap<URL, WeakReference<SpriteModel>> loaded = new HashMap<>();
+	private final SpriteModel missing;
+	private final BitSet usedIds = new BitSet();
 	private AtlasSprite atlas;
 	public final int levels, shader;
 	private final int texScale;
 	private int texId, idBuf;
+	private boolean doResize;
 
 	public IconAtlas(int shader, int levels, int w0, int h0, int n0) {
-		this.loaded = new ArrayList<>();
 		this.atlas = new AtlasSprite(w0, h0);
 		this.levels = levels;
 		genIndexTexture(n0);
@@ -34,6 +44,7 @@ public class IconAtlas {
 		glBindTexture(GL_TEXTURE_1D, 0);
 		glBindTexture(GL_TEXTURE_2D, 0);
 		checkGLErrors();
+		this.missing = load(IconAtlas.class.getResource("/textures/missing.tga"));
 	}
 
 	private void genIndexTexture(int n) {
@@ -86,6 +97,38 @@ public class IconAtlas {
 		glUseProgram(shader);
 	}
 
+	public ArrayList<SpriteModel> getLoaded() {
+		ArrayList<SpriteModel> list = new ArrayList<>(loaded.size());
+		for (Iterator<WeakReference<SpriteModel>> it = loaded.values().iterator(); it.hasNext();) {
+			SpriteModel m = it.next().get();
+			if (m == null) it.remove();
+			else list.add(m);
+		}
+		return list;
+	}
+
+	public SpriteModel get(URL path) {
+		if (path == null) return missing;
+		WeakReference<SpriteModel> r = loaded.get(path);
+		SpriteModel m = r == null ? null : r.get();
+		return m != null ? m : load(path);
+	}
+
+	private SpriteModel load(URL path) {
+		try (MemoryStack ms = MemoryStack.stackPush()){
+			byte[] data = CircuitFile.loadResource(path, 65536);
+			SpriteModel m = new SpriteModel();
+			m.readFromImageMetadata(data);
+			load(GLUtils.readTGA(new ByteArrayInputStream(data), ms), m);
+			loaded.put(path, new WeakReference<>(m));
+			System.out.println("loaded icon " + path);
+			return m;
+		} catch(IOException e) {
+			e.printStackTrace();
+			return missing;
+		}
+	}
+
 	/**@param level mip-map level to read
 	 * @param format GL color format
 	 * @param type pixel data type
@@ -99,12 +142,12 @@ public class IconAtlas {
 		ByteBuffer buf = MemoryUtil.memAlloc(tw * th * bpp + 2);
 		buf.putShort((short)(tw * bpp));
 		glGetTexImage(GL_TEXTURE_2D, level, format, type, buf);
-		glBindTexture(GL_TEXTURE_2D, 0);
+		checkGLErrors();
 		return buf.clear();
 	}
 
-	public AtlasSprite load(ByteBuffer img, IconHolder holder) {
-		AtlasSprite old = holder.icon(), icon;
+	public AtlasSprite load(ByteBuffer img, SpriteModel model) {
+		AtlasSprite old = model.icon, icon;
 		glBindTexture(GL_TEXTURE_2D, texId);
 		glBindTexture(GL_TEXTURE_1D, idBuf);
 		int w = img.getShort(), h = img.getShort(), ws = w >> levels, hs = h >> levels;
@@ -114,17 +157,19 @@ public class IconAtlas {
 			icon.h = hs;
 		} else while((icon = atlas.place(ws, hs)) == null)
 			enlargeAtlas();
+		doResize = false;
 		glTexSubImage2D(
 			GL_TEXTURE_2D, 0, icon.x << levels, icon.y << levels, w, h,
 			img.getChar(), img.getChar(), img
 		);
 		checkGLErrors();
 		if (old == null) {
-			if ((icon.id = loaded.size()) >= glGetTexLevelParameteri(GL_TEXTURE_1D, 0, GL_TEXTURE_WIDTH) >> 1)
+			int id = usedIds.nextClearBit(0);
+			usedIds.set(icon.id = id);
+			if (id >= glGetTexLevelParameteri(GL_TEXTURE_1D, 0, GL_TEXTURE_WIDTH) >> 1)
 				enlargeIndices();
-			loaded.add(holder);
 		} else icon.id = old.id;
-		updateId(icon, holder.icon(icon));
+		updateId(icon, model);
 		checkGLErrors();
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindTexture(GL_TEXTURE_1D, 0);
@@ -136,23 +181,30 @@ public class IconAtlas {
 		try (MemoryStack ms = MemoryStack.stackPush()) {
 			int s = old.getShort();
 			int w = s >> 2, h = old.remaining() / s;
-			if (w > h) h <<= 1; else w <<= 1;
-			System.out.printf("enlarging icon atlas to %d x %d\n", w, h);
-			genAtlasTexture(w, h);
-			Collections.sort(loaded, (a, b)-> b.icon().A() - a.icon().A());
+			if (doResize) {
+				if (w > h) h <<= 1; else w <<= 1;
+				System.out.printf("enlarging icon atlas to %d x %d\n", w, h);
+				genAtlasTexture(w, h);
+			} else {
+				System.out.println("rearranging icon atlas");
+				doResize = true;
+			}
+			ArrayList<SpriteModel> loaded = getLoaded();
+			Collections.sort(loaded, (a, b)-> b.icon.A() - a.icon.A());
 			ByteBuffer buf; {
 				int max = 0;
-				for (IconHolder holder : loaded) {
-					AtlasSprite icon = holder.icon();
+				for (SpriteModel model : loaded) {
+					AtlasSprite icon = model.icon;
 					max = Math.max(max, icon.w * icon.h);
 				}
 				buf = ms.malloc(max << levels * 2 + 2);
 			}
+			usedIds.clear();
 			atlas = new AtlasSprite(w >> levels, h >> levels);
-			for (IconHolder holder : loaded) {
-				AtlasSprite icon = holder.icon();
+			for (SpriteModel model : loaded) {
+				AtlasSprite icon = model.icon;
 				if (icon.A() == 0) {
-					holder.icon(AtlasSprite.NULL);
+					model.icon = AtlasSprite.NULL;
 					continue;
 				}
 				AtlasSprite ns = atlas.place(icon.w, icon.h);
@@ -163,8 +215,8 @@ public class IconAtlas {
 				) buf.put(i, old, j, di);
 				glTexSubImage2D(GL_TEXTURE_2D, 0, ns.x << levels, ns.y << levels, ns.w << levels, ns.h << levels, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, buf);
 				checkGLErrors();
-				ns.id = icon.id;
-				updateId(ns, holder.icon(ns));
+				usedIds.set(ns.id = icon.id);
+				updateId(ns, model);
 			}
 		} finally {
 			MemoryUtil.memFree(old);
@@ -184,14 +236,19 @@ public class IconAtlas {
 		updateShader();
 	}
 
-	private void updateId(AtlasSprite icon, float[] rep) {
+	private short scale(int r, int l) {
+		return (short)(l == 0 ? 0 : max(min((r << 16 - levels) / l, 65535), 0));
+	}
+
+	private void updateId(AtlasSprite icon, SpriteModel model) {
+		model.icon = icon;
 		int w = glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH) >> levels;
 		int h = glGetTexLevelParameteri(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT) >> levels;
 		glTexSubImage1D(GL_TEXTURE_1D, 0, icon.id * 2, 2, GL_RGBA, GL_UNSIGNED_SHORT, new short[] {
 			(short)((icon.x << 16) / w    ), (short)((icon.y << 16) / h    ),
 			(short)((icon.w << 16) / w - 1), (short)((icon.h << 16) / h - 1),
-			(short)min(scalb(rep[0], 16), 65535), (short)min(scalb(rep[1], 16), 65535),
-			(short)min(scalb(rep[2], 16), 65535), (short)min(scalb(rep[3], 16), 65535),
+			scale(model.rx0, icon.w), scale(model.ry0, icon.h),
+			scale(model.rx1, icon.w), scale(model.ry1, icon.h),
 		});
 	}
 

@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.*;
 
 import org.lwjgl.system.MemoryStack;
+
 import cd4017be.dfc.lang.builders.BasicConstructs;
 import cd4017be.dfc.lang.builders.ConstList;
 import cd4017be.dfc.lang.builders.Function;
@@ -27,7 +28,6 @@ public class Module {
 	public final LinkedHashMap<String, Module> imports = new LinkedHashMap<>();
 	public final HashMap<Module, String> modNames = new HashMap<>();
 	public final HashMap<String, BlockDef> blocks = new LinkedHashMap<>();
-	public final HashMap<String, BlockModel> models = new HashMap<>();
 	public final HashMap<String, Type> types = new HashMap<>();
 	public final ArrayList<SignalProvider> signals = new ArrayList<>();
 	public final ArrayList<PaletteGroup> groups = new ArrayList<>();
@@ -39,12 +39,6 @@ public class Module {
 		this.path = path;
 		this.moduleImpl = intr;
 		loadTraces();
-		try {
-			loadModelDescriptions();
-		} catch(IOException e) {
-			models.clear();
-			e.printStackTrace();
-		}
 	}
 
 	public static Class<?> loadIntrinsicsClass(Path path) {
@@ -73,57 +67,6 @@ public class Module {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-	}
-
-	private void loadModelDescriptions() throws IOException {
-		Object[] data =  ConfigFile.parse(Files.newBufferedReader(path.resolve("models.cfg")));
-		try {
-			for (Object e0 : data) {
-				KeyValue kv0 = (KeyValue)e0;
-				String key = kv0.key();
-				BlockModel model = new BlockModel(this, key);
-				for (Object e1 : (Object[])kv0.value()) {
-					KeyValue kv1 = (KeyValue)e1;
-					switch(kv1.key()) {
-					case "out" -> model.outs = parseIO((Object[])kv1.value());
-					case "in" -> model.ins = parseIO((Object[])kv1.value());
-					case "rep" -> {
-						Object[] arr = (Object[])kv1.value();
-						model.setRepRegion(
-							((Number)arr[0]).intValue(),
-							((Number)arr[1]).intValue(),
-							((Number)arr[2]).intValue(),
-							((Number)arr[3]).intValue()
-						);
-					}
-					case "text" -> {
-						Object[] arr = (Object[])kv1.value();
-						model.setTextRegion(
-							((Number)arr[0]).intValue(),
-							((Number)arr[1]).intValue(),
-							((Number)arr[2]).intValue(),
-							((Number)arr[3]).intValue()
-						);
-					}
-					}
-				}
-				models.put(key, model);
-			}
-		} catch (ClassCastException | ArrayIndexOutOfBoundsException e) {
-			throw new IOException(e);
-		}
-		System.out.println("loaded models for module " + path);
-	}
-
-	private static byte[] parseIO(Object[] arr) {
-		byte[] val = new byte[Math.max(2, arr.length * 2)];
-		int i = 0;
-		for (Object e : arr) {
-			Object[] arr1 = (Object[])e;
-			val[i++] = ((Number)arr1[0]).byteValue();
-			val[i++] = ((Number)arr1[1]).byteValue();
-		}
-		return val;
 	}
 
 	public Module ensureLoaded() {
@@ -172,24 +115,13 @@ public class Module {
 						String type = null;
 						Object[] out = {}, in = out, arg = out;
 						String name = kv1.key();
-						BlockModel model = LoadingCache.MISSING_MODEL;
+						String model = "";
 						int scale = 0;
 						for (Object e2 : (Object[])kv1.value()) {
 							KeyValue kv2 = (KeyValue)e2;
 							switch(kv2.key()) {
 							case "type" -> type = (String)kv2.value();
-							case "model" -> {
-								String s = (String)kv2.value();
-								int i = s.indexOf(':');
-								Module m = this;
-								if (i >= 0) {
-									m = imports.get(s.substring(0, i));
-									if (m == null)
-										throw new IOException("module for block model not defined: " + s);
-									s = s.substring(i + 1);
-								}
-								model = m.models.getOrDefault(s, LoadingCache.MISSING_MODEL);
-							}
+							case "model" -> model = (String)kv2.value();
 							case "name" -> name = (String)kv2.value();
 							case "in" -> in = (Object[])kv2.value();
 							case "out" -> out = (Object[])kv2.value();
@@ -276,17 +208,11 @@ public class Module {
 		cw.key(key).begin().nl();
 		cw.key("name").val(def.name).nl();
 		cw.key("type").val(def.type).nl();
-		cw.key("model").val(modelName(def.model)).nl();
+		cw.key("model").val(def.modelId).nl();
 		cw.optKeyArray("out", def.outs, ConfigWriter::val, false);
 		cw.optKeyArray("in", def.outs, ConfigWriter::val, false);
 		cw.optKeyArray("arg", def.outs, ConfigWriter::val, false);
 		cw.end();
-	}
-
-	private String modelName(BlockModel model) {
-		if (model.module == this) return model.name;
-		String name = modNames.get(model.module);
-		return name == null ? "" : name + ":" + model.name;
 	}
 
 	private static String[] sortKeys(HashMap<String, ?> map) {
