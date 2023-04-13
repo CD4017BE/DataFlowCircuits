@@ -3,24 +3,22 @@ package cd4017be.dfc.lang;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 /**
  * 
  * @author CD4017BE */
 public class PluginClassLoader extends ClassLoader {
 
-	private final Path path;
+	private final URL path;
 
-	public PluginClassLoader(Path path) {
+	public PluginClassLoader(URL path) {
 		this.path = path;
 	}
 
 	@Override
 	protected URL findResource(String name) {
 		try {
-			return path.resolve(name).toUri().toURL();
+			return new URL(path, name);
 		} catch(MalformedURLException e) {
 			return null;
 		}
@@ -29,7 +27,7 @@ public class PluginClassLoader extends ClassLoader {
 	@Override
 	protected Class<?> findClass(String name) throws ClassNotFoundException {
 		try {
-			byte[] data = Files.readAllBytes(path.resolve(name + ".class"));
+			byte[] data = CircuitFile.loadResource(findResource(name + ".class"), 1 << 24);
 			return defineClass(name, data, 0, data.length);
 		} catch (IOException e) {
 			throw new ClassNotFoundException(null, e);

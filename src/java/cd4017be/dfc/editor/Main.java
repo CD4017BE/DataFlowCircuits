@@ -3,7 +3,7 @@ package cd4017be.dfc.editor;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
-import java.nio.file.Path;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 
@@ -90,7 +90,7 @@ public class Main {
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		LoadingCache.initGraphics();
 		new CircuitEditor().open(
-			LoadingCache.getModule(Path.of("src/dfc/test"))
+			LoadingCache.getModule("test")
 			.getBlock("test2")
 		);
 	}

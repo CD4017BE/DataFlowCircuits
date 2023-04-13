@@ -2,8 +2,10 @@ package cd4017be.dfc.lang;
 
 import static cd4017be.dfc.lang.LoadingCache.CORE;
 import static cd4017be.dfc.modules.core.Intrinsics.NULL;
-import java.io.IOException;
-import java.io.InputStream;
+
+import java.io.*;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -24,7 +26,8 @@ import cd4017be.util.ConfigFile.KeyValue;
  * @author CD4017BE */
 public class Module {
 
-	public final Path path;
+	public final String name;
+	protected final URL source;
 	public final LinkedHashMap<String, Module> imports = new LinkedHashMap<>();
 	public final HashMap<Module, String> modNames = new HashMap<>();
 	public final HashMap<String, BlockDef> blocks = new LinkedHashMap<>();
@@ -35,36 +38,50 @@ public class Module {
 	private boolean loaded;
 	int trace0 = -1;
 
-	public Module(Path path, Class<?> intr) {
-		this.path = path;
-		this.moduleImpl = intr;
+	public Module(String path, Class<?> intr) {
+		this.name = path;
+		this.source = resolve(path);
+		this.moduleImpl = intr != null ? intr : loadIntrinsicsClass(source);
 		loadTraces();
 	}
 
-	public static Class<?> loadIntrinsicsClass(Path path) {
-		if (Files.isRegularFile(path.resolve("Intrinsics.class")))
-			try {
-				Class<?> c = new PluginClassLoader(path).loadClass("Intrinsics");
-				System.out.println("loaded intrinsics for module " + path);
-				return c;
-			} catch(
-				ClassNotFoundException | IllegalArgumentException
-				| SecurityException | ClassCastException e
-			) { e.printStackTrace(); }
+	private static URL resolve(String path) {
+		URL url = LoadingCache.class.getResource("/cd4017be/dfc/modules/" + path + "/module.cfg");
+		if (url != null) return url;
+		Path p = Path.of("src/dfc", path, "module.cfg");
+		if (Files.exists(p)) try {
+			return p.toUri().toURL();
+		} catch(MalformedURLException e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	public static Class<?> loadIntrinsicsClass(URL source) {
+		if (source == null) return null;
+		try {
+			Class<?> c = new PluginClassLoader(source).loadClass("Intrinsics");
+			System.out.println("loaded intrinsics for module " + source);
+			return c;
+		} catch (ClassNotFoundException e) {
+		} catch(IllegalArgumentException | SecurityException | ClassCastException e) {
+			e.printStackTrace();
+		}
 		return null;
 	}
 
 	public void loadTraces() {
 		if (LoadingCache.TRACES == null || trace0 >= 0) return;
-		Path path = this.path.resolve("traces.tga");
 		trace0 = 2;
-		if (Files.isReadable(path)) try (
-			InputStream is = Files.newInputStream(path);
+		if (source == null) return;
+		try (
+			InputStream is = new URL(source, "traces.tga").openStream();
 			MemoryStack ms = MemoryStack.stackPush();
 		) {
 			trace0 = LoadingCache.TRACES.load(GLUtils.readTGA(is, ms), this);
-			System.out.println("loaded traces for module " + this.path);
-		} catch (IOException e) {
+			System.out.println("loaded traces for module " + name);
+		} catch (FileNotFoundException e) {}
+		catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
@@ -86,7 +103,8 @@ public class Module {
 	}
 
 	private void load() throws IOException {
-		Object[] data = ConfigFile.parse(Files.newBufferedReader(path.resolve("module.cfg")));
+		if (source == null) return;
+		Object[] data = ConfigFile.parse(new InputStreamReader(source.openStream()));
 		try {
 			if (this != CORE) {
 				imports.put("core", CORE);
@@ -98,8 +116,7 @@ public class Module {
 				case "modules" -> {
 					for (Object e1 : (Object[])kv0.value()) {
 						KeyValue kv1 = (KeyValue)e1;
-						Path p = path.resolveSibling((String)kv1.value()).normalize();
-						Module m = LoadingCache.getModule(p);
+						Module m = LoadingCache.getModule((String)kv1.value());
 						imports.put(kv1.key(), m);
 						modNames.put(m, kv1.key());
 					}}
@@ -189,37 +206,37 @@ public class Module {
 			throw new IOException(e);
 		}
 		if (moduleImpl != null) IntrinsicLoader.linkAll(this, moduleImpl);
-		System.out.println("loaded content of module " + path);
+		System.out.println("loaded content of module " + name);
 	}
 
-	public void save() throws IOException {
-		try(ConfigWriter cw = new ConfigWriter(Files.newBufferedWriter(path.resolve("module.cfg")), " ")) {
-			cw.optKeyArray("modules", sortKeys(imports), this::writeImport, true);
-			cw.optKeyArray("blocks", sortKeys(blocks), this::writeBlock, true);
-		}
-	}
+//	public void save() throws IOException {
+//		try(ConfigWriter cw = new ConfigWriter(Files.newBufferedWriter(path.resolve("module.cfg")), " ")) {
+//			cw.optKeyArray("modules", sortKeys(imports), this::writeImport, true);
+//			cw.optKeyArray("blocks", sortKeys(blocks), this::writeBlock, true);
+//		}
+//	}
 
-	private void writeImport(ConfigWriter cw, String key) throws IOException {
-		cw.key(key).val(imports.get(key).path.relativize(path.getParent()).toString());
-	}
+//	private void writeImport(ConfigWriter cw, String key) throws IOException {
+//		cw.key(key).val(imports.get(key).path.relativize(path.getParent()).toString());
+//	}
 
-	private void writeBlock(ConfigWriter cw, String key) throws IOException {
-		BlockDef def = blocks.get(key);
-		cw.key(key).begin().nl();
-		cw.key("name").val(def.name).nl();
-		cw.key("type").val(def.type).nl();
-		cw.key("model").val(def.modelId).nl();
-		cw.optKeyArray("out", def.outs, ConfigWriter::val, false);
-		cw.optKeyArray("in", def.outs, ConfigWriter::val, false);
-		cw.optKeyArray("arg", def.outs, ConfigWriter::val, false);
-		cw.end();
-	}
+//	private void writeBlock(ConfigWriter cw, String key) throws IOException {
+//		BlockDef def = blocks.get(key);
+//		cw.key(key).begin().nl();
+//		cw.key("name").val(def.name).nl();
+//		cw.key("type").val(def.type).nl();
+//		cw.key("model").val(def.modelId).nl();
+//		cw.optKeyArray("out", def.outs, ConfigWriter::val, false);
+//		cw.optKeyArray("in", def.outs, ConfigWriter::val, false);
+//		cw.optKeyArray("arg", def.outs, ConfigWriter::val, false);
+//		cw.end();
+//	}
 
-	private static String[] sortKeys(HashMap<String, ?> map) {
-		String[] arr = map.keySet().toArray(String[]::new);
-		Arrays.sort(arr);
-		return arr;
-	}
+//	private static String[] sortKeys(HashMap<String, ?> map) {
+//		String[] arr = map.keySet().toArray(String[]::new);
+//		Arrays.sort(arr);
+//		return arr;
+//	}
 
 	public Type findType(String name) {
 		ensureLoaded();
@@ -270,7 +287,7 @@ public class Module {
 
 	@Override
 	public String toString() {
-		return path.toString();
+		return name;
 	}
 
 	public static class SignalProvider {

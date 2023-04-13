@@ -1,10 +1,7 @@
 package cd4017be.dfc.lang;
 
-import static java.nio.file.Files.*;
 import java.io.*;
-import java.net.URL;
-import java.net.URLConnection;
-import java.nio.file.*;
+import java.net.*;
 import java.util.*;
 import cd4017be.dfc.editor.*;
 import cd4017be.util.*;
@@ -42,13 +39,13 @@ public class CircuitFile {
 		}
 	}
 
-	public static Path path(BlockDef def) {
-		return def.module.path.resolve("blocks/" + def.id + ".dfc");
+	public static URL path(BlockDef def) throws MalformedURLException {
+		return new URL(def.module.source, "blocks/" + def.id + ".dfc");
 	}
 
 	public static ExtInputStream readBlock(BlockDef def) throws IOException {
 		assert(Thread.holdsLock(def));
-		return new ExtInputStream(newInputStream(path(def)));
+		return new ExtInputStream(path(def).openStream());
 	}
 
 	public static void readLayout(ExtInputStream is, Module m, CircuitEditor cc) throws IOException {
@@ -131,9 +128,9 @@ public class CircuitFile {
 	public static void writeLayout(BlockDef def, List<Block> blocks, IndexedSet<Trace> traces)
 	throws IOException {
 		assert(Thread.holdsLock(def));
-		Path path = path(def);
-		createDirectories(path.getParent());
-		try(ExtOutputStream os = new ExtOutputStream(newOutputStream(path))) {
+		URL path = path(def);
+		//createDirectories(path.getParent());
+		try(ExtOutputStream os = new ExtOutputStream(path.openConnection().getOutputStream())) {
 			BitSet visited = new BitSet(traces.size());
 			int no = 0, ni = 0;
 			for (int i = 0; i < blocks.size(); i++) {
@@ -238,8 +235,8 @@ public class CircuitFile {
 		}
 	}
 
-	private static Path constPath(BlockDef def) {
-		return def.module.path.resolve("out/" + def.id + ".dfc");
+	private static URL constPath(BlockDef def) throws MalformedURLException {
+		return new URL(def.module.source, "out/" + def.id + ".dfc");
 	}
 
 	public static void writeSignals(BlockDef def, String[] keys, Value[] signals) throws IOException {
@@ -264,17 +261,15 @@ public class CircuitFile {
 					stack.add(val.elements);
 			}
 		//write file
-		Path path = constPath(def);
-		createDirectories(path.getParent());
-		try (ExtOutputStream os = new ExtOutputStream(newOutputStream(path))) {
+		URL path = constPath(def);
+		try (ExtOutputStream os = new ExtOutputStream(path.openConnection().getOutputStream())) {
 			//write header
 			os.write32(SIGNAL_MAGIC);
 			os.write8(SIGNAL_VERSION);
 			//write module descriptions
 			os.writeVarInt(modules.size());
-			Path root = def.module.path.getParent();
 			for (Module module : modules.keySet())
-				os.writeUTF8(module == LoadingCache.CORE ? "" : root.relativize(module.path).toString());
+				os.writeUTF8(module.name);
 			//write type descriptions
 			os.writeVarInt(types.size());
 			for (Type type : types.keySet()) {
@@ -308,19 +303,16 @@ public class CircuitFile {
 	}
 
 	public static void readSignals(BlockDef def, HashMap<String, Value> signals) throws IOException {
-		Path path = constPath(def);
-		try(ExtInputStream is = new ExtInputStream(newInputStream(path))) {
+		URL path = constPath(def);
+		try(ExtInputStream is = new ExtInputStream(path.openStream())) {
 			//read header
 			checkMagic(is, SIGNAL_MAGIC);
 			if (is.readU8() != SIGNAL_VERSION)
 				throw new IOException("unsupported format version");
 			//read module descriptions
 			Module[] modules = new Module[is.readVarInt()];
-			for (int i = 0; i < modules.length; i++) {
-				String p = is.readUTF8();
-				modules[i] = p.isEmpty() ? LoadingCache.CORE
-					: LoadingCache.getModule(def.module.path.resolveSibling(p)).ensureLoaded();
-			}
+			for (int i = 0; i < modules.length; i++)
+				modules[i] = LoadingCache.getModule(is.readUTF8()).ensureLoaded();
 			//read type descriptions
 			Type[] types = new Type[is.readVarInt()];
 			for (int i = 0; i < types.length; i++) {

@@ -1,9 +1,7 @@
 package cd4017be.dfc.lang;
 
 import java.lang.ref.WeakReference;
-import java.net.URISyntaxException;
-import java.nio.file.Path;
-import java.util.WeakHashMap;
+import java.util.HashMap;
 import cd4017be.dfc.editor.Shaders;
 import cd4017be.dfc.graphics.IconAtlas;
 import cd4017be.dfc.modules.core.Intrinsics;
@@ -14,17 +12,12 @@ import cd4017be.util.TraceAtlas;
  * @author CD4017BE */
 public class LoadingCache {
 
-	private static final WeakHashMap<Path, WeakReference<Module>> MODULES = new WeakHashMap<>();
+	private static final HashMap<String, WeakReference<Module>> MODULES = new HashMap<>();
 	public static final Module CORE;
 	public static final BlockDef MISSING_BLOCK, IN_BLOCK, OUT_BLOCK;
 	static {
-		try {
-			Path path = Path.of(LoadingCache.class.getResource("/cd4017be/dfc/modules/core/module.cfg").toURI()).getParent();
-			CORE = new Module(path, Intrinsics.class);
-			MODULES.put(path, new WeakReference<Module>(CORE));
-		} catch(URISyntaxException e) {
-			throw new RuntimeException(e);
-		}
+		CORE = new Module("core", Intrinsics.class);
+		MODULES.put(CORE.name, new WeakReference<Module>(CORE));
 		MISSING_BLOCK = CORE.getBlock("missing");
 		IN_BLOCK = CORE.getBlock("in");
 		OUT_BLOCK = CORE.getBlock("out");
@@ -58,11 +51,12 @@ public class LoadingCache {
 //		}
 //	}
 
-	public static synchronized Module getModule(Path path) {
+	public static synchronized Module getModule(String path) {
 		var ref = MODULES.get(path);
 		Module m = ref == null ? null : ref.get();
-		if (m == null)
-			MODULES.put(path, new WeakReference<>(m = new Module(path, Module.loadIntrinsicsClass(path))));
+		if (m == null) {
+			MODULES.put(path, new WeakReference<>(m = new Module(path, null)));
+		}
 		return m;
 	}
 

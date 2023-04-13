@@ -1,6 +1,7 @@
 package cd4017be.dfc.lang;
 
 import java.net.MalformedURLException;
+import java.net.URL;
 
 import cd4017be.dfc.graphics.SpriteModel;
 
@@ -69,7 +70,7 @@ public class BlockDef {
 			s = s.substring(i + 1);
 		}
 		if (!s.isEmpty()) try {
-			return model = LoadingCache.ATLAS.get(m.path.resolve("icons/" + s + ".tga").toUri().toURL());
+			return model = LoadingCache.ATLAS.get(new URL(m.source, "icons/" + s + ".tga"));
 		} catch(MalformedURLException e) {
 			e.printStackTrace();
 		}
