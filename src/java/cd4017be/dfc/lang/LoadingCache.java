@@ -2,10 +2,7 @@ package cd4017be.dfc.lang;
 
 import java.lang.ref.WeakReference;
 import java.util.HashMap;
-import cd4017be.dfc.editor.Shaders;
-import cd4017be.dfc.graphics.IconAtlas;
 import cd4017be.dfc.modules.core.Intrinsics;
-import cd4017be.util.TraceAtlas;
 
 /**
  * 
@@ -21,18 +18,6 @@ public class LoadingCache {
 		MISSING_BLOCK = CORE.getBlock("missing");
 		IN_BLOCK = CORE.getBlock("in");
 		OUT_BLOCK = CORE.getBlock("out");
-	}
-
-	public static IconAtlas ATLAS;
-	public static TraceAtlas TRACES;
-
-	public static void initGraphics() {
-		if (ATLAS == null)
-			ATLAS = new IconAtlas(Shaders.blockP, 2, 16, 16, 256);
-		if (TRACES == null) {
-			TRACES = new TraceAtlas(Shaders.traceP, 8, 256);
-			CORE.loadTraces();
-		}
 	}
 
 //	public LoadingCache(boolean graphics) {

@@ -5,12 +5,13 @@ import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
-
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.system.MemoryUtil;
-import cd4017be.dfc.lang.LoadingCache;
+
+import cd4017be.dfc.editor.gui.GuiGroup;
+import cd4017be.dfc.graphics.IconAtlas;
+import cd4017be.util.TraceAtlas;
 
 /**
  * @author CD4017BE */
@@ -46,23 +47,21 @@ public class Main {
 				throw new RuntimeException("OpenGL drivers are outdated! (version 2.0 or above required)");
 			//init rendering
 			glfwSwapInterval(1);
-			init(window);
-			glfwSetKeyCallback(window, Main::onKeyInput);
-			glfwSetCharCallback(window, Main::onCharInput);
-			glfwSetMouseButtonCallback(window, Main::onMouseButton);
-			glfwSetCursorPosCallback(window, Main::onMouseMove);
-			glfwSetFramebufferSizeCallback(window, Main::onResize);
-			glfwSetScrollCallback(window, Main::onScroll);
-			glfwSetWindowRefreshCallback(window, Main::refresh);
-			{
-				int[] w = new int[1], h = new int[1];
-				glfwGetFramebufferSize(window, w, h);
-				onResize(window, w[0], h[0]);
-			}
+			WINDOW = window;
+			ICONS = new IconAtlas(Shaders.blockP, 2, 16, 16, 256);
+			TRACES = new TraceAtlas(Shaders.traceP, 8, 256);
+			MAIN_CURSOR = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
+			VRESIZE_CURSOR = glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
+			MOVE_CURSOR = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
+			TEXT_CURSOR = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
+			SEL_CURSOR = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
+			GuiGroup gui = new GuiGroup(window);
+			init(gui, window);
 			//main loop
-			run(window);
+			run(gui, window);
 			//cleanup
-			close(window);
+			gui.close(window);
+			Shaders.deleteAll();
 			glfwDestroyWindow(window);
 		} finally {
 			glfwTerminate();
@@ -70,37 +69,22 @@ public class Main {
 	}
 
 	private static final ArrayDeque<Runnable> ASYNC_EVENTS = new ArrayDeque<>();
-	public static final ArrayList<IGuiSection> GUI = new ArrayList<>();
-	private static IGuiSection inFocus;
-	private static boolean redraw = true, lock;
-	public static int WIDTH, HEIGHT;
+	public static IconAtlas ICONS;
+	public static TraceAtlas TRACES;
 	public static long WINDOW,
 	MAIN_CURSOR, VRESIZE_CURSOR, MOVE_CURSOR, TEXT_CURSOR, SEL_CURSOR;
 
-	static void init(long window) {
-		WINDOW = window;
-		MAIN_CURSOR = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
-		VRESIZE_CURSOR = glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
-		MOVE_CURSOR = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
-		TEXT_CURSOR = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
-		SEL_CURSOR = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
-		glfwSetInputMode(window, GLFW_LOCK_KEY_MODS, GLFW_TRUE);
-		glClearColor(0, 0, 0, 1);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		LoadingCache.initGraphics();
-		new CircuitEditor().open(
-			LoadingCache.getModule("test")
-			.getBlock("test2")
-		);
+	static void init(GuiGroup gui, long window) {
+//		new CircuitEditor().open(
+//			LoadingCache.getModule("test")
+//			.getBlock("test2")
+//		);
 	}
 
-	private static void run(long window) {
-		while(!glfwWindowShouldClose(window) && !GUI.isEmpty()) {
-			if (redraw) {
-				redraw = false;
-				glClear(GL_COLOR_BUFFER_BIT);
-				for (IGuiSection gs : GUI) gs.redraw();
+	private static void run(GuiGroup gui, long window) {
+		while(!glfwWindowShouldClose(window)) {
+			if (gui.isDirty()) {
+				gui.redraw();
 				glfwSwapBuffers(window);
 			}
 			checkGLErrors();
@@ -112,65 +96,11 @@ public class Main {
 		}
 	}
 
-	static void close(long window) {
-		for (IGuiSection gs : GUI) gs.close();
-		Shaders.deleteAll();
-	}
-
 	public static void runAsync(Runnable r) {
 		synchronized(ASYNC_EVENTS) {
 			ASYNC_EVENTS.add(r);
 			glfwPostEmptyEvent();
 		}
-	}
-
-	public static void lockFocus(IGuiSection gui) {
-		inFocus = gui;
-		lock = gui != null;
-	}
-
-	public static void lock(boolean doLock) {
-		lock = doLock;
-	}
-
-	/**Cause a redraw and frame buffer swap
-	 * @param window (ignored) */
-	public static void refresh(long window) {
-		redraw = true;
-	}
-
-	private static void onResize(long window, int w, int h) {
-		glViewport(0, 0, w, h);
-		for (IGuiSection gs : GUI) gs.onResize(w, h);
-		WIDTH = w; HEIGHT = h;
-		refresh(window);
-	}
-
-	private static void onKeyInput(long window, int key, int scancode, int action, int mods) {
-		if (inFocus != null) inFocus.onKeyInput(key, scancode, action, mods);
-	}
-
-	private static void onCharInput(long window, int cp) {
-		if (inFocus != null) inFocus.onCharInput(cp);
-	}
-
-	private static void onMouseButton(long window, int button, int action, int mods) {
-		if (inFocus != null) inFocus.onMouseButton(button, action, mods);
-	}
-
-	private static void onScroll(long window, double dx, double dy) {
-		if (inFocus != null) inFocus.onScroll(dx, dy);
-	}
-
-	private static void onMouseMove(long window, double x, double y) {
-		int[] w = {0}, h = {0};
-		glfwGetWindowSize(window, w, h);
-		x = x / w[0] * 2.0 - 1.0;
-		y = y / h[0] * 2.0 - 1.0;
-		if (lock && inFocus != null)
-			inFocus.onMouseMove(x, y);
-		else for (IGuiSection gs : GUI)
-			if (gs.onMouseMove(x, y)) inFocus = gs;
 	}
 
 	private static final String[] ERROR_MSG = {

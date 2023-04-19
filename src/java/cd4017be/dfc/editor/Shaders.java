@@ -149,6 +149,12 @@ public class Shaders {
 		return new VertexArray(glGenBuffers(), GL_QUADS, BLOCK_STRIDE, blockA).alloc(quads * 4);
 	}
 
+	public static void drawBlock(VertexArray va, int x, int y, int w, int h, AtlasSprite icon) {
+		try (MemoryStack ms = MemoryStack.stackPush()){
+			va.append(drawBlock(ms.malloc(BLOCK_PRIMLEN), x, y, w, h, icon));
+		}
+	}
+
 	/**Add a block to the given vertex buffer.
 	 * @param buf vertex buffer
 	 * @param x block x position
