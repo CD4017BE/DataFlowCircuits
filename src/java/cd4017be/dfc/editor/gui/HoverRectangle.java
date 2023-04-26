@@ -6,7 +6,7 @@ package cd4017be.dfc.editor.gui;
  * @author CD4017BE */
 public class HoverRectangle implements InputHandler {
 
-	protected int x0, y0, x1, y1;
+	public int x0, y0, x1, y1;
 
 	public HoverRectangle() {}
 

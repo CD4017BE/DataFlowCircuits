@@ -19,11 +19,10 @@ public class Button extends HoverRectangle implements Drawable {
 	public int color;
 
 	public Button(
-		GuiGroup gui, int x, int y, int w, int h,
-		SpriteModel model, String text, int color,
-		IntConsumer action
+		GuiGroup gui, String text, int x, int y, int w, int h,
+		SpriteModel model, int color, IntConsumer action
 	) {
-		super(x, y, w, h);
+		super(x * 4, y * 4, w * 4, h * 4);
 		this.gui = gui;
 		this.model = model;
 		this.text = text;
@@ -34,9 +33,9 @@ public class Button extends HoverRectangle implements Drawable {
 	@Override
 	public void redraw() {
 		int w = x1 - x0, h = y1 - y0;
-		drawBlock(gui.sprites, x0, y0, w, h, model.icon);
+		drawBlock(gui.sprites, x0 >> 2, y0 >> 2, w >> 2, h >> 2, model.icon);
 		if (text != null)
-			print(text, color, x0 + x1 + model.tx() - text.length(), y0 * 2 + model.ty(), 2, 3);
+			print(text, color, (x0 + x1 >> 1) + (model.tx() - text.length()) * 2, y0 + model.ty() * 2 + 1, 4, 6);
 		if (gui.hovered() == this)
 			addSel(x0, y0, w, h, color);
 	}

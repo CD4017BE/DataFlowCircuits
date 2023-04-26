@@ -75,10 +75,14 @@ public class Main {
 	MAIN_CURSOR, VRESIZE_CURSOR, MOVE_CURSOR, TEXT_CURSOR, SEL_CURSOR;
 
 	static void init(GuiGroup gui, long window) {
+		new Test(gui);
 //		new CircuitEditor().open(
 //			LoadingCache.getModule("test")
 //			.getBlock("test2")
 //		);
+		int[] w = new int[1], h = new int[1];
+		glfwGetFramebufferSize(window, w, h);
+		gui.onResize(window, w[0], h[0]);
 	}
 
 	private static void run(GuiGroup gui, long window) {

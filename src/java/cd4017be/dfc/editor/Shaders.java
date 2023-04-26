@@ -151,7 +151,7 @@ public class Shaders {
 
 	public static void drawBlock(VertexArray va, int x, int y, int w, int h, AtlasSprite icon) {
 		try (MemoryStack ms = MemoryStack.stackPush()){
-			va.append(drawBlock(ms.malloc(BLOCK_PRIMLEN), x, y, w, h, icon));
+			va.append(drawBlock(ms.malloc(BLOCK_PRIMLEN), x, y, w, h, icon).flip());
 		}
 	}
 

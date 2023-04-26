@@ -107,6 +107,10 @@ public class IconAtlas {
 		return list;
 	}
 
+	public SpriteModel get(String internalPath) {
+		return get(IconAtlas.class.getResource(internalPath));
+	}
+
 	public SpriteModel get(URL path) {
 		if (path == null) return missing;
 		WeakReference<SpriteModel> r = loaded.get(path);

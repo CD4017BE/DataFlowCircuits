@@ -2,6 +2,8 @@ package cd4017be.dfc.editor.gui;
 
 import static cd4017be.dfc.editor.Main.ICONS;
 import static cd4017be.dfc.editor.Shaders.*;
+import static java.lang.Math.max;
+import static java.lang.Math.min;
 
 import java.util.ArrayList;
 import org.lwjgl.glfw.GLFW;
@@ -44,14 +46,16 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 		glfwSetCursorPosCallback(window, this::onMouseMove);
 		glfwSetFramebufferSizeCallback(window, this::onResize);
 		glfwSetWindowRefreshCallback(window, this::refresh);
-		int[] w = new int[1], h = new int[1];
-		glfwGetFramebufferSize(window, w, h);
-		onResize(window, w[0], h[0]);
 		glfwSetInputMode(window, GLFW_LOCK_KEY_MODS, GLFW_TRUE);
 		glClearColor(0, 0, 0, 1);
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glEnable(GL_SCISSOR_TEST);
+	}
+
+	public void add(Object o) {
+		if (o instanceof Drawable d) drawables.add(d);
+		if (o instanceof InputHandler ih) inputHandlers.add(ih);
 	}
 
 	public InputHandler hovered() {
@@ -93,9 +97,13 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 			mx = (mx - x0) / scale;
 			my = (my - y0) / scale;
 		}
-		for (InputHandler ih : inputHandlers)
-			if (ih.onMouseMove(mx, my))
+		for (int i = inputHandlers.size() - 1; i >= 0; i--) {
+			InputHandler ih = inputHandlers.get(i);
+			if (ih.onMouseMove(mx, my)) {
 				hovered = ih;
+				break;
+			}
+		}
 		if (hover != hovered) {
 			if (hover != null) hover.updateHover();
 			if (hovered != null) hovered.updateHover();
@@ -107,7 +115,8 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 	public boolean onMouseButton(int button, int action, int mods) {
 		if (parent != null) parent.focus(this);
 		InputHandler ih = action == GLFW.GLFW_RELEASE ? focused : hovered;
-		return ih != null && ih.onMouseButton(button, action, mods);
+		if (ih != null) return ih.onMouseButton(button, action, mods);
+		return focus(null);
 	}
 
 	@Override
@@ -140,15 +149,16 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 			int w = x1 - x0, h = y1 - y0;
 			glViewport(x0, y0, w, h);
 			glScissor(x0, y0, w, h);
+			glClear(GL_COLOR_BUFFER_BIT);
 			sprites.clear();
 			for (Drawable d : drawables)
 				d.redraw();
-			float sx = 4F / w * scale, sy = -4F / h * scale;
+			float sx = 2F / w * scale, sy = -2F / h * scale;
 			ICONS.bind();
-			transform(block_transform, -1, 1, sx * 2, sy * 2);
+			transform(block_transform, -1, 1, sx * 4, sy * 4);
 			sprites.draw();
-			drawSel(-1, 1, sx, sy, 0, 1);
-			drawText(-1, 1 + 0.5F * sy, sx, sy);
+			drawSel(-1, 1, sx, sy, 0, 2);
+			drawText(-1, 1, sx, sy);
 		}
 	}
 
@@ -183,8 +193,9 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 		onMouseMove((int)(x / w[0] * x1), (int)(y / h[0] * y1));
 	}
 
-	protected void onResize(long window, int w, int h) {
-		for (Drawable d : drawables)
+	public void onResize(long window, int w, int h) {
+		if (scale > 0) markDirty();
+		else for (Drawable d : drawables)
 			if (d instanceof GuiGroup g)
 				g.onResize(window, w, h);
 		if (parent == null) {
@@ -205,6 +216,15 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 				g.close(window);
 		drawables.clear();
 		inputHandlers.clear();
+	}
+
+	protected void scaleCentered(int sw, int sh, int gw, int gh) {
+		scale = max(1, min(sw / gw, sh / gh));
+		x0 = sw - gw * scale >> 1;
+		x1 = sw + gw * scale >> 1;
+		y0 = sh - gh * scale >> 1;
+		y1 = sh + gh * scale >> 1;
+		markDirty();
 	}
 
 }
