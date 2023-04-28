@@ -2,7 +2,7 @@ package cd4017be.dfc.lang;
 
 import java.net.MalformedURLException;
 import java.net.URL;
-
+import cd4017be.dfc.editor.Main;
 import cd4017be.dfc.graphics.SpriteModel;
 
 /**
@@ -65,16 +65,16 @@ public class BlockDef {
 		if (i >= 0) {
 			if ((m = module.imports.get(s.substring(0, i))) == null) {
 				System.out.println("module for block model not defined: " + s);
-				return model = LoadingCache.ATLAS.get(null);
+				return model = Main.ICONS.missing();
 			}
 			s = s.substring(i + 1);
 		}
 		if (!s.isEmpty()) try {
-			return model = LoadingCache.ATLAS.get(new URL(m.source, "icons/" + s + ".tga"));
+			return model = Main.ICONS.get(new URL(m.source, "icons/" + s + ".tga"));
 		} catch(MalformedURLException e) {
 			e.printStackTrace();
 		}
-		return model = LoadingCache.ATLAS.get(null);
+		return model = Main.ICONS.missing();
 	}
 
 }

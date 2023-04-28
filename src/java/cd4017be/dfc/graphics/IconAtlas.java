@@ -107,6 +107,10 @@ public class IconAtlas {
 		return list;
 	}
 
+	public SpriteModel missing() {
+		return missing;
+	}
+
 	public SpriteModel get(String internalPath) {
 		return get(IconAtlas.class.getResource(internalPath));
 	}

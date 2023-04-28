@@ -6,11 +6,12 @@ import static java.lang.Math.max;
 import static java.lang.Math.min;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicLong;
 import org.lwjgl.glfw.GLFW;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11C.*;
-
+import cd4017be.dfc.editor.Main;
 import cd4017be.util.VertexArray;
 
 /**
@@ -18,16 +19,18 @@ import cd4017be.util.VertexArray;
  * @author CD4017BE */
 public class GuiGroup extends HoverRectangle implements Drawable {
 
-	private InputHandler hovered, focused;
+	private InputHandler hovered, focused, info;
 	protected InputHandler background;
 	public final GuiGroup parent;
 	public final ArrayList<InputHandler> inputHandlers = new ArrayList<>();
 	public final ArrayList<Drawable> drawables = new ArrayList<>();
+	public final ArrayList<HoverInfo> infos = new ArrayList<>();
 	public final VertexArray sprites;
 	/** number of frames to redraw (2: both buffers, 1: front buffer, 0: up to date) */
 	protected byte redraw;
 	/** scale < 0: pre hub, scale == 0: post hub, scale > 0: grid scale factor (active) */
 	protected int scale;
+	protected int mx, my;
 
 	public GuiGroup(GuiGroup parent, int scale) {
 		this.parent = parent;
@@ -51,11 +54,23 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glEnable(GL_SCISSOR_TEST);
+		Thread timer = new Thread(this::timerRun, "timer");
+		timer.setDaemon(true);
+		timer.start();
 	}
 
-	public void add(Object o) {
+	public int add(Object o) {
 		if (o instanceof Drawable d) drawables.add(d);
-		if (o instanceof InputHandler ih) inputHandlers.add(ih);
+		if (o instanceof InputHandler ih) {
+			int i = inputHandlers.size();
+			inputHandlers.add(ih);
+			return i;
+		} else return -1;
+	}
+
+	@SuppressWarnings("unchecked")
+	public <T extends InputHandler> T get(int idx) {
+		return (T)inputHandlers.get(idx);
 	}
 
 	public InputHandler hovered() {
@@ -97,6 +112,8 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 			mx = (mx - x0) / scale;
 			my = (my - y0) / scale;
 		}
+		this.mx = mx;
+		this.my = my;
 		for (int i = inputHandlers.size() - 1; i >= 0; i--) {
 			InputHandler ih = inputHandlers.get(i);
 			if (ih.onMouseMove(mx, my)) {
@@ -141,6 +158,12 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 	@Override
 	public void redraw() {
 		if (scale <= 0) {
+			if (parent == null && CLEAR > 0) {
+				CLEAR--;
+				glDisable(GL_SCISSOR_TEST);
+				glClear(GL_COLOR_BUFFER_BIT);
+				glEnable(GL_SCISSOR_TEST);
+			}
 			redraw = 0;
 			for (Drawable d : drawables)
 				d.redraw();
@@ -153,6 +176,8 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 			sprites.clear();
 			for (Drawable d : drawables)
 				d.redraw();
+			if (info instanceof HoverInfo hi)
+				hi.drawOverlay(this);
 			float sx = 2F / w * scale, sy = -2F / h * scale;
 			ICONS.bind();
 			transform(block_transform, -1, 1, sx * 4, sy * 4);
@@ -172,6 +197,7 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 	}
 
 	private void onKeyInput(long window, int key, int scancode, int action, int mods) {
+		move(true);
 		onKeyInput(key, scancode, action, mods);
 	}
 
@@ -180,14 +206,17 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 	}
 
 	private void onMouseButton(long window, int button, int action, int mods) {
+		move(true);
 		onMouseButton(button, action, mods);
 	}
 
 	private void onScroll(long window, double dx, double dy) {
+		move(true);
 		onScroll(dx, dy);
 	}
 
 	private void onMouseMove(long window, double x, double y) {
+		move(false);
 		int[] w = {0}, h = {0};
 		glfwGetWindowSize(window, w, h);
 		onMouseMove((int)(x / w[0] * x1), (int)(y / h[0] * y1));
@@ -200,6 +229,7 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 				g.onResize(window, w, h);
 		if (parent == null) {
 			x1 = w; y1 = h;
+			CLEAR = 2;
 		}
 	}
 
@@ -208,6 +238,7 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 		else for (Drawable d : drawables)
 			if (d instanceof GuiGroup g)
 				g.refresh(window);
+		if (parent == null) CLEAR = 2;
 	}
 
 	public void close(long window) {
@@ -225,6 +256,59 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 		y0 = sh - gh * scale >> 1;
 		y1 = sh + gh * scale >> 1;
 		markDirty();
+	}
+
+	public void endWait() {
+		if (info != null) {
+			info.endWait();
+			info = null;
+			markDirty();
+		}
+	}
+
+	public boolean onHoverWait() {
+		if (hovered != null && hovered.onHoverWait()) {
+			info = hovered;
+			return true;
+		}
+		for (HoverInfo i : infos)
+			if (i.onMouseMove(mx, my)) {
+				info = i;
+				markDirty();
+				return true;
+			}
+		info = null;
+		return false;
+	}
+
+	private static byte CLEAR;
+	private static AtomicLong LAST_MOVE = new AtomicLong();
+
+	public void move(boolean cancel) {
+		endWait();
+		if (cancel) LAST_MOVE.set(0);
+		else if (LAST_MOVE.getAndSet(System.currentTimeMillis() + 1000) == 0)
+			synchronized(LAST_MOVE) {
+				LAST_MOVE.notify();
+			}
+	}
+
+	private void timerRun() {
+		for(;;) {
+			long t0 = LAST_MOVE.get();
+			long dt = t0 - System.currentTimeMillis();
+			if (t0 == 0) dt = 0;
+			else if (dt <= 0) {
+				Main.runAsync(this::onHoverWait);
+				LAST_MOVE.set(0);
+				dt = 0;
+			}
+			synchronized(LAST_MOVE) {
+				try {
+					LAST_MOVE.wait(dt);
+				} catch(InterruptedException e) {}
+			}
+		}
 	}
 
 }

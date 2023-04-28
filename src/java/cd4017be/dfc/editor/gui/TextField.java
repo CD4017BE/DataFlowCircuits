@@ -6,8 +6,6 @@ import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static org.lwjgl.glfw.GLFW.*;
 
-import java.util.function.*;
-
 import cd4017be.dfc.editor.Main;
 import cd4017be.dfc.graphics.SpriteModel;
 
@@ -18,32 +16,55 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 
 	public final GuiGroup gui;
 	public SpriteModel model;
-	public Supplier<String> text;
-	public Consumer<String> modify;
-	public Runnable enter;
-	public int color;
+	public String text = "";
+	public TextAction action = NOP;
+	public int color = FG_YELLOW_L;
 	private int cur0, cur1, curH;
 	private boolean mouseSel;
 
-	public TextField(
-		GuiGroup gui, int x, int y, int w, int h,
-		SpriteModel model, int color,
-		Supplier<String> text, Consumer<String> modify, Runnable enter
-	) {
-		super(x * 4, y * 4, w * 4, h * 4);
+	public TextField(GuiGroup gui) {
 		this.gui = gui;
-		this.model = model;
-		this.color = color;
+		gui.drawables.add(this);
+		gui.inputHandlers.add(this);
+	}
+
+	public TextField pos(int x, int y, int w, int h) {
+		x0 = x * 4;
+		x1 = (x + w) * 4;
+		y0 = y * 4;
+		y1 = (y + h) * 4;
+		gui.markDirty();
+		return this;
+	}
+
+	public TextField text(String text) {
 		this.text = text;
-		this.modify = modify;
-		this.enter = enter;
+		gui.markDirty();
+		return this;
+	}
+
+	public TextField model(SpriteModel model) {
+		this.model = model;
+		gui.markDirty();
+		return this;
+	}
+
+	public TextField color(int color) {
+		this.color = color;
+		gui.markDirty();
+		return this;
+	}
+
+	public TextField action(TextAction action) {
+		this.action = action;
+		return this;
 	}
 
 	@Override
 	public void redraw() {
+		if (model == null) return;
 		int w = x1 - x0, h = y1 - y0;
 		drawBlock(gui.sprites, x0 >> 2, y0 >> 2, w >> 2, h >> 2, model.icon);
-		String text = this.text.get();
 		int l = text.length();
 		int tx = (x0 + x1 >> 1) + (model.tx() - l) * 2, ty = y0 + model.ty() * 2 + 1;
 		if (gui.focused() == this) {
@@ -72,7 +93,7 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 	@Override
 	public void unfocus() {
 		gui.markDirty();
-		enter.run();
+		action.handle(this, true);
 	}
 
 	@Override
@@ -80,7 +101,7 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 		if (!super.onMouseMove(mx, my)) return false;
 		curH = (mx - (x0 + x1 >> 1) >> 1) - model.tx() + 1;
 		if (mouseSel) {
-			int l = text.get().length();
+			int l = text.length();
 			if (cur1 != (cur1 = max(min(curH + l >> 1, l), 0)))
 				gui.markDirty();
 		}
@@ -91,7 +112,7 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 	public boolean onMouseButton(int button, int action, int mods) {
 		if (action == GLFW_PRESS) {
 			gui.focus(this);
-			int l = text.get().length();
+			int l = text.length();
 			if (button == GLFW_MOUSE_BUTTON_LEFT) {
 				cur0 = cur1 = max(min(curH + l >> 1, l), 0);
 				mouseSel = true;
@@ -107,7 +128,6 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 		if (action != GLFW_PRESS) return false;
 		boolean ctrl = (mods & GLFW_MOD_CONTROL) != 0;
 		boolean shift = (mods & GLFW_MOD_SHIFT) != 0;
-		String text = this.text.get();
 		int nc, l = text.length();
 		switch(key) {
 		case GLFW_KEY_HOME:
@@ -139,7 +159,7 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 			text = text.substring(0, nc = min(cur0, cur1)).concat(s)
 			.concat(text.substring(max(cur0, cur1)));
 			cur0 = cur1 = nc + s.length();
-			modify.accept(text);
+			this.action.handle(this, false);
 			break;
 		case GLFW_KEY_X, GLFW_KEY_C:
 			if (!ctrl) return false;
@@ -160,7 +180,7 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 			text = text.substring(0, nc = min(cur0, cur1))
 			.concat(text.substring(max(cur0, cur1)));
 			cur0 = cur1 = nc;
-			modify.accept(text);
+			this.action.handle(this, false);
 			break;
 		case GLFW_KEY_ENTER, GLFW_KEY_KP_ENTER:
 			return gui.focus(null);
@@ -173,13 +193,19 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 	@Override
 	public boolean onCharInput(int cp) {
 		int nc = min(cur0, cur1);
-		String text = this.text.get();
 		text = text.substring(0, nc) + (char)cp
 			+ text.substring(max(cur0, cur1));
 		cur0 = cur1 = nc + 1;
-		modify.accept(text);
+		this.action.handle(this, false);
 		gui.markDirty();
 		return true;
+	}
+
+	public static final TextAction NOP = (tf, finish) -> {};
+
+	@FunctionalInterface
+	public interface TextAction {
+		void handle(TextField tf, boolean finish);
 	}
 
 }

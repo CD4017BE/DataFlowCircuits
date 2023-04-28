@@ -55,12 +55,13 @@ public class Main {
 			MOVE_CURSOR = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
 			TEXT_CURSOR = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
 			SEL_CURSOR = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
-			GuiGroup gui = new GuiGroup(window);
-			init(gui, window);
+			GUI = new GuiGroup(window);
+			init(window);
 			//main loop
-			run(gui, window);
+			run(window);
 			//cleanup
-			gui.close(window);
+			GUI.close(window);
+			GUI = null;
 			Shaders.deleteAll();
 			glfwDestroyWindow(window);
 		} finally {
@@ -71,24 +72,25 @@ public class Main {
 	private static final ArrayDeque<Runnable> ASYNC_EVENTS = new ArrayDeque<>();
 	public static IconAtlas ICONS;
 	public static TraceAtlas TRACES;
+	public static GuiGroup GUI;
 	public static long WINDOW,
 	MAIN_CURSOR, VRESIZE_CURSOR, MOVE_CURSOR, TEXT_CURSOR, SEL_CURSOR;
 
-	static void init(GuiGroup gui, long window) {
-		new Test(gui);
+	static void init(long window) {
+		new BlockDefEditor(GUI);
 //		new CircuitEditor().open(
 //			LoadingCache.getModule("test")
 //			.getBlock("test2")
 //		);
 		int[] w = new int[1], h = new int[1];
 		glfwGetFramebufferSize(window, w, h);
-		gui.onResize(window, w[0], h[0]);
+		GUI.onResize(window, w[0], h[0]);
 	}
 
-	private static void run(GuiGroup gui, long window) {
+	private static void run(long window) {
 		while(!glfwWindowShouldClose(window)) {
-			if (gui.isDirty()) {
-				gui.redraw();
+			if (GUI.isDirty()) {
+				GUI.redraw();
 				glfwSwapBuffers(window);
 			}
 			checkGLErrors();
