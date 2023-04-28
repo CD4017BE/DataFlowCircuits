@@ -37,10 +37,14 @@ public interface InputHandler {
 	 * @return whether this component is hovered */
 	boolean onMouseMove(int mx, int my);
 
+	default boolean onHoverWait() {return false;}
+	default void endWait() {}
+
 	/**Triggered when focus lost. */
 	default void unfocus() {}
 
 	/**Triggered when hovered or unhovered. */
 	default void updateHover() {}
+
 
 }
