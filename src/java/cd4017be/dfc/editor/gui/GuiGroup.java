@@ -157,7 +157,7 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 			ICONS.bind();
 			transform(block_transform, -1, 1, sx * 4, sy * 4);
 			sprites.draw();
-			drawSel(-1, 1, sx, sy, 0, 2);
+			drawSel(-1, 1, sx, sy, 0, 1);
 			drawText(-1, 1, sx, sy);
 		}
 	}

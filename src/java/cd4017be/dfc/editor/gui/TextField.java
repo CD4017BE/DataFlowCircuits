@@ -1,5 +1,6 @@
 package cd4017be.dfc.editor.gui;
 
+import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
@@ -64,6 +65,7 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 
 	@Override
 	public void updateHover() {
+		glfwSetCursor(WINDOW, gui.hovered() == this ? TEXT_CURSOR : MAIN_CURSOR);
 		gui.markDirty();
 	}
 

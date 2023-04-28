@@ -5,6 +5,7 @@ import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.file.*;
+import java.nio.file.attribute.FileTime;
 
 import cd4017be.dfc.graphics.SpriteModel;
 import cd4017be.util.ConfigFile.KeyValue;
@@ -18,24 +19,27 @@ public class SpriteModelConverter {
 		for (String arg : args) {
 			if (arg.startsWith("-")) continue;
 			try {
-				Object[] cfg = ConfigFile.parse(new FileReader(arg + "/metadata.cfg"));
+				Path file = Path.of(arg, "metadata.cfg");
+				FileTime t = Files.getLastModifiedTime(file);
+				Object[] cfg = ConfigFile.parse(Files.newBufferedReader(file));
 				for (Object e : cfg)
 					if (e instanceof KeyValue kv)
-						visitIcon(arg, kv);
+						visitIcon(arg, kv, t);
 			} catch(IOException e) {
 				System.out.printf("can't read metadata for %s : %s\n", arg, e);
 			}
 		}
 	}
 
-	private static void visitIcon(String path, KeyValue kv0) {
+	private static void visitIcon(String path, KeyValue kv0, FileTime t) {
 		String key = kv0.key();
 		Path file = Path.of(path, key + ".tga");
 		SpriteModel model = new SpriteModel();
 		byte[] data;
 		try {
+			FileTime t1 = Files.getLastModifiedTime(file);
 			data = Files.readAllBytes(file);
-			if (model.readFromImageMetadata(data)) return;
+			if (model.readFromImageMetadata(data) && t1.compareTo(t) > 0) return;
 			for (Object e1 : (Object[])kv0.value()) {
 				KeyValue kv1 = (KeyValue)e1;
 				switch(kv1.key()) {
