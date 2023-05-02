@@ -83,8 +83,8 @@ public class Shaders {
 
 	/** default font texture for text rendering */
 	public static final int font_tex = texture2DMM(GL_LINEAR_MIPMAP_NEAREST, GL_NEAREST, GL_REPEAT, GL_R3_G3_B2, "font0", "font1");
-	public static final VertexArray text_vao = genTextVAO(32);
-	public static final VertexArray sel_vao = genSelVAO(8);
+	public static final VertexArray text_vao = genTextVAO(32), text_overlay = genTextVAO(32);
+	public static final VertexArray sel_vao = genSelVAO(8), sel_overlay = genSelVAO(8);
 	public static final int palette_tex = genColorPalette(
 		0x00000000, 0x80000000, 0xff000000, 0xff202020, 0xff804040, 0, 0, 0, //background colors
 		0xff00ff00, 0xffff0000, 0xff80ff80, 0xff8080ff, 0xffff8080, 0xffffffff, 0xffffff80, 0x80ffffff, //fg colors 1
@@ -107,7 +107,8 @@ public class Shaders {
 	FG_RED_L = 12, FG_WHITE = 13, FG_YELLOW_L = 14, FG_WHITE_T = 15,
 	FG_RED_XL = 16, FG_BLUE_SL = 17, FG_GRAY_L = 18, FG_BLUE_XL = 19,
 	FG_YELLOW_SL = 20, FG_GREEN_SL = 21, FG_GREEN_XL = 22, FG_RED_SL = 23,
-	CURSOR_COLOR = BG_TRANSP | FG_RED_L, HIGHLIGHT_COLOR = 0x80;
+	CURSOR_COLOR = BG_TRANSP | FG_RED_L, HIGHLIGHT_COLOR = 0x80,
+	OVERLAY = 0x100;
 
 	static void deleteAll() {
 		glDeleteProgram(textP);
@@ -217,7 +218,7 @@ public class Shaders {
 	 * @param y text grid Y origin
 	 * @param sx text grid X scale
 	 * @param sy text grid Y scale */
-	public static void drawText(float x, float y, float sx, float sy) {
+	public static void drawText(float x, float y, float sx, float sy, boolean overlay) {
 		glActiveTexture(GL_TEXTURE1);
 		glBindTexture(GL_TEXTURE_2D, font_tex);
 		glActiveTexture(GL_TEXTURE0);
@@ -225,8 +226,9 @@ public class Shaders {
 		glUseProgram(textP);
 		transform(text_transform, x, y, sx, sy);
 		checkGLErrors();
-		text_vao.draw();
-		text_vao.clear();
+		VertexArray va = overlay ? text_overlay : text_vao;
+		va.draw();
+		va.clear();
 	}
 
 	/**Add text to be rendered later by {@link #drawText(float, float, float, float)}.
@@ -240,6 +242,7 @@ public class Shaders {
 		CharSequence s, int c,
 		int x, int y, int w, int h
 	) {
+		VertexArray va = (c & OVERLAY) != 0 ? text_overlay : text_vao;
 		try(MemoryStack ms = MemoryStack.stackPush()) {
 			ByteBuffer buf = ms.malloc(s.length() * 4 * TEXT_STRIDE);
 			byte col = (byte)c;
@@ -258,7 +261,7 @@ public class Shaders {
 				buf.putShort(x1).putShort(y1).putChar(ch).put(col).put(X1Y1);
 				buf.putShort(x0).putShort(y1).putChar(ch).put(col).put(X0Y1);
 			}
-			if (buf.position() > 0) text_vao.append(buf.flip());
+			if (buf.position() > 0) va.append(buf.flip());
 		}
 	}
 
@@ -274,12 +277,14 @@ public class Shaders {
 		int size = w | h << 16;
 		byte col = (byte)c;
 		try(MemoryStack ms = MemoryStack.stackPush()) {
-			sel_vao.append(ms.malloc(SEL_STRIDE * 4)
+			((c & OVERLAY) != 0 ? sel_overlay : sel_vao).append(
+				ms.malloc(SEL_STRIDE * 4)
 				.putShort(x0).putShort(y0).putInt(size).put(col).put(X0Y0)
 				.putShort(x1).putShort(y0).putInt(size).put(col).put(X1Y0)
 				.putShort(x1).putShort(y1).putInt(size).put(col).put(X1Y1)
 				.putShort(x0).putShort(y1).putInt(size).put(col).put(X0Y1)
-			.flip());
+				.flip()
+			);
 		}
 	}
 
@@ -292,14 +297,15 @@ public class Shaders {
 	 * @param e1 edge fade end */
 	public static void drawSel(
 		float x, float y, float sx, float sy,
-		float e0, float e1
+		float e0, float e1, boolean overlay
 	) {
 		glBindTexture(GL_TEXTURE_1D, palette_tex);
 		glUseProgram(selP);
 		transform(sel_transform, x, y, sx, sy);
 		glUniform2f(sel_edgeRange, e0, e1);
-		sel_vao.draw();
-		sel_vao.clear();
+		VertexArray va = overlay ? sel_overlay : sel_vao;
+		va.draw();
+		va.clear();
 	}
 
 	/**Set the transformation for id

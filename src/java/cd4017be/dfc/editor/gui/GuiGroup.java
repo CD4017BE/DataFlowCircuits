@@ -73,6 +73,14 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 		return (T)inputHandlers.get(idx);
 	}
 
+	public int h() {
+		return (y1 - y0) / scale;
+	}
+
+	public int w() {
+		return (x1 - x0) / scale;
+	}
+
 	public InputHandler hovered() {
 		return hovered;
 	}
@@ -182,8 +190,10 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 			ICONS.bind();
 			transform(block_transform, -1, 1, sx * 4, sy * 4);
 			sprites.draw();
-			drawSel(-1, 1, sx, sy, 0, 1);
-			drawText(-1, 1, sx, sy);
+			drawSel(-1, 1, sx, sy, 0, 1, false);
+			drawText(-1, 1, sx, sy, false);
+			drawSel(-1, 1, sx, sy, 0, 1, true);
+			drawText(-1, 1, sx, sy, true);
 		}
 	}
 

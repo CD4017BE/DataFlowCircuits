@@ -40,7 +40,7 @@ public class BlockDefEditor extends GuiGroup {
 		new Label(this).text("Model:").pos(0, 9, 3);
 		this.id = new Label(this).color(FG_WHITE);
 		this.name = new TextField(this).pos(8, 3, 24, 3).model(TEXT_MODEL);
-		this.type = new TextField(this).pos(8, 6, 24, 3).model(TEXT_MODEL);
+		this.type = new TextField(this).pos(8, 6, 24, 3).model(TEXT_MODEL).action(this::editType);
 		this.model = new TextField(this).pos(8, 9, 24, 3).model(TEXT_MODEL);
 		makeIO(0, "Inputs:");
 		makeIO(1, "Outputs:");
@@ -93,6 +93,17 @@ public class BlockDefEditor extends GuiGroup {
 				new TextField(this).text(names[j]).model(TEXT_MODEL).pos(8, y, 24, 3)
 				.action((tf, finish) -> {if (finish) names[jj] = tf.text;});
 			}
+		}
+	}
+
+	private static final String[] TYPES = {"function", "macro", "constant", "io"};
+
+	private void editType(TextField tf, boolean finish) {
+		if (!finish) {
+			tf.autocomplete.clear();
+			for (String t : TYPES)
+				if (t.startsWith(tf.text))
+					tf.autocomplete.add(t);
 		}
 	}
 

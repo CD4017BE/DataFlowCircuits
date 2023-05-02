@@ -6,6 +6,8 @@ import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static org.lwjgl.glfw.GLFW.*;
 
+import java.util.ArrayList;
+
 import cd4017be.dfc.editor.Main;
 import cd4017be.dfc.graphics.SpriteModel;
 
@@ -19,8 +21,9 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 	public String text = "";
 	public TextAction action = NOP;
 	public int color = FG_YELLOW_L;
-	private int cur0, cur1, curH;
+	private int cur0, cur1, curH, selAC;
 	private boolean mouseSel;
+	public final ArrayList<String> autocomplete = new ArrayList<>();
 
 	public TextField(GuiGroup gui) {
 		this.gui = gui;
@@ -79,6 +82,23 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 				print(text.subSequence(i0, i1), HIGHLIGHT_COLOR | color & 31, tx + i0 * 4, ty, 4, 6);
 				print(text.subSequence(i1, text.length()), color, tx + i1 * 4, ty, 4, 6);
 			}
+			if (!autocomplete.isEmpty()) {
+				int gh = gui.h(), ay0, n;
+				if (y0 > gh - y1) {
+					n = min(y0 / 6, autocomplete.size());
+					ay0 = y0 - n * 6;
+				} else {
+					n = min((gh - y1) / 6, autocomplete.size());
+					ay0 = y1;
+				}
+				addSel(x0, ay0, w, n * 6, FG_GRAY_L | BG_BLACK_T | OVERLAY);
+				if (selAC >= 0 && selAC < n)
+					addSel(x0, ay0 + selAC * 6, w, 6, FG_GREEN_L | OVERLAY);
+				for (int i = 0; i < n; i++) {
+					String s = autocomplete.get(i);
+					print(s, color & 31 | BG_BLACK_T | OVERLAY, (x0 + x1 >> 1) - s.length() * 2, ay0 + i * 6, 4, 6);
+				}
+			}
 		} else print(text, color, tx, ty, 4, 6);
 		if (gui.hovered() == this)
 			addSel(x0, y0, w, h, color);
@@ -125,7 +145,7 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 
 	@Override
 	public boolean onKeyInput(int key, int scancode, int action, int mods) {
-		if (action != GLFW_PRESS) return false;
+		if (action == GLFW_RELEASE) return false;
 		boolean ctrl = (mods & GLFW_MOD_CONTROL) != 0;
 		boolean shift = (mods & GLFW_MOD_SHIFT) != 0;
 		int nc, l = text.length();
@@ -146,6 +166,24 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 			cur1 = min(cur1 + 1, l);
 			if (!shift) cur0 = cur1;
 			break;
+		case GLFW_KEY_UP:
+			selAC = (selAC <= 0 ? autocomplete.size() : selAC) - 1;
+			break;
+		case GLFW_KEY_DOWN:
+			selAC = selAC + 1 >= autocomplete.size() ? 0 : selAC + 1;
+			break;
+		case GLFW_KEY_TAB:
+			if (selAC >= 0 && selAC < autocomplete.size()) {
+				String s = autocomplete.get(selAC);
+				for (int i = max(0, l - s.length()); i <= l; i++)
+					if (s.regionMatches(0, text, i, l - i)) {
+						text = text.substring(0, i).concat(s);
+						cur1 = cur0 = text.length();
+						this.action.handle(this, false);
+						break;
+					}
+				break;
+			} else return false;
 		case GLFW_KEY_A:
 			if (!ctrl) return false;
 			cur0 = 0;
