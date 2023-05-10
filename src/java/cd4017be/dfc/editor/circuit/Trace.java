@@ -1,4 +1,4 @@
-package cd4017be.dfc.editor;
+package cd4017be.dfc.editor.circuit;
 
 import static cd4017be.dfc.editor.Shaders.*;
 
@@ -8,7 +8,6 @@ import org.lwjgl.system.MemoryStack;
 import cd4017be.dfc.lang.*;
 import cd4017be.dfc.lang.Node.Vertex;
 import cd4017be.util.IndexedSet;
-import cd4017be.util.VertexArray;
 
 /**Represents a data trace node.
  * @author CD4017BE */
@@ -19,7 +18,7 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 	/**-1: trace, 0..outs-1: output, outs..: input */
 	public final int pin;
 	private short x, y;
-	private VertexArray va;
+	private CircuitBoard cb;
 
 	public Trace() {
 		this.block = null;
@@ -46,7 +45,7 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		return y;
 	}
 
-	public void movePin(int i, short[] pins, int x, int y, int w, int h, int rh, CircuitEditor cc) {
+	public void movePin(int i, short[] pins, int x, int y, int w, int h, int rh) {
 		int o = i - (pins.length) + 1;
 		if (o > 0) {
 			y += o * rh;
@@ -56,11 +55,11 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		int dy = dx >> 8; dx = (byte)dx;
 		if (dx < 0) dx += w + 1;
 		if (dy < 0) dy += h + 1;
-		pos(x + dx, y + dy, cc);
+		pos(x + dx, y + dy);
 	}
 
 	@Override
-	public Trace pos(int x, int y, CircuitEditor cc) {
+	public Trace pos(int x, int y) {
 		this.x = (short)x;
 		this.y = (short)y;
 		draw();
@@ -70,25 +69,25 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 	}
 
 	@Override
-	public Trace pickup(CircuitEditor cc) {
+	public Trace pickup() {
 		return this;
 	}
 
 	@Override
-	public Trace place(CircuitEditor cc) {
-		for (Block block : cc.blocks)
+	public Trace place() {
+		for (Block block : cb.blocks)
 			for (int i = 0; i < block.outs(); i++) {
 				Trace tr = block.io[i];
 				if (tr.x == x && tr.y == y && tr != this)
-					return merge(tr, cc);
+					return merge(tr);
 			}
-		for (Trace tr : cc.traces)
+		for (Trace tr : cb.traces)
 			if (tr.x == x && tr.y == y && tr != this)
-				return merge(tr, cc);
+				return merge(tr);
 		return this;
 	}
 
-	private Trace merge(Trace tr, CircuitEditor cc) {
+	private Trace merge(Trace tr) {
 		Trace rem;
 		if (this.pin < 0)
 			rem = this;
@@ -105,21 +104,21 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 				Block block0 = tr.block, block1 = this.block;
 				Trace[] io0 = block0.io, io1 = block1.io;
 				for (Trace out = tr; out.to != null;)
-					out.to.connect(this, cc);
+					out.to.connect(this);
 				for (int i = block0.outs(), j = block1.outs(); i < io0.length && j < io1.length; i++, j++)
-					io1[j].connect(io0[i].from, cc);
-				tr.block.remove(cc);
+					io1[j].connect(io0[i].from);
+				tr.block.remove();
 				return this;
 			}
-			rem.connect(tr, cc);
+			rem.connect(tr);
 			return tr;
 		}
-		rem.connect(tr, cc);
-		rem.remove(cc);
+		rem.connect(tr);
+		rem.remove();
 		return tr;
 	}
 
-	public void connect(Trace tr, CircuitEditor cc) {
+	public void connect(Trace tr) {
 		if (from == tr || isOut()) return;
 		if (from != null) {
 			Trace t0 = null;
@@ -139,12 +138,12 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		if (this.src != src) {
 			ArrayList<Trace> stack = new ArrayList<>();
 			stack.add(this);
-			forEachUser(stack, trace -> trace.updateSrc(src, cc));
+			forEachUser(stack, trace -> trace.updateSrc(src));
 		}
 		draw();
 	}
 
-	private void updateSrc(Trace src, CircuitEditor cc) {
+	private void updateSrc(Trace src) {
 		this.src = src;
 		draw();
 		if (pin < 0) return;
@@ -154,24 +153,22 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		else block.connectIn(i, null, -1);
 		Vertex v = block.ins[i];
 		if (v != null && v.scope() != null)
-			cc.reRunTypecheck = true;
+			cb.reRunTypecheck = true;
 	}
 
 	@Override
-	public void add(CircuitEditor cc) {
-		if (!isOut()) {
-			va = cc.traceVAO;
-			cc.traces.add(this);
-		}
+	public void add(CircuitBoard cb) {
+		this.cb = cb;
+		if (!isOut()) cb.traces.add(this);
 	}
 
 	@Override
-	public void remove(CircuitEditor cc) {
-		va = null;
-		cc.traces.remove(this);
-		pickup(cc);
-		while(to != null) to.connect(from, cc);
-		connect(null, cc);
+	public void remove() {
+		cb.traces.remove(this);
+		pickup();
+		while(to != null) to.connect(from);
+		connect(null);
+		this.cb = null;
 	}
 
 	@Override
@@ -181,13 +178,13 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		Trace from = this.from;
 		if (from == null) from = this;
 		try (MemoryStack ms = MemoryStack.stackPush()) {
-			va.set(idx * 4, drawTrace(
+			cb.traceVAO.set(idx * 4, drawTrace(
 				ms.malloc(TRACE_PRIMLEN),
 				from.x, from.y, x, y,
 				src == null ? 1 : src.block.colors[src.pin]
 			).flip());
 		}
-		Main.refresh(0);
+		cb.gui.markDirty();
 	}
 
 	@Override

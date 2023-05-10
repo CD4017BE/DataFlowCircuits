@@ -1,4 +1,4 @@
-package cd4017be.dfc.editor;
+package cd4017be.dfc.editor.circuit;
 
 import static cd4017be.dfc.editor.Shaders.*;
 import static java.lang.Math.max;
@@ -8,10 +8,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 import org.lwjgl.system.MemoryStack;
-
 import cd4017be.dfc.graphics.SpriteModel;
 import cd4017be.dfc.lang.*;
-import cd4017be.util.VertexArray;
 
 /**Represents an operand block.
  * @author CD4017BE */
@@ -20,7 +18,7 @@ public class Block extends BlockDesc implements CircuitObject {
 	public final Trace[] io;
 	protected final short[] colors;
 	public short x, y, w, h;
-	private VertexArray va;
+	private CircuitBoard cb;
 
 	public Block(BlockDesc desc) {
 		this(desc.def, desc.outs.length, desc.ins.length, desc.args);
@@ -49,21 +47,21 @@ public class Block extends BlockDesc implements CircuitObject {
 	}
 
 	@Override
-	public Block pickup(CircuitEditor cc) {
-		for (Trace tr : io) tr.pickup(cc);
+	public Block pickup() {
+		for (Trace tr : io) tr.pickup();
 		return this;
 	}
 
 	@Override
-	public Block pos(int x, int y, CircuitEditor cc) {
+	public Block pos(int x, int y) {
 		this.x = (short)x;
 		this.y = (short)y;
 		draw();
-		updatePins(cc);
+		updatePins();
 		return this;
 	}
 
-	public Block resize(int ds, CircuitEditor cc) {
+	public Block resize(int ds) {
 		if (ds == 0) return this;
 		int s = size() + ds;
 		if (s < 0)
@@ -74,16 +72,17 @@ public class Block extends BlockDesc implements CircuitObject {
 		block.updateSize();
 		for (int i = 0, l = min(outs(), block.outs()); i < l; i++) {
 			Trace ta = io[i], tb = block.io[i];
-			while(ta.to != null) ta.to.connect(tb, cc);
+			while(ta.to != null) ta.to.connect(tb);
 		}
 		for (int i = outs(), j = block.outs(), l = min(ins(), block.ins()); l > 0; i++, j++, l--) {
 			Trace ta = io[i], tb = block.io[j];
-			while(ta.to != null) ta.to.connect(tb, cc);
-			tb.connect(ta.from, cc);
+			while(ta.to != null) ta.to.connect(tb);
+			tb.connect(ta.from);
 		}
-		remove(cc);
-		block.pos(x, y, cc).add(cc);
-		return block.place(cc);
+		CircuitBoard cb = this.cb;
+		remove();
+		block.pos(x, y).add(cb);
+		return block.place();
 	}
 
 	public int size() {
@@ -109,17 +108,17 @@ public class Block extends BlockDesc implements CircuitObject {
 		draw();
 	}
 
-	public void updatePins(CircuitEditor cc) {
+	public void updatePins() {
 		SpriteModel model = def.model;
 		for (int i = 0; i < outs(); i++)
-			io[i].movePin(i, model.outs, x, y, w, h, model.rh(), cc);
+			io[i].movePin(i, model.outs, x, y, w, h, model.rh());
 		for (int i = outs(), j = 0; i < io.length; i++, j++)
-			io[i].movePin(j, model.ins, x, y, w, h, model.rh(), cc);
+			io[i].movePin(j, model.ins, x, y, w, h, model.rh());
 	}
 
 	@Override
-	public Block place(CircuitEditor cc) {
-		for (Trace tr : io) tr.place(cc);
+	public Block place() {
+		for (Trace tr : io) tr.place();
 		return this;
 	}
 
@@ -128,12 +127,12 @@ public class Block extends BlockDesc implements CircuitObject {
 		int idx = getIdx();
 		if (idx < 0) return;
 		try(MemoryStack ms = MemoryStack.stackPush()) {
-			va.set(idx * 4, drawBlock(
+			cb.blockVAO.set(idx * 4, drawBlock(
 				ms.malloc(BLOCK_PRIMLEN),
 				x, y, w, h, def.model.icon
 			).flip());
 		}
-		Main.refresh(0);
+		cb.gui.markDirty();
 	}
 
 	public int textX() {
@@ -181,22 +180,22 @@ public class Block extends BlockDesc implements CircuitObject {
 	}
 
 	@Override
-	public void add(CircuitEditor cc) {
-		va = cc.blockVAO;
-		if (cc.blocks.add(this))
-			for (Trace tr : io) tr.add(cc);
-		if (outs() == 0) cc.reRunTypecheck = true;
+	public void add(CircuitBoard cb) {
+		this.cb = cb;
+		if (cb.blocks.add(this))
+			for (Trace tr : io) tr.add(cb);
+		if (outs() == 0) cb.reRunTypecheck = true;
 	}
 
 	@Override
-	public void remove(CircuitEditor cc) {
-		va = null;
-		cc.blocks.remove(this);
-		for (Trace tr : io) tr.remove(cc);
-		if (cc.errorBlock == this) {
-			cc.errorBlock = null;
-			cc.reRunTypecheck = true;
+	public void remove() {
+		cb.blocks.remove(this);
+		for (Trace tr : io) tr.remove();
+		if (cb.errorBlock == this) {
+			cb.errorBlock = null;
+			cb.reRunTypecheck = true;
 		}
+		this.cb = null;
 	}
 
 	@Override

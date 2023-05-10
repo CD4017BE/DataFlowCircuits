@@ -3,7 +3,8 @@ package cd4017be.dfc.lang;
 import java.io.*;
 import java.net.*;
 import java.util.*;
-import cd4017be.dfc.editor.*;
+import cd4017be.dfc.editor.circuit.Block;
+import cd4017be.dfc.editor.circuit.Trace;
 import cd4017be.util.*;
 
 /**
@@ -48,7 +49,9 @@ public class CircuitFile {
 		return new ExtInputStream(path(def).openStream());
 	}
 
-	public static void readLayout(ExtInputStream is, Module m, CircuitEditor cc) throws IOException {
+	public static record Layout(Block[] blocks, Trace[] traces) {}
+
+	public static Layout readLayout(ExtInputStream is, Module m) throws IOException {
 		IndexedSet<BlockDesc> circuit = readCircuit(is, m);
 		is.readU8(LAYOUT_VERSION);
 		Trace[] traces = new Trace[is.readVarInt() + 1];
@@ -58,7 +61,7 @@ public class CircuitFile {
 			ni += info.outs.length;
 		for (int i = 0; i < blocks.length; i++) {
 			Block block = blocks[i] = new Block(circuit.get(i));
-			block.pos(is.readI16(), is.readI16(), cc);
+			block.pos(is.readI16(), is.readI16());
 			int j = 0;
 			for (Trace tr : block.io)
 				traces[j++ < block.outs() ? no++ : ni++] = tr;
@@ -67,11 +70,10 @@ public class CircuitFile {
 			traces[i] = new Trace();
 		for (int i = 1; i < traces.length; i++) {
 			Trace tr = traces[i];
-			tr.pos(is.readI16(), is.readI16(), cc);
-			if (i >= no) tr.connect(traces[is.readInt(traces.length - 1)], cc);
-			tr.add(cc);
+			tr.pos(is.readI16(), is.readI16());
+			if (i >= no) tr.connect(traces[is.readInt(traces.length - 1)]);
 		}
-		for (Block block : blocks) block.add(cc);
+		return new Layout(blocks, traces);
 	}
 
 	public static IndexedSet<BlockDesc> readCircuit(ExtInputStream is, Module m) throws IOException {

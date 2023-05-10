@@ -65,6 +65,15 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 		return this;
 	}
 
+	public int cursor() {
+		return cur1;
+	}
+
+	public void cursor(int c) {
+		cur1 = cur0 = max(min(c, text.length()), 0);
+		gui.markDirty();
+	}
+
 	@Override
 	public void redraw() {
 		if (model == null) return;

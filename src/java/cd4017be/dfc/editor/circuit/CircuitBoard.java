@@ -1,37 +1,49 @@
-package cd4017be.dfc.editor;
+package cd4017be.dfc.editor.circuit;
 
-import java.io.*;
-import java.util.*;
-import cd4017be.dfc.editor.circuit.Block;
-import cd4017be.dfc.editor.circuit.CircuitObject;
-import cd4017be.dfc.editor.circuit.Trace;
+import static cd4017be.dfc.editor.Main.*;
+import static cd4017be.dfc.editor.Shaders.*;
+import static cd4017be.dfc.lang.LoadingCache.IN_BLOCK;
+import static cd4017be.dfc.lang.LoadingCache.OUT_BLOCK;
+import static java.lang.Math.abs;
+import static java.lang.Math.floor;
+import static java.lang.Math.floorDiv;
+import static java.lang.Math.max;
+import static java.lang.Math.min;
+import static java.lang.Math.round;
+import static org.lwjgl.glfw.GLFW.*;
+import static org.lwjgl.opengl.GL20C.glUniform2f;
+import static org.lwjgl.opengl.GL20C.glUseProgram;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import cd4017be.dfc.editor.Main;
+import cd4017be.dfc.editor.Palette;
 import cd4017be.dfc.editor.gui.Drawable;
 import cd4017be.dfc.editor.gui.GuiGroup;
-import cd4017be.dfc.editor.gui.HoverInfo;
+import cd4017be.dfc.editor.gui.InputHandler;
+import cd4017be.dfc.editor.gui.Label;
 import cd4017be.dfc.editor.gui.TextField;
-import cd4017be.dfc.lang.*;
+import cd4017be.dfc.lang.BlockDef;
+import cd4017be.dfc.lang.CircuitFile;
+import cd4017be.dfc.lang.CircuitFile.Layout;
+import cd4017be.dfc.lang.Interpreter;
+import cd4017be.dfc.lang.Node;
+import cd4017be.dfc.lang.NodeContext;
+import cd4017be.dfc.lang.SignalError;
+import cd4017be.dfc.lang.Value;
 import cd4017be.dfc.lang.Interpreter.Task;
 import cd4017be.dfc.lang.Node.Vertex;
 import cd4017be.dfc.lang.builders.BasicConstructs;
 import cd4017be.dfc.lang.builders.ConstList;
 import cd4017be.dfc.lang.builders.Function;
 import cd4017be.dfc.lang.builders.Macro;
-import cd4017be.dfc.lang.instructions.*;
-import cd4017be.util.*;
-import static cd4017be.dfc.editor.Main.*;
-import static cd4017be.dfc.editor.Shaders.*;
-import static cd4017be.dfc.lang.LoadingCache.*;
-import static java.lang.Math.*;
-import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.opengl.GL11C.GL_COLOR_BUFFER_BIT;
-import static org.lwjgl.opengl.GL11C.glClear;
-import static org.lwjgl.opengl.GL11C.glScissor;
-import static org.lwjgl.opengl.GL11C.glViewport;
-import static org.lwjgl.opengl.GL20C.*;
+import cd4017be.dfc.lang.instructions.UnpackIns;
+import cd4017be.util.IndexedSet;
+import cd4017be.util.VertexArray;
 
-/**Implements the circuit editor user interface.
- * @author CD4017BE */
-public class CircuitEditor extends GuiGroup {
+/**
+ * @author cd4017be */
+public class CircuitBoard implements InputHandler, Drawable {
 
 	/**Editing modes */
 	private static final byte M_IDLE = 0, M_BLOCK_SEL = 1, M_TRACE_SEL = 2, M_TRACE_MV = 3, M_TRACE_DRAW = 4,
@@ -39,13 +51,9 @@ public class CircuitEditor extends GuiGroup {
 
 	public final IndexedSet<Block> blocks;
 	public final IndexedSet<Trace> traces;
-	final ArrayList<CircuitObject> moving = new ArrayList<>();
-	final Palette palette;
+	private final ArrayList<CircuitObject> moving = new ArrayList<>();
 	/** GL vertex arrays */
 	final VertexArray blockVAO, traceVAO;
-	final TextField text = new TextField(this::setText);
-	final ArrayList<String> autoComplete = new ArrayList<>();
-	final Interpreter ip;
 	/** mouse grid offset and zoom */
 	int ofsX, ofsY, zoom = 16, dSize;
 	boolean panning = false;
@@ -58,71 +66,26 @@ public class CircuitEditor extends GuiGroup {
 	SignalError lastError;
 	int editArg;
 	boolean textModified, reRunTypecheck;
-	String info = "";
+	//final TextField text = new TextField(this::setText);
+	public final GuiGroup gui;
+	TextField text;
+	Label info;
+	Palette palette;
+	final Interpreter ip;
 	NodeContext context;
 	Task result;
 
-	public CircuitEditor(GuiGroup parent) {
-		super(parent, 1);
-		parent.add(this);
-		parent.add(palette);
+	public CircuitBoard(GuiGroup gui) {
+		this.gui = gui;
+		gui.add(this);
 		this.blockVAO = genBlockVAO(64);
 		this.traceVAO = genTraceVAO(64);
 		this.blocks = new IndexedSet<>(new Block[64]);
 		this.traces = new IndexedSet<>(new Trace[64]);
-		this.palette = new Palette(this);
 		this.ip = new Interpreter();
-		
 		glUseProgram(traceP);
 		glUniform2f(trace_lineSize, 1F, 1F);
 		checkGLErrors();
-	}
-
-	public void open(BlockDef def) {
-		clear();
-		palette.setModule(def.module);
-		ip.cancel();
-		result = ip.new Task(null, task -> {});
-		context = new NodeContext(def, true);
-		reRunTypecheck = true;
-		synchronized(def) {
-			try {
-				CircuitFile.readLayout(CircuitFile.readBlock(def), def.module, this);
-			} catch(IOException e) {
-				e.printStackTrace();
-			}
-		}
-		if (blocks.isEmpty() && !def.type.equals("const")) {
-			int i = 0;
-			for (String s : def.outs) {
-				Block block = new Block(OUT_BLOCK, 1);
-				block.args[0] = s;
-				block.updateSize();
-				block.pos(2, i * 4, this).add(this);
-				i++;
-			}
-			i = 0;
-			for (String s : def.ins) {
-				Block block = new Block(IN_BLOCK, 1);
-				block.args[0] = s;
-				block.updateSize();
-				block.pos(-2 - block.w, i * 4, this).add(this);
-				i++;
-			}
-			for (String s : def.args) {
-				Block block = new Block(IN_BLOCK, 1);
-				block.args[0] = s;
-				block.updateSize();
-				block.pos(-2 - block.w, i * 4, this).add(this);
-				i++;
-			}
-		}
-	}
-
-	@Override
-	public void onResize(long window, int w, int h) {
-		// TODO Auto-generated method stub
-		super.onResize(window, w, h);
 	}
 
 	@Override
@@ -131,14 +94,9 @@ public class CircuitEditor extends GuiGroup {
 			context.typeCheck(ip, blocks, task -> Main.runAsync(() -> applyResult(task)));
 			reRunTypecheck = false;
 		}
-		//draw frame
-		if (redraw <= 0) return;
-		redraw--;
-		int w = x1 - x0, h = y1 - y0;
-		glViewport(x0, y0, w, h);
-		glScissor(x0, y0, w, h);
-		glClear(GL_COLOR_BUFFER_BIT);
-		float sx = 2F / w * zoom, sy = -2F / h * zoom;
+		
+		float sx = 2F / (gui.x1 - gui.x0) * zoom;
+		float sy = -2F / (gui.y1 - gui.y0) * zoom;
 		float ox = (float)ofsX * sx * 0.5F;
 		float oy = (float)ofsY * sx * 0.5F;
 		
@@ -153,18 +111,6 @@ public class CircuitEditor extends GuiGroup {
 		blockVAO.count = blocks.size() * 4;
 		blockVAO.draw();
 		checkGLErrors();
-		
-		/*
-		sprites.clear();
-		for (Drawable d : drawables)
-			d.redraw();
-		if (info instanceof HoverInfo hi)
-			hi.drawOverlay(this);
-		ICONS.bind();
-		transform(block_transform, -1, 1, sx * 4, sy * 4);
-		sprites.draw();
-		drawSel(-1, 1, sx, sy, 0, 2);
-		drawText(-1, 1, sx, sy);*/
 		
 		if (lastError != null && errorBlock != null) {
 			Block block = errorBlock;
@@ -187,110 +133,9 @@ public class CircuitEditor extends GuiGroup {
 		}
 		if (selTr != null)
 			addSel(selTr.x() * 2 - 1, selTr.y() * 2 - 1, 2, 2, FG_RED_L);
-		int ac0 = 0, ac1 = 0, x = 0, y = 0;
-		if (editing != null && editArg >= 0) {
-			String s = text.get();
-			int l = s.length();
-			x = editing.textX() - l;
-			y = editing.textY() + editArg * 4;
-			text.redraw(x, y, 2, 3, 0);
-			addSel(x, y, l * 2, 4, FG_YELLOW_L);
-			s = s.substring(0, Math.min(text.cursor(), s.length()));
-			ac0 = Collections.binarySearch(autoComplete, s);
-			ac1 = Collections.binarySearch(autoComplete, s + '\uffff');
-			if (ac0 < 0) ac0 ^= -1;
-			if (ac1 < 0) ac1 ^= -1;
-		}
-		drawSel(ofsX, -ofsY, 0.5F * scaleX, -0.5F * scaleY, 0F, 1F);
+		drawSel(ox, oy, sx * 0.5F, sy * 0.5F, 0F, 1F);
 		for (Block block : blocks) block.printText();
-		drawText(ofsX, scaleY * -.25F - ofsY, scaleX * 0.5F, scaleY * -0.5F);
-		if (ac1 > ac0) {
-			y += 4;
-			int l = 0;
-			for (int i = ac0, j = 0; i < ac1; i++, j++) {
-				String s = autoComplete.get(i);
-				print(s, FG_GRAY_L, x, y + j * 3, 2, 3);
-				l = Math.max(l, s.length());
-			}
-			addSel(x, y, l * 2, 1 + 3 * (ac1 - ac0), BG_BLACK_T | FG_GRAY_D);
-			drawSel(ofsX, -ofsY, 0.5F * scaleX, -0.5F * scaleY, 0F, 1F);
-			drawText(ofsX, scaleY * -.25F - ofsY, scaleX * 0.5F, scaleY * -0.5F);
-		}
-		print(info, FG_YELLOW_L, 16, -1, 1, 1);
-		drawText(-1F, -1F, 16F / (float)WIDTH, -24F / (float)HEIGHT);
-	}
-
-	private void applyResult(Task task) {
-		result = task;
-		task.log();
-		lastError = task.error;
-		if (lastError == null) {
-			errorBlock = null;
-		} else {
-			int i = lastError.pos;
-			errorBlock = i >= 0 && i < blocks.size() ? blocks.get(i) : null;
-			info = lastError.getMessage();
-		}
-		if (task.vars != null)
-			for (Block block : blocks)
-				block.updateColors(task.vars);
-	}
-
-	private void setText(String text) {
-		Block editing = this.editing;
-		editing.args[editArg] = text;
-		int dw = -editing.w;
-		editing.updateSize();
-		if ((dw += editing.w) > 0) {
-			int l = 32768, r = 32768;
-			for (Block block : blocks) {
-				if (block.y + block.h <= editing.y || block.y >= editing.y + editing.h || block == editing) continue;
-				if (block.x < editing.x)
-					l = min(l, editing.x - (block.x + block.w));
-				else r = min(r, block.x - (editing.x + editing.w));
-			}
-			dw = min(-r, l);
-		}
-		if (dw > 0) editing.pos(editing.x - dw, editing.y, this);
-		else editing.updatePins(this);
-		textModified = true;
-	}
-
-	private void updateArg() {
-		if (editing == null || !textModified) return;
-		if (editing == errorBlock || editing.outs() == 0)
-			reRunTypecheck = true;
-		else for (Node n : editing.outs)
-			if (n != null && n.addr(0) > 0) {
-				reRunTypecheck = true;
-				break;
-			}
-		textModified = false;
-	}
-
-	private void editText(Block block, int row, int col) {
-		if (block == null || row < 0 || row >= block.args.length) {
-			if (editing != null) refresh(0);
-			updateArg();
-			editing = null;
-			editArg = -1;
-			text.set("", 0);
-			autoComplete.clear();
-		} else {
-			if (block != editing || row != editArg) {
-				updateArg();
-				editing = block;
-				editArg = row;
-				autoComplete.clear();
-				if (context.def.assembler instanceof Macro)
-					for (String s : context.def.args)
-						autoComplete.add(s);
-				block.def.assembler.getAutoCompletions(block, row, autoComplete, context);
-				Collections.sort(autoComplete);
-				refresh(0);
-			}
-			text.set(block.args[row], col);
-		}
+		drawText(ofsX, oy + sy * .25F, sx * 0.5F, sy * 0.5F);
 	}
 
 	@Override
@@ -303,14 +148,14 @@ public class CircuitEditor extends GuiGroup {
 		ofsX = round(dox * scale) - mx;
 		ofsY = round(doy * scale) - my;
 		zoom = zoom1;
-		refresh(0);
+		gui.markDirty();
 		return true;
 	}
 
 	@Override
 	public boolean onMouseMove(int x, int y) {
-		int gx = (int)floor(x * (double)WIDTH / (double)zoom) - ofsX;
-		int gy = (int)floor(y * (double)HEIGHT / (double)zoom) - ofsY;
+		int gx = x / zoom - ofsX;
+		int gy = y / zoom - ofsY;
 		if (gx != mx || gy != my)
 			moveSel(gx, gy);
 		return true;
@@ -320,7 +165,7 @@ public class CircuitEditor extends GuiGroup {
 		if (panning) {
 			ofsX += x - mx;
 			ofsY += y - my;
-			refresh(0);
+			gui.markDirty();
 			return;
 		}
 		mx = x; my = y;
@@ -347,7 +192,7 @@ public class CircuitEditor extends GuiGroup {
 						break;
 					}
 			selTrace(sel);
-			if (selBlock != old) refresh(0);
+			if (selBlock != old) gui.markDirty();
 			if (selTr != null) glfwSetCursor(WINDOW, MAIN_CURSOR);
 			else if (selBlock == null) glfwSetCursor(WINDOW, SEL_CURSOR);
 			else if (selBlock.def.varSize() && (selBlock.y + selBlock.h) * 2 - my < 2)
@@ -363,7 +208,7 @@ public class CircuitEditor extends GuiGroup {
 		case M_TRACE_SEL:
 			glfwSetCursor(WINDOW, MOVE_CURSOR);
 			if (selTr.pin < 0) {
-				selTr.pickup(this);
+				selTr.pickup();
 				mode = M_TRACE_MV;
 			} else {
 				selBlock = selTr.block;
@@ -374,28 +219,28 @@ public class CircuitEditor extends GuiGroup {
 			}
 		case M_TRACE_MV, M_TRACE_DRAW:
 			glfwSetCursor(WINDOW, MOVE_CURSOR);
-			selTr.pos(x + 1 >> 1, y + 1 >> 1, this);
+			selTr.pos(x + 1 >> 1, y + 1 >> 1);
 			return;
 		case M_MULTI_SEL:
 			glfwSetCursor(WINDOW, SEL_CURSOR);
-			refresh(0);
+			gui.markDirty();
 			return;
 		case M_BLOCK_SCALE:
 			glfwSetCursor(WINDOW, VRESIZE_CURSOR);
 			if (dSize != (dSize = floorDiv(my - lmy + 2, selBlock.def.model.rh() * 2)))
-				refresh(0);
+				gui.markDirty();
 			return;
 		default: return;
 		case M_BLOCK_SEL:
 			if (moving.isEmpty())
-				moving.add(selBlock.pickup(this));
+				moving.add(selBlock.pickup());
 		case M_MULTI_MOVE:
 			glfwSetCursor(WINDOW, MOVE_CURSOR);
 		}
 		int dx = x - lmx >> 1, dy = y - lmy >> 1;
 		if (dx == 0 && dy == 0) return;
 		for (CircuitObject m : moving)
-			m.pos(m.x() + dx, m.y() + dy, this);
+			m.pos(m.x() + dx, m.y() + dy);
 		lmx += dx << 1;
 		lmy += dy << 1;
 	}
@@ -419,15 +264,15 @@ public class CircuitEditor extends GuiGroup {
 					dSize = 0;
 					mode = M_BLOCK_SCALE;
 				} else mode = M_BLOCK_SEL;
-				refresh(0);
+				gui.markDirty();
 			} else if (mode == M_TRACE_DRAW) {
-				Trace t = selTr.place(this);
+				Trace t = selTr.place();
 				if (selTrace(t)) mode = M_IDLE;
 				else mode = M_TRACE_SEL;
 			} else if (mode == M_IDLE)
 				mode = M_TRACE_SEL;
 			else if (mode == M_BLOCK_SEL) {
-				selBlock.place(this);
+				selBlock.place();
 				moving.clear();
 				mode = M_IDLE;
 			}
@@ -444,40 +289,40 @@ public class CircuitEditor extends GuiGroup {
 				for (Block block : blocks)
 					if (block.inRange(x0, y0, x1, y1))
 						moving.add(block);
-				for (CircuitObject m : moving) m.pickup(this);
-				for (CircuitObject m : moving) m.pickup(this);
+				for (CircuitObject m : moving) m.pickup();
+				for (CircuitObject m : moving) m.pickup();
 				lmx = mx;
 				lmy = my;
 				mode = moving.isEmpty() ? M_IDLE : M_MULTI_MOVE;
-				refresh(0);
+				gui.markDirty();
 			} else if (mode == M_MULTI_MOVE) {
 				for (CircuitObject m : moving)
-					m.place(this);
+					m.place();
 				moving.clear();
 				mode = M_IDLE;
 			} else if (mode == M_BLOCK_SEL) {
 				Block block = selBlock;
-				block.place(this);
+				block.place();
 				moving.clear();
 				mode = M_IDLE;
 				int row = lmy - block.textY() >> 2;
 				int col = row >= 0 && row < block.args.length ?
 					(lmx - block.textX() + block.args[row].length() + 1 >> 1) : 0;
 				editText(block, row, col);
-				refresh(0);
+				gui.markDirty();
 			} else if (mode == M_BLOCK_SCALE) {
-				selBlock = selBlock.resize(dSize, this);
+				selBlock = selBlock.resize(dSize);
 				mode = M_IDLE;
-				refresh(0);
+				gui.markDirty();
 			} else if (mode == M_TRACE_MV) {
-				selTr.place(this);
+				selTr.place();
 				mode = M_IDLE;
 			} else if (mode == M_TRACE_SEL)
 				if (!selTr.isOut()) {
 					mode = M_TRACE_DRAW;
-					Trace t = new Trace().pos(mx + 1 >> 1, my + 1 >> 1, this);
+					Trace t = new Trace().pos(mx + 1 >> 1, my + 1 >> 1);
 					t.add(this);
-					selTr.connect(t, this);
+					selTr.connect(t);
 					selTrace(t);
 				} else mode = M_IDLE;
 			break;
@@ -490,66 +335,64 @@ public class CircuitEditor extends GuiGroup {
 				}
 			break;
 		}
-		lock(panning || mode != M_IDLE && mode != M_TRACE_DRAW);
+		if (panning || mode != M_IDLE && mode != M_TRACE_DRAW)
+			gui.focus(this);
+		return true;
 	}
 
 	@Override
 	public boolean onKeyInput(int key, int scancode, int action, int mods) {
-		if (action == GLFW_RELEASE) return;
-		if (editing != null && text.onKeyInput(key, mods)) return;
+		if (action == GLFW_RELEASE) return false;
 		boolean ctrl = (mods & GLFW_MOD_CONTROL) != 0;
 		//boolean shift = (mods & GLFW_MOD_SHIFT) != 0;
 		switch(key) {
 		case GLFW_KEY_PAGE_UP:
-			if (editing != null)
-				editText(editing, editArg - 1, text.cursor());
-			break;
+			if (editing == null) return false;
+			editText(editing, editArg - 1, text.cursor());
+			return true;
 		case GLFW_KEY_PAGE_DOWN:
-			if (editing != null)
-				editText(editing, editArg + 1, text.cursor());
-			break;
-		case GLFW_KEY_ENTER:
-			if (editing != null)
-				editText(null, -1, 0);
-			break;
+			if (editing == null) return false;
+			editText(editing, editArg + 1, text.cursor());
+			return true;
 		case GLFW_KEY_DELETE:
 			if (selBlock != null)
-				selBlock.remove(this);
+				selBlock.remove();
 			if (selTr != null && selTr.pin < 0)
-				selTr.remove(this);
-			for (CircuitObject m : moving) m.remove(this);
+				selTr.remove();
+			for (CircuitObject m : moving) m.remove();
 			selBlock = null;
 			selTr = null;
 			moving.clear();
 			mode = M_IDLE;
-			break;
+			return true;
 		case GLFW_KEY_S:
-			if (!ctrl) break;
+			if (!ctrl) return false;
 			try {
 				BlockDef def = context.def;
 				CircuitFile.writeLayout(def, blocks, traces);
-				info = "saved!";
+				info.text("saved!");
 				if (def.assembler instanceof Function m) m.reset();
 				else if (def.assembler instanceof ConstList cl)
 					cl.compile(ip);
 			} catch(IOException e) {
 				e.printStackTrace();
-				info = e.toString();
+				info.text(e.toString());
 			} catch (SignalError e) {
 				lastError = e;
 				errorBlock = e.pos >= 0 && e.pos < blocks.size() ? blocks.get(e.pos) : null;
-				info += " " + e.getMessage();
+				info.text(info.text + " " + e.getMessage());
 			}
-			refresh(0);
-			break;
+			return true;
 		case GLFW_KEY_W:
-			if (ctrl) glfwSetWindowShouldClose(WINDOW, true);
-			break;
+			if (!ctrl) return false;
+			glfwSetWindowShouldClose(WINDOW, true);
+			return true;
 		case GLFW_KEY_D:
-			if (ctrl) cleanUpTraces();
-			break;
+			if (!ctrl) return false;
+			cleanUpTraces();
+			return true;
 		case GLFW_KEY_O:
-			if (!(ctrl && selBlock != null)) break;
+			if (!(ctrl && selBlock != null)) return false;
 			BlockDef def = selBlock.def;
 			Node node = selBlock.outs() > 0 ? selBlock.outs[0] : null;
 			while (node != null && node.op instanceof UnpackIns) node = node.in[0].from();
@@ -582,16 +425,13 @@ public class CircuitEditor extends GuiGroup {
 				open(f.def);
 				System.arraycopy(ins, 0, context.env, 0, ins.length);
 			}
-			break;
-//		case GLFW_KEY_T:
-//			if (!ctrl) break;
-//			info = "type check restarted";
-//			refresh(0);
-//			break;
+			return true;
 		case GLFW_KEY_HOME:
 			ofsX = ofsY = 0;
-			refresh(0);
-			break;
+			gui.markDirty();
+			return true;
+		default:
+			return false;
 		}
 	}
 
@@ -611,36 +451,65 @@ public class CircuitEditor extends GuiGroup {
 			if (v != null) sb.append(v.toString());
 			else sb.append("[not evaluated]");
 		}
-		info = sb.toString();
-		if (info.length() > WIDTH / 8) info = info.substring(0, WIDTH / 8);
-		refresh(0);
+		int l = min(sb.length(), (gui.x1 - gui.y0) / 8);
+		info.text(sb.substring(0, l));
 		return true;
-	}
-
-	@Override
-	public boolean onCharInput(int cp) {
-		if (editing != null) text.onCharInput(cp);
 	}
 
 	public void addBlock(BlockDef type) {
 		editText(null, -1, 0);
 		lmx = mx; lmy = my;
 		selBlock = new Block(type, 1);
-		selBlock.pos(mx + 1 - selBlock.w >> 1, my + 1 - selBlock.h >> 1, this);
+		selBlock.pos(mx + 1 - selBlock.w >> 1, my + 1 - selBlock.h >> 1);
 		selBlock.add(this);
 		Trace t = selBlock.io[0];
 		if (selTr != null && t.isOut())
-			(selTr.pin >= 0 ? selTr : selTr.to).connect(t, this);
+			(selTr.pin >= 0 ? selTr : selTr.to).connect(t);
 		selTrace(t);
 		mode = M_BLOCK_SEL;
 	}
 
-	@Override
-	public void close(long window) {
-		super.close(window);
-		glDeleteBuffers(blockVAO.buffer);
-		glDeleteBuffers(traceVAO.buffer);
-		ip.terminate();
+	public void open(BlockDef def) {
+		clear();
+		palette.setModule(def.module);
+		ip.cancel();
+		result = ip.new Task(null, task -> {});
+		context = new NodeContext(def, true);
+		reRunTypecheck = true;
+		synchronized(def) {
+			try {
+				Layout layout = CircuitFile.readLayout(CircuitFile.readBlock(def), def.module);
+				for (Trace trace : layout.traces()) trace.add(this);
+				for (Block block : layout.blocks()) block.add(this);
+			} catch(IOException e) {
+				e.printStackTrace();
+			}
+		}
+		if (blocks.isEmpty() && !def.type.equals("const")) {
+			int i = 0;
+			for (String s : def.outs) {
+				Block block = new Block(OUT_BLOCK, 1);
+				block.args[0] = s;
+				block.updateSize();
+				block.pos(2, i * 4).add(this);
+				i++;
+			}
+			i = 0;
+			for (String s : def.ins) {
+				Block block = new Block(IN_BLOCK, 1);
+				block.args[0] = s;
+				block.updateSize();
+				block.pos(-2 - block.w, i * 4).add(this);
+				i++;
+			}
+			for (String s : def.args) {
+				Block block = new Block(IN_BLOCK, 1);
+				block.args[0] = s;
+				block.updateSize();
+				block.pos(-2 - block.w, i * 4).add(this);
+				i++;
+			}
+		}
 	}
 
 	private void clear() {
@@ -652,7 +521,7 @@ public class CircuitEditor extends GuiGroup {
 		selBlock = errorBlock = null;
 		selTr = null;
 		lastError = null;
-		refresh(0);
+		gui.markDirty();
 	}
 
 	private void cleanUpTraces() {
@@ -668,12 +537,65 @@ public class CircuitEditor extends GuiGroup {
 				if (t.pin < 0)
 					toRemove.add(t);
 			Trace f = tr.from;
-			tr.remove(this);
+			tr.remove();
 			if (f != null && f.pin < 0 && f.to == null)
 				toRemove.add(f);
 		}
-		info = "removed " + n + " traces!";
-		refresh(0);
+		info.text("removed " + n + " traces!");
+	}
+
+	private void applyResult(Task task) {
+		result = task;
+		task.log();
+		lastError = task.error;
+		if (lastError == null) {
+			errorBlock = null;
+		} else {
+			int i = lastError.pos;
+			errorBlock = i >= 0 && i < blocks.size() ? blocks.get(i) : null;
+			info.text(lastError.getMessage());
+		}
+		if (task.vars != null)
+			for (Block block : blocks)
+				block.updateColors(task.vars);
+	}
+
+	private void updateArg() {
+		if (editing == null || !textModified) return;
+		if (editing == errorBlock || editing.outs() == 0)
+			reRunTypecheck = true;
+		else for (Node n : editing.outs)
+			if (n != null && n.addr(0) > 0) {
+				reRunTypecheck = true;
+				break;
+			}
+		textModified = false;
+	}
+
+	private void editText(Block block, int row, int col) {
+		if (block == null || row < 0 || row >= block.args.length) {
+			if (editing != null) gui.markDirty();
+			updateArg();
+			editing = null;
+			editArg = -1;
+			text.text("");
+			text.autoComplete.clear();
+		} else {
+			if (block != editing || row != editArg) {
+				updateArg();
+				editing = block;
+				editArg = row;
+				text.autoComplete.clear();
+				if (context.def.assembler instanceof Macro)
+					for (String s : context.def.args)
+						text.autoComplete.add(s);
+				block.def.assembler.getAutoCompletions(block, row, text.autoComplete, context);
+				Collections.sort(text.autoComplete);
+				gui.markDirty();
+			}
+			text.text(block.args[row]);
+			text.cursor(col);
+		}
 	}
 
 }
