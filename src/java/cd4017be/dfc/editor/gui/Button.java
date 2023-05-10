@@ -2,15 +2,20 @@ package cd4017be.dfc.editor.gui;
 
 import static cd4017be.dfc.editor.Shaders.*;
 import org.lwjgl.glfw.GLFW;
+
+import cd4017be.dfc.editor.Main;
 import cd4017be.dfc.graphics.SpriteModel;
 
 /**
  * @author CD4017BE */
 public class Button extends HoverRectangle implements Drawable {
 
+	public static final SpriteModel BUTTON_MODEL = Main.ICONS.get("/textures/button.tga");
+	public static final SpriteModel PRESS_MODEL = Main.ICONS.get("/textures/buttonPress.tga");
+
 	public final GuiGroup gui;
 	public ButtonAction action = NOP;
-	public SpriteModel normalModel, pressedModel;
+	public SpriteModel normalModel = BUTTON_MODEL, pressedModel = PRESS_MODEL;
 	public String text;
 	public int color = FG_GRAY_L;
 

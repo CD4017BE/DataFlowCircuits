@@ -77,7 +77,7 @@ public class Main {
 	MAIN_CURSOR, VRESIZE_CURSOR, MOVE_CURSOR, TEXT_CURSOR, SEL_CURSOR;
 
 	static void init(long window) {
-		new BlockDefEditor(GUI);
+		new ModuleEditor(GUI);
 //		new CircuitEditor().open(
 //			LoadingCache.getModule("test")
 //			.getBlock("test2")

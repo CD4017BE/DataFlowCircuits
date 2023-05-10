@@ -16,8 +16,10 @@ import cd4017be.dfc.graphics.SpriteModel;
  * @author CD4017BE */
 public class TextField extends HoverRectangle implements Drawable, InputHandler {
 
+	public static final SpriteModel TEXT_MODEL = Main.ICONS.get("/textures/textfield.tga");
+
 	public final GuiGroup gui;
-	public SpriteModel model;
+	public SpriteModel model = TEXT_MODEL;
 	public String text = "";
 	public TextAction action = NOP;
 	public int color = FG_YELLOW_L;
