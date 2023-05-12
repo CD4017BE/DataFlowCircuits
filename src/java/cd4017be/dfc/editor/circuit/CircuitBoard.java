@@ -4,12 +4,7 @@ import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
 import static cd4017be.dfc.lang.LoadingCache.IN_BLOCK;
 import static cd4017be.dfc.lang.LoadingCache.OUT_BLOCK;
-import static java.lang.Math.abs;
-import static java.lang.Math.floor;
-import static java.lang.Math.floorDiv;
-import static java.lang.Math.max;
-import static java.lang.Math.min;
-import static java.lang.Math.round;
+import static java.lang.Math.*;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL20C.glUniform2f;
 import static org.lwjgl.opengl.GL20C.glUseProgram;
@@ -133,9 +128,9 @@ public class CircuitBoard implements InputHandler, Drawable {
 		}
 		if (selTr != null)
 			addSel(selTr.x() * 2 - 1, selTr.y() * 2 - 1, 2, 2, FG_RED_L);
-		drawSel(ox, oy, sx * 0.5F, sy * 0.5F, 0F, 1F);
+		drawSel(ox, oy, sx * 0.5F, sy * 0.5F, 0F, 1F, false);
 		for (Block block : blocks) block.printText();
-		drawText(ofsX, oy + sy * .25F, sx * 0.5F, sy * 0.5F);
+		drawText(ofsX, oy + sy * .25F, sx * 0.5F, sy * 0.5F, false);
 	}
 
 	@Override
@@ -579,18 +574,18 @@ public class CircuitBoard implements InputHandler, Drawable {
 			editing = null;
 			editArg = -1;
 			text.text("");
-			text.autoComplete.clear();
+			text.autocomplete.clear();
 		} else {
 			if (block != editing || row != editArg) {
 				updateArg();
 				editing = block;
 				editArg = row;
-				text.autoComplete.clear();
+				text.autocomplete.clear();
 				if (context.def.assembler instanceof Macro)
 					for (String s : context.def.args)
-						text.autoComplete.add(s);
-				block.def.assembler.getAutoCompletions(block, row, text.autoComplete, context);
-				Collections.sort(text.autoComplete);
+						text.autocomplete.add(s);
+				block.def.assembler.getAutoCompletions(block, row, text.autocomplete, context);
+				Collections.sort(text.autocomplete);
 				gui.markDirty();
 			}
 			text.text(block.args[row]);

@@ -36,7 +36,8 @@ public class HoverInfo extends HoverRectangle {
 			i0 = ++is;
 			th++;
 		}
-		sb.append(text, i0, text.length());
+		sb.append(text, i0, is = text.length());
+		tw = max(tw, is - i0);
 		th *= 6;
 		tw *= 4;
 		int x = max(min(gui.mx, w - tw), 0);
