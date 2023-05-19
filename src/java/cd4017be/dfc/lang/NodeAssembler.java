@@ -1,7 +1,6 @@
 package cd4017be.dfc.lang;
 
 import java.lang.invoke.MethodHandle;
-import java.util.ArrayList;
 
 /**
  * 
@@ -14,15 +13,6 @@ public interface NodeAssembler {
 	 * @param block to assemble
 	 * @param context in which it is assembled */
 	void assemble(BlockDesc block, NodeContext context, int idx) throws SignalError;
-
-	/**Collect text argument auto-completion options
-	 * @param block to get auto-completions for
-	 * @param arg index of argument to complete
-	 * @param list to collect auto-complete options
-	 * @param context in which block it is assembled */
-	default void getAutoCompletions(
-		BlockDesc block, int arg, ArrayList<String> list, NodeContext context
-	) {}
 
 	default Instruction makeVirtual(BlockDef def) {
 		return null;

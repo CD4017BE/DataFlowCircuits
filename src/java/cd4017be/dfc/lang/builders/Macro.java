@@ -16,7 +16,7 @@ import cd4017be.util.IndexedSet;
 /**
  * 
  * @author CD4017BE */
-public class Macro extends NodeContext implements NodeAssembler {
+public class Macro extends NodeContext implements NodeAssembler, ArgumentParser {
 
 	private final int[] argUsers;
 	private IndexedSet<BlockDesc> blocks;
@@ -154,11 +154,18 @@ public class Macro extends NodeContext implements NodeAssembler {
 			int i = argUsers[arg];
 			if (i >= 0) {
 				block = blocks.get(i & 0xffff);
-				block.def.assembler.getAutoCompletions(block, i >> 16, list, context);
+				block.parser(i >> 16).getAutoCompletions(block, i >> 16, list, context);
 			}
 		} finally {
 			this.parent = null;
 		}
+	}
+
+	@Override
+	public Node parse(
+		String arg, BlockDesc block, int argidx, NodeContext context, int idx
+	) throws SignalError {
+		return null;
 	}
 
 }

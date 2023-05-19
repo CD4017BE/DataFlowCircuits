@@ -10,7 +10,6 @@ import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.system.MemoryUtil;
 
 import cd4017be.dfc.editor.circuit.CircuitEditor;
-import cd4017be.dfc.editor.circuit.Palette;
 import cd4017be.dfc.editor.gui.GuiGroup;
 import cd4017be.dfc.graphics.IconAtlas;
 import cd4017be.dfc.lang.LoadingCache;

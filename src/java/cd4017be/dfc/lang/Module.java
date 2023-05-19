@@ -35,6 +35,8 @@ public class Module {
 	public final HashMap<String, Type> types = new HashMap<>();
 	public final ArrayList<SignalProvider> signals = new ArrayList<>();
 	public final ArrayList<PaletteGroup> groups = new ArrayList<>();
+	public final HashMap<String, java.util.function.Function<BlockDef, NodeAssembler>> assemblers = new HashMap<>();
+	public final HashMap<String, ArgumentParser> parsers = new HashMap<>();
 	private final Class<?> moduleImpl;
 	private boolean loaded;
 	int trace0 = -1;
@@ -162,7 +164,6 @@ public class Module {
 							model, scale
 						);
 						def.name = name;
-						blocks.put(def.id, def);
 						pg.blocks().add(def);
 					}}
 				case "types" -> {
@@ -259,19 +260,27 @@ public class Module {
 		return modNames.get(mod);
 	}
 
+	public ArgumentParser parser(String type) {
+		return switch(type) {
+		case "str" -> BasicConstructs.STRING_ARG;
+		case "val" -> BasicConstructs.VALUE_ARG;
+		case "io" -> BasicConstructs.IO_ARG;
+		default -> BasicConstructs.ERROR_ARG;
+		};
+	}
+
 	public NodeAssembler assembler(String type, BlockDef def) {
 		return switch(type) {
 		case "macro" -> new Macro(def);
 		case "func" -> new Function(def);
 		case "const" -> new ConstList(def);
 		case "swt" -> new SwitchBuilder(def);
-		case "io" -> BasicConstructs.IO;
+		case "in" -> BasicConstructs.INPUT;
+		case "out" -> BasicConstructs.OUTPUT;
 		case "dep" -> BasicConstructs.DEPEND;
 		case "pack" -> BasicConstructs.PACK;
 		case "loop" -> BasicConstructs.LOOP;
 		case "vc" -> BasicConstructs.VIRTUAL;
-		case "str" -> BasicConstructs.STRING;
-		case "ce" -> BasicConstructs.CONSTANT;
 		default -> BasicConstructs.ERROR;
 		};
 	}

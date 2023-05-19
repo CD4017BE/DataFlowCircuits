@@ -10,7 +10,7 @@ import cd4017be.util.Profiler;
 
 /**
  * @author CD4017BE */
-public class ConstList implements NodeAssembler {
+public class ConstList implements NodeAssembler, ArgumentParser {
 
 	final BlockDef def;
 	HashMap<String, Value> signals;
@@ -37,11 +37,8 @@ public class ConstList implements NodeAssembler {
 		if (block.ins() != 0 || block.outs() != args.length)
 			throw new SignalError(idx, "wrong IO count");
 		ensureLoaded();
-		for (int i = 0; i < args.length; i++) {
-			Value val = signals.get(args[i]);
-			if (val == null) throw new SignalError(idx, "invalid name " + args[i]);
-			block.outs[i] = ConstantIns.node(val, idx);
-		}
+		for (int i = 0; i < args.length; i++)
+			block.outs[i] = parse(args[i], block, i, context, idx);
 	}
 
 	@Override
@@ -93,6 +90,15 @@ public class ConstList implements NodeAssembler {
 					signals.put(keys[i], elem[i]);
 			}
 		});
+	}
+
+	@Override
+	public Node parse(
+		String arg, BlockDesc block, int argidx, NodeContext context, int idx
+	) throws SignalError {
+		Value val = signals.get(arg);
+		if (val == null) throw new SignalError(idx, "invalid name " + arg);
+		return ConstantIns.node(val, idx);
 	}
 
 }

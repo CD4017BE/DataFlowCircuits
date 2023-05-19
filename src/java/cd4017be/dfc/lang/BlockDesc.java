@@ -112,14 +112,20 @@ public class BlockDesc extends IndexedSet.Element {
 		if ((def.vaSize & BlockDef.VAR_ARG) != 0) {
 			int l = args.length - --n;
 			if (l < 0) throw new SignalError(idx, "wrong parameter count");
-			Value[] arr = new Value[l];
+			ArgumentParser p = parser(n);
+			Node merge = new Node(new PackIns(), Node.INSTR, l, idx);
 			for (int i = 0; i < l; i++)
-				arr[i] = Intrinsics.parse(args[n + i], context, idx, def.args[n]);
-			nodes[n] = ConstantIns.node(new Value(Intrinsics.VOID, arr, Value.NO_DATA, 0), idx);
+				merge.in[i].connect(p.parse(args[n + i], this, n + i, context, idx));
+			nodes[n] = merge;
 		} else if (args.length != n) throw new SignalError(idx, "wrong parameter count");
 		for (int i = 0; i < n; i++)
-			nodes[i] = ConstantIns.node(Intrinsics.parse(args[i], context, idx, def.args[i]), idx);
+			nodes[i] = parser(i).parse(args[i], this, i, context, idx);
 		return nodes;
+	}
+
+	public ArgumentParser parser(int argidx) {
+		ArgumentParser[] parsers = def.parsers;
+		return parsers[argidx < parsers.length ? argidx : parsers.length - 1];
 	}
 
 	public void connectIn(int i, BlockDesc src, int pin) {

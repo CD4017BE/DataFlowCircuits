@@ -2,6 +2,7 @@ package cd4017be.dfc.lang.builders;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import java.util.ArrayList;
+import cd4017be.dfc.lang.ArgumentParser;
 import cd4017be.dfc.lang.BlockDef;
 import cd4017be.dfc.lang.BlockDesc;
 import cd4017be.dfc.lang.Instruction;
@@ -20,26 +21,33 @@ import cd4017be.dfc.modules.core.Intrinsics;
  * @author cd4017be */
 public class BasicConstructs {
 
-	public static final NodeAssembler IO = new NodeAssembler() {
+	public static final ArgumentParser IO_ARG = new ArgumentParser() {
 		@Override
-		public void assemble(BlockDesc block, NodeContext context, int idx) throws SignalError {
-			int l = block.outs.length + block.ins.length;
-			if (block.args.length != l)
-				throw new SignalError(idx, "wrong IO count");
-			if (block.outs.length == 0)
-				for (int i = 0; i < l; i++)
-					block.ins[i] = context.getIO(block.args[i]).in[0];
-			else if (block.ins.length == 0)
-				for (int i = 0; i < l; i++)
-					block.outs[i] = context.getIO(block.args[i]);
-			else throw new SignalError(idx, "wrong IO count");
+		public Node parse(String arg, BlockDesc block, int argidx, NodeContext context, int idx) throws SignalError {
+			return context.getIO(arg);
 		}
 		@Override
-		public void getAutoCompletions(
-			BlockDesc block, int arg, ArrayList<String> list, NodeContext context
-		) {
+		public void getAutoCompletions(BlockDesc block, int arg, ArrayList<String> list, NodeContext context) {
 			list.addAll(context.links.keySet());
 		}
+	};
+	public static final NodeAssembler OUTPUT = (block, context, idx) -> {
+		String[] args = context.args(block);
+		if (block.outs() != 0 || args.length != block.ins())
+			throw new SignalError(idx, "wrong IO count");
+		for (int i = 0; i < args.length; i++) {
+			Node node = block.parser(i).parse(args[i], block, i, context, idx);
+			if (node.in.length == 0)
+				throw new SignalError(idx, "argument node has no inputs");
+			block.ins[i] = node.in[0];
+		}
+	};
+	public static final NodeAssembler INPUT = (block, context, idx) -> {
+		Node[] args = block.getArgNodes(context, idx);
+		if (block.ins() != 0 || args.length != block.outs())
+			throw new SignalError(idx, "wrong IO count");
+		for (int i = 0; i < args.length; i++)
+			block.outs[i] = args[i];
 	};
 	public static final NodeAssembler PACK = (block, context, idx) -> {
 		if (block.outs() != 1)
@@ -81,29 +89,18 @@ public class BasicConstructs {
 			return new VirtualCallIns(names);
 		}
 	};
-	public static final NodeAssembler STRING = (block, context, idx) -> {
-		String[] args = context.args(block);
-		if (block.ins.length != 0 || args.length != block.outs.length)
-			throw new SignalError(idx, "wrong IO count");
-		for (int i = 0; i < args.length; i++) {
-			Value v = new Value(Intrinsics.STRING, Value.NO_ELEM, args[i].isEmpty() ? Value.NO_DATA : args[i].getBytes(UTF_8), 0);
-			block.outs[i] = new Node(new ConstantIns(v), Node.INSTR, 0, idx);
-		}
+	public static final ArgumentParser STRING_ARG = (arg, block, argidx, context, idx) -> {
+		Value v = new Value(Intrinsics.STRING, Value.NO_ELEM, arg.isEmpty() ? Value.NO_DATA : arg.getBytes(UTF_8), 0);
+		return new Node(new ConstantIns(v), Node.INSTR, 0, idx);
 	};
-	public static final NodeAssembler CONSTANT = new NodeAssembler() {
+	public static final ArgumentParser VALUE_ARG = new ArgumentParser() {
 		@Override
-		public void assemble(BlockDesc block, NodeContext context, int idx) throws SignalError {
-			String[] args = context.args(block);
-			if (block.ins.length != 0 || args.length != block.outs.length)
-				throw new SignalError(idx, "wrong IO count");
-			for (int i = 0; i < args.length; i++)
-				block.outs[i] = new Node(new ConstantIns(Intrinsics.parse(args[i], context, idx, "value")), Node.INSTR, 0, idx);
+		public Node parse(String arg, BlockDesc block, int argidx, NodeContext context, int idx)
+		throws SignalError {
+			return new Node(new ConstantIns(Intrinsics.parse(arg, context, idx, "value")), Node.INSTR, 0, idx);
 		}
 		@Override
-		public void getAutoCompletions(
-			BlockDesc block, int arg, ArrayList<String> list,
-			NodeContext context
-		) {
+		public void getAutoCompletions(BlockDesc block, int arg, ArrayList<String> list, NodeContext context) {
 			for (SignalProvider sp : context.def.module.signals) {
 				ConstList cl = sp.signals();
 				if (cl != null)
@@ -112,6 +109,9 @@ public class BasicConstructs {
 		}
 	};
 	public static final NodeAssembler ERROR = (block, context, idx) -> {
+		throw new SignalError(idx, "Invalid Block");
+	};
+	public static final ArgumentParser ERROR_ARG = (arg, block, argidx, context, idx) -> {
 		throw new SignalError(idx, "Invalid Block");
 	};
 

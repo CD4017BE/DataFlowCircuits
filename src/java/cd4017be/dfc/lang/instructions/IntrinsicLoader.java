@@ -17,13 +17,17 @@ import java.lang.invoke.MethodHandles.Lookup;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.HashMap;
+import java.util.function.Function;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
+import cd4017be.dfc.lang.ArgumentParser;
 import cd4017be.dfc.lang.BlockDef;
 import cd4017be.dfc.lang.Instruction;
 import cd4017be.dfc.lang.Interpreter;
 import cd4017be.dfc.lang.Module;
+import cd4017be.dfc.lang.NodeAssembler;
 import cd4017be.dfc.lang.SignalError;
 import cd4017be.dfc.lang.Type;
 import cd4017be.dfc.lang.Value;
@@ -289,6 +293,19 @@ public class IntrinsicLoader {
 		Label l = new Label();
 		mv.visitLabel(l);
 		mv.visitLineNumber(i, l);
+	}
+
+	public static void defineHandlers(
+		HashMap<String, Function<BlockDef, NodeAssembler>> assemblers,
+		HashMap<String, ArgumentParser> parsers, Class<?> impl
+	) {
+		try {
+			Method m = impl.getDeclaredMethod("getHandlers", HashMap.class, HashMap.class);
+			m.invoke(null, assemblers, parsers);
+		} catch(NoSuchMethodException e) {
+		} catch(SecurityException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+			e.printStackTrace();
+		}
 	}
 
 	public static void linkAll(Module mod, Class<?> impl) {

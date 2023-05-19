@@ -10,27 +10,42 @@ import cd4017be.dfc.graphics.SpriteModel;
  * @author CD4017BE */
 public class BlockDef {
 
+	public static final String[] EMPTY_IO = {};
 	static final int VAR_OUT = 1, VAR_IN = 2, VAR_ARG = 4;
 
 	public final Module module;
-	public final String id, type, modelId;
+	public final String id, modelId;
 	public final String[] ins, outs, args;
+	public final ArgumentParser[] parsers;
 	public final NodeAssembler assembler;
 	public final int vaSize;
 	public SpriteModel model;
 	public String name;
 	public Instruction impl;
 
-	public BlockDef(Module module, String id, String type, String[] ins, String[] outs, String[] args, String model, int vaSize) {
+	public BlockDef(
+		Module module, String id, String type, String model,
+		String[] ins, String[] outs, String[] args, String[] argtypes
+	) {
 		this.module = module;
 		this.id = id;
+		this.assembler = module.assemblers.get(type).apply(this);
 		this.ins = ins;
 		this.outs = outs;
 		this.args = args;
+		int l = args.length;
+		if (l != argtypes.length) throw new IllegalArgumentException();
+		this.parsers = new ArgumentParser[l];
+		for (int i = 0; i < l; i++)
+			parsers[i] = module.parsers.get(argtypes[i]);
 		this.modelId = model;
-		this.vaSize = vaSize;
-		this.type = type;
-		this.assembler = module.assembler(type, this);
+		this.vaSize = isVar(ins) & VAR_IN | isVar(outs) & VAR_OUT | isVar(args) & VAR_ARG;
+		module.blocks.put(id, this);
+	}
+
+	private static int isVar(String[] io) {
+		int l = io.length - 1;
+		return l >= 0 && io[l].indexOf('#') >= 0 ? -1 : 0;
 	}
 
 	public int ins(int size) {

@@ -277,7 +277,7 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 				if (context.def.assembler instanceof Macro)
 					for (String s : context.def.args)
 						autoComplete.add(s);
-				block.def.assembler.getAutoCompletions(block, row, autoComplete, context);
+				block.def.parser(row).getAutoCompletions(block, row, autoComplete, context);
 				Collections.sort(autoComplete);
 			}
 			text.text(block.args[row]).cursor(col);
