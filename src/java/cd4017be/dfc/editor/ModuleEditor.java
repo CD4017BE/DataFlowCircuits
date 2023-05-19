@@ -5,6 +5,7 @@ import static cd4017be.dfc.editor.Shaders.*;
 import java.util.Arrays;
 
 import cd4017be.dfc.editor.gui.*;
+import cd4017be.dfc.lang.Module;
 
 
 /**
@@ -18,12 +19,13 @@ public class ModuleEditor extends GuiGroup {
 	final Button[] elemAdd;
 	final int lastIH, lastL;
 	final String[][] elements;
+	Module module;
 
 	public ModuleEditor(GuiGroup parent) {
 		super(parent, 2);
 		parent.add(this);
 		this.defEdit = new BlockDefEditor(parent);
-		new Label(this).text("Module:").pos(0, 0, 3).color(FG_WHITE);
+		new Label(this).text("Module:").pos(0, 0, 12).color(FG_WHITE);
 		this.path = new Label(this).color(FG_WHITE);
 		this.elemL = new Label[] {
 			new Label(this).color(FG_GRAY_L).text("Imports:"),
@@ -46,8 +48,9 @@ public class ModuleEditor extends GuiGroup {
 		init("core", new String[] {}, new String[] {}, new String[] {});
 	}
 
-	public void init(String path, String[] imports, String[] blocks, String[] types) {
-		this.path.text(path).pos(42 - path.length() >> 1, 0, 3);
+	public void init(Module module, String[] imports, String[] blocks, String[] types) {
+		this.module = module;
+		this.path.text(module.name).pos(84 - module.name.length() * 2, 0, 12);
 		this.elements[0] = imports;
 		this.elements[1] = blocks;
 		this.elements[2] = types;
@@ -55,18 +58,17 @@ public class ModuleEditor extends GuiGroup {
 	}
 
 	private void updateElements() {
-		inputHandlers.subList(lastIH, inputHandlers.size()).clear();
-		drawables.subList(lastL, drawables.size()).clear();
+		chop(lastL, lastIH);
 		int y = 0;
 		for (int i = 0; i < 3; i++) {
-			elemL[i].pos(0, y += 3, 3);
-			elemNew[i].pos(0, y += 3, 32, 3);
-			elemAdd[i].pos(37, y, 3, 3);
+			elemL[i].pos(0, y += 12, 12);
+			elemNew[i].pos(0, y += 12, 128, 12);
+			elemAdd[i].pos(148, y, 12, 12);
 			String[] elem = elements[i];
 			for (int j = 0; j < elem.length; j++) {
 				final int i_ = i, j_ = j;
-				new Button(this).color(FG_BLUE_XL).text(elem[j]).pos(0, y += 3, 32, 3).action((b, mb) -> editElement(i_, j_));
-				new Button(this).color(FG_RED_L).text("-").pos(37, y, 3, 3).action((b, mb) -> remElement(i_, j_));
+				new Button(this).color(FG_BLUE_XL).text(elem[j]).pos(0, y += 12, 128, 12).action((b, mb) -> editElement(i_, j_));
+				new Button(this).color(FG_RED_L).text("-").pos(148, y, 12, 12).action((b, mb) -> remElement(i_, j_));
 			}
 		}
 	}

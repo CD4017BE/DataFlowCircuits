@@ -10,7 +10,7 @@ public interface CircuitObject {
 	CircuitObject pickup();
 	CircuitObject place();
 	CircuitObject pos(int x, int y);
-	void add(CircuitBoard cb);
+	void add(CircuitEditor cb);
 	void remove();
 	void draw();
 

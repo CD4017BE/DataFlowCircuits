@@ -31,10 +31,10 @@ public class Button extends HoverRectangle implements Drawable {
 	}
 
 	public Button pos(int x, int y, int w, int h) {
-		x0 = x * 4;
-		x1 = (x + w) * 4;
-		y0 = y * 4;
-		y1 = (y + h) * 4;
+		x0 = x;
+		x1 = x + w;
+		y0 = y;
+		y1 = y + h;
 		gui.markDirty();
 		return this;
 	}
@@ -65,10 +65,10 @@ public class Button extends HoverRectangle implements Drawable {
 		if (model != null) {
 			drawBlock(gui.sprites, x0 >> 2, y0 >> 2, w >> 2, h >> 2, model.icon);
 			if (text != null)
-				print(text, color, (x0 + x1 + model.tx0 + model.tx1 >> 1) - (model.icon.w + text.length()) * 2, y0 + model.ty0 + 1, 4, 6);
+				print(text, color, (x0 + x1 + model.tx0 + model.tx1 >> 2) - model.icon.w - text.length(), (y0 + model.ty0 >> 1), 2, 3);
 		}
 		if (gui.hovered() == this)
-			addSel(x0, y0, w, h, color);
+			addSel(x0 >> 1, y0 >> 1, w >> 1, h >> 1, color);
 	}
 
 	@Override

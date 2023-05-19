@@ -30,14 +30,16 @@ public class BlockDefEditor extends GuiGroup {
 		infos.add(new HoverInfo(0, 24, 160, 36, "How the block is treated in circuits."));
 		infos.add(new HoverInfo(0, 36, 160, 48, "The model that defines icon and pin layout."));
 		infos.add(new HoverInfo(0, 48, 160, 60, "The numbers of input pins, output pins and text arguments. All elements must be given a signal name and the last element of each type can be set to repeat when the block is expanded."));
-		new Label(this).text("Block ID:").pos(0, 0, 3).color(FG_WHITE);
-		new Label(this).text("Name:").pos(0, 3, 3);
-		new Label(this).text("Type:").pos(0, 6, 3);
-		new Label(this).text("Model:").pos(0, 9, 3);
+		new Label(this).text("Block ID:").pos(0, 0, 12).color(FG_WHITE);
+		new Button(this).text("Save changes").pos(0, 12, 76, 12).color(FG_GREEN_L);
+		new Button(this).text("Edit circuit").pos(84, 12, 76, 12).color(FG_BLUE_XL);
+		new Label(this).text("Name:").pos(0, 24, 12);
+		new Label(this).text("Type:").pos(0, 36, 12);
+		new Label(this).text("Model:").pos(0, 48, 12);
 		this.id = new Label(this).color(FG_WHITE);
-		this.name = new TextField(this).pos(8, 3, 32, 3);
-		this.type = new TextField(this).pos(8, 6, 32, 3).action(this::editType);
-		this.model = new TextField(this).pos(8, 9, 32, 3);
+		this.name = new TextField(this).pos(32, 24, 128, 12);
+		this.type = new TextField(this).pos(32, 36, 128, 12).action(this::editType);
+		this.model = new TextField(this).pos(32, 48, 128, 12);
 		makeIO(0, "Inputs:");
 		makeIO(1, "Outputs:");
 		makeIO(2, "Arguments:");
@@ -59,7 +61,7 @@ public class BlockDefEditor extends GuiGroup {
 		boolean varIn, boolean varOut, boolean varArg,
 		String[] ins, String[] outs, String[] args
 	) {
-		this.id.text(id).pos(42 - id.length() >> 1, 0, 3);
+		this.id.text(id).pos(84 - id.length() * 2, 0, 12);
 		this.name.text(name);
 		this.type.text(type);
 		this.model.text(model);
@@ -75,18 +77,18 @@ public class BlockDefEditor extends GuiGroup {
 	private void updateIOs() {
 		inputHandlers.subList(lastIH, inputHandlers.size()).clear();
 		drawables.subList(lastL, drawables.size()).clear();
-		for (int y = 12, i = 0; i < 3; i++) {
+		for (int y = 60, i = 0; i < 3; i++) {
 			String[] names = ios[i];
 			int n = names.length;
-			ioL[i].pos(0, y, 3);
-			ioL[i + 3].pos(23, y, 3).text(Integer.toString(n));
-			ioVar[i].pos(32, y, 8, 3);
-			ioVar[i + 3].pos(26, y, 3, 3);
-			ioVar[i + 6].pos(19, y, 3, 3);
-			y += 3;
-			for (int j = 0; j < n; j++, y += 3) {
+			ioL[i].pos(0, y, 12);
+			ioL[i + 3].pos(92, y, 12).text(Integer.toString(n));
+			ioVar[i].pos(128, y, 32, 12);
+			ioVar[i + 3].pos(104, y, 12, 12);
+			ioVar[i + 6].pos(76, y, 12, 12);
+			y += 12;
+			for (int j = 0; j < n; j++, y += 12) {
 				int jj = j;
-				new TextField(this).text(names[j]).pos(8, y, 32, 3)
+				new TextField(this).text(names[j]).pos(32, y, 128, 12)
 				.action((tf, finish) -> {if (finish) names[jj] = tf.text;});
 			}
 		}

@@ -19,7 +19,8 @@ import cd4017be.util.VertexArray;
  * @author CD4017BE */
 public class GuiGroup extends HoverRectangle implements Drawable {
 
-	private InputHandler hovered, focused, info;
+	protected InputHandler hovered, focused;
+	private InputHandler info;
 	protected InputHandler background;
 	public final GuiGroup parent;
 	public final ArrayList<InputHandler> inputHandlers = new ArrayList<>();
@@ -71,6 +72,14 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 	@SuppressWarnings("unchecked")
 	public <T extends InputHandler> T get(int idx) {
 		return (T)inputHandlers.get(idx);
+	}
+
+	/**Chops (clears) gui component lists after a given number of elements.
+	 * @param nd number of initial Drawables to preserve
+	 * @param nih number of initial InputHandlers to preserve */
+	public void chop(int nd, int nih) {
+		drawables.subList(nd, drawables.size()).clear();
+		inputHandlers.subList(nih, inputHandlers.size()).clear();
 	}
 
 	public int h() {
@@ -177,23 +186,23 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 				d.redraw();
 		} else if (redraw > 0) {
 			redraw--;
-			int w = x1 - x0, h = y1 - y0;
-			glViewport(x0, y0, w, h);
-			glScissor(x0, y0, w, h);
+			int w = x1 - x0, h = y1 - y0, y = parent.y1 - y1;
+			glViewport(x0, y, w, h);
+			glScissor(x0, y, w, h);
 			glClear(GL_COLOR_BUFFER_BIT);
 			sprites.clear();
 			for (Drawable d : drawables)
 				d.redraw();
 			if (info instanceof HoverInfo hi)
 				hi.drawOverlay(this);
-			float sx = 2F / w * scale, sy = -2F / h * scale;
+			float s = 4 * scale, sx = s / w, sy = -s / h;
 			ICONS.bind();
-			transform(block_transform, -1, 1, sx * 4, sy * 4);
+			transform(block_transform, -1, 1, sx * 2F, sy * 2F);
 			sprites.draw();
 			drawSel(-1, 1, sx, sy, 0, 1, false);
-			drawText(-1, 1, sx, sy, false);
+			drawText(-1, 1 + sy * 0.5F, sx, sy, false);
 			drawSel(-1, 1, sx, sy, 0, 1, true);
-			drawText(-1, 1, sx, sy, true);
+			drawText(-1, 1 + sy * 0.5F, sx, sy, true);
 		}
 	}
 

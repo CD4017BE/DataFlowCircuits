@@ -6,8 +6,7 @@ import static org.lwjgl.opengl.GL20C.*;
 import java.nio.ByteBuffer;
 import org.lwjgl.system.MemoryStack;
 
-import cd4017be.util.AtlasSprite;
-import cd4017be.util.VertexArray;
+import cd4017be.util.*;
 import cd4017be.util.VertexArray.Attribute;
 
 /**Loads and configures all OpenGL shaders used by the program.
@@ -63,6 +62,22 @@ public class Shaders {
 	/** mat3x3: transformation from trace grid to screen coordinates */
 	public static final int trace_transform = glGetUniformLocation(traceP, "transform");
 
+	private static final int gridV = loadShader(GL_VERTEX_SHADER, "/shaders/grid_vert.glsl");
+	private static final int gridF = loadShader(GL_FRAGMENT_SHADER, "/shaders/grid_frag.glsl");
+	/** grid rendering shader */
+	public static final int gridP = program(gridV, gridF);
+	public static final int GRID_STRIDE = 10, GRID_PRIMLEN = GRID_STRIDE * 4;
+	private static final Attribute[] gridA = {
+		new Attribute(gridP, "vertex", 2, GL_BYTE, false, 0),
+		new Attribute(gridP, "coords", 2, GL_FLOAT, false, 2)
+	};
+	/** float: grid line thickness in grid coordinates */
+	public static final int grid_linewidth = glGetUniformLocation(gridP, "linewidth");
+	/** vec4: grid foreground color (r, g, b, a) */
+	public static final int grid_fg_color = glGetUniformLocation(gridP, "fg_color");
+	/** vec4: grid background color (r, g, b, a) */
+	public static final int grid_bg_color = glGetUniformLocation(gridP, "bg_color");
+
 	private static final int selV = loadShader(GL_VERTEX_SHADER, "/shaders/sel_vert.glsl");
 	private static final int selF = loadShader(GL_FRAGMENT_SHADER, "/shaders/sel_frag.glsl");
 	/** selection rendering shader */
@@ -85,6 +100,7 @@ public class Shaders {
 	public static final int font_tex = texture2DMM(GL_LINEAR_MIPMAP_NEAREST, GL_NEAREST, GL_REPEAT, GL_R3_G3_B2, "font0", "font1");
 	public static final VertexArray text_vao = genTextVAO(32), text_overlay = genTextVAO(32);
 	public static final VertexArray sel_vao = genSelVAO(8), sel_overlay = genSelVAO(8);
+	public static final VertexArray grid_vao = new VertexArray(glGenBuffers(), GL_QUADS, GRID_STRIDE, gridA).alloc(4);
 	public static final int palette_tex = genColorPalette(
 		0x00000000, 0x80000000, 0xff000000, 0xff202020, 0xff804040, 0, 0, 0, //background colors
 		0xff00ff00, 0xffff0000, 0xff80ff80, 0xff8080ff, 0xffff8080, 0xffffffff, 0xffffff80, 0x80ffffff, //fg colors 1
@@ -97,6 +113,9 @@ public class Shaders {
 		initFont(font_tex, FONT_CW, FONT_CH);
 		glUniform1i(glGetUniformLocation(textP, "font"), 1);
 		glUniform1i(glGetUniformLocation(textP, "palette"), 0);
+		glUseProgram(gridP);
+		setColor(grid_fg_color, 0xff202020);
+		setColor(grid_bg_color, 0xff000000);
 	}
 	private static final byte X0Y0 = 0, X1Y0 = 1, X0Y1 = 2, X1Y1 = 3;
 	/**Color indices: index = BG_? | FG_? */
@@ -114,14 +133,17 @@ public class Shaders {
 		glDeleteProgram(textP);
 		glDeleteProgram(blockP);
 		glDeleteProgram(traceP);
+		glDeleteProgram(gridP);
 		glDeleteProgram(selP);
 		glDeleteShader(textV);
 		glDeleteShader(textF);
-		glDeleteShader(blockF);
 		glDeleteShader(blockV);
+		glDeleteShader(blockF);
 		glDeleteShader(traceV);
-		glDeleteShader(selV);
+		glDeleteShader(gridF);
+		glDeleteShader(gridV);
 		glDeleteShader(selF);
+		glDeleteShader(selV);
 		glDeleteTextures(font_tex);
 	}
 
@@ -135,6 +157,27 @@ public class Shaders {
 		glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA8, colors.length, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, colors);
 		return tex;
+	}
+
+	/**Draw a grid over the entire draw plane with 1 coordinate unit distance between lines.
+	 * @param x0 left coordinate
+	 * @param y0 top coordinate
+	 * @param x1 right coordinate
+	 * @param y1 bottom coordinate
+	 * @param lt line width (in coordinate units) */
+	public static void drawGrid(float x0, float y0, float x1, float y1, float lt) {
+		try (MemoryStack ms = MemoryStack.stackPush()) {
+			grid_vao.append(ms.malloc(GRID_PRIMLEN)
+				.put((byte)-1).put((byte)-1).putFloat(x0).putFloat(y1)
+				.put((byte) 1).put((byte)-1).putFloat(x1).putFloat(y1)
+				.put((byte) 1).put((byte) 1).putFloat(x1).putFloat(y0)
+				.put((byte)-1).put((byte) 1).putFloat(x0).putFloat(y0)
+			.flip());
+		}
+		glUseProgram(gridP);
+		glUniform1f(grid_linewidth, lt);
+		grid_vao.draw();
+		grid_vao.clear();
 	}
 
 	/**Used to render text.

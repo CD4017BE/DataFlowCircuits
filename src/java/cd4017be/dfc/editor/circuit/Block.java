@@ -18,7 +18,7 @@ public class Block extends BlockDesc implements CircuitObject {
 	public final Trace[] io;
 	protected final short[] colors;
 	public short x, y, w, h;
-	private CircuitBoard cb;
+	private CircuitEditor ce;
 
 	public Block(BlockDesc desc) {
 		this(desc.def, desc.outs.length, desc.ins.length, desc.args);
@@ -79,7 +79,7 @@ public class Block extends BlockDesc implements CircuitObject {
 			while(ta.to != null) ta.to.connect(tb);
 			tb.connect(ta.from);
 		}
-		CircuitBoard cb = this.cb;
+		CircuitEditor cb = this.ce;
 		remove();
 		block.pos(x, y).add(cb);
 		return block.place();
@@ -127,12 +127,12 @@ public class Block extends BlockDesc implements CircuitObject {
 		int idx = getIdx();
 		if (idx < 0) return;
 		try(MemoryStack ms = MemoryStack.stackPush()) {
-			cb.blockVAO.set(idx * 4, drawBlock(
+			ce.blockVAO.set(idx * 4, drawBlock(
 				ms.malloc(BLOCK_PRIMLEN),
 				x, y, w, h, def.model.icon
 			).flip());
 		}
-		cb.gui.markDirty();
+		ce.markDirty();
 	}
 
 	public int textX() {
@@ -180,8 +180,8 @@ public class Block extends BlockDesc implements CircuitObject {
 	}
 
 	@Override
-	public void add(CircuitBoard cb) {
-		this.cb = cb;
+	public void add(CircuitEditor cb) {
+		this.ce = cb;
 		if (cb.blocks.add(this))
 			for (Trace tr : io) tr.add(cb);
 		if (outs() == 0) cb.reRunTypecheck = true;
@@ -189,13 +189,13 @@ public class Block extends BlockDesc implements CircuitObject {
 
 	@Override
 	public void remove() {
-		cb.blocks.remove(this);
+		ce.blocks.remove(this);
 		for (Trace tr : io) tr.remove();
-		if (cb.errorBlock == this) {
-			cb.errorBlock = null;
-			cb.reRunTypecheck = true;
+		if (ce.errorBlock == this) {
+			ce.errorBlock = null;
+			ce.reRunTypecheck = true;
 		}
-		this.cb = null;
+		this.ce = null;
 	}
 
 	@Override

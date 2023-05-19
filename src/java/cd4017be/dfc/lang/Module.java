@@ -12,6 +12,7 @@ import java.util.*;
 
 import org.lwjgl.system.MemoryStack;
 
+import cd4017be.dfc.editor.Main;
 import cd4017be.dfc.lang.builders.BasicConstructs;
 import cd4017be.dfc.lang.builders.ConstList;
 import cd4017be.dfc.lang.builders.Function;
@@ -71,14 +72,14 @@ public class Module {
 	}
 
 	public void loadTraces() {
-		if (LoadingCache.TRACES == null || trace0 >= 0) return;
+		if (Main.TRACES == null || trace0 >= 0) return;
 		trace0 = 2;
 		if (source == null) return;
 		try (
 			InputStream is = new URL(source, "traces.tga").openStream();
 			MemoryStack ms = MemoryStack.stackPush();
 		) {
-			trace0 = LoadingCache.TRACES.load(GLUtils.readTGA(is, ms), this);
+			trace0 = Main.TRACES.load(GLUtils.readTGA(is, ms), this);
 			System.out.println("loaded traces for module " + name);
 		} catch (FileNotFoundException e) {}
 		catch (IOException e) {

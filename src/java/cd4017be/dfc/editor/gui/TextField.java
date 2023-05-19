@@ -34,10 +34,10 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 	}
 
 	public TextField pos(int x, int y, int w, int h) {
-		x0 = x * 4;
-		x1 = (x + w) * 4;
-		y0 = y * 4;
-		y1 = (y + h) * 4;
+		x0 = x;
+		y0 = y;
+		x1 = x + w;
+		y1 = y + h;
 		gui.markDirty();
 		return this;
 	}
@@ -76,43 +76,51 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 
 	@Override
 	public void redraw() {
-		if (model == null) return;
-		int w = x1 - x0, h = y1 - y0;
-		drawBlock(gui.sprites, x0 >> 2, y0 >> 2, w >> 2, h >> 2, model.icon);
-		int l = text.length();
-		int tx = (x0 + x1 >> 1) + (model.tx() - l) * 2, ty = y0 + model.ty() * 2 + 1;
+		int w = x1 - x0, h = y1 - y0, l = text.length(), tx, ty;
+		if (model != null) {
+			drawBlock(gui.sprites, x0 >> 2, y0 >> 2, w >> 2, h >> 2, model.icon);
+			tx = (x0 + x1 >> 2) - l + model.tx();
+			ty = (y0 >> 1) + model.ty();
+		} else {
+			tx = (x0 + x1 >> 2) - l;
+			ty = (y0 + y1 >> 2) - 2;
+		}
 		if (gui.focused() == this) {
 			cur0 = min(cur0, l);
 			cur1 = min(cur1, l);
 			if (cur0 == cur1) {
-				print(text, color, tx, ty, 4, 6);
-				print("|", CURSOR_COLOR, tx + cur1 * 4 - 2, ty, 4, 6);
+				print(text, color, tx, ty, 2, 3);
+				print("|", CURSOR_COLOR, tx + cur1 * 2 - 1, ty, 2, 3);
 			} else {
 				int i0 = min(cur0, cur1), i1 = max(cur0, cur1);
-				print(text.subSequence(0, i0), color, tx, ty, 4, 6);
-				print(text.subSequence(i0, i1), HIGHLIGHT_COLOR | color & 31, tx + i0 * 4, ty, 4, 6);
-				print(text.subSequence(i1, text.length()), color, tx + i1 * 4, ty, 4, 6);
+				print(text.subSequence(0, i0), color, tx, ty, 2, 3);
+				print(text.subSequence(i0, i1), HIGHLIGHT_COLOR | color & 31, tx + i0 * 2, ty, 2, 3);
+				print(text.subSequence(i1, text.length()), color, tx + i1 * 2, ty, 2, 3);
 			}
 			if (!autocomplete.isEmpty()) {
 				int gh = gui.h(), ay0, n;
 				if (y0 > gh - y1) {
 					n = min(y0 / 6, autocomplete.size());
-					ay0 = y0 - n * 6;
+					ay0 = (y0 >> 1) - n * 3;
 				} else {
 					n = min((gh - y1) / 6, autocomplete.size());
-					ay0 = y1;
+					ay0 = y1 >> 1;
 				}
-				addSel(x0, ay0, w, n * 6, FG_GRAY_L | BG_BLACK_T | OVERLAY);
+				int aw = w >> 1;
+				for (int i = 0; i < n; i++)
+					aw = max(aw, autocomplete.get(i).length() * 2);
+				int ax0 = (x0 + x1 >> 1) - aw >> 1;
+				addSel(ax0, ay0, aw, n * 3 + 1, FG_GRAY_L | BG_BLACK | OVERLAY);
 				if (selAC >= 0 && selAC < n)
-					addSel(x0, ay0 + selAC * 6, w, 6, FG_GREEN_L | OVERLAY);
+					addSel(ax0, ay0 + selAC * 3, aw, 4, FG_GREEN_L | OVERLAY);
 				for (int i = 0; i < n; i++) {
 					String s = autocomplete.get(i);
-					print(s, color & 31 | BG_BLACK_T | OVERLAY, (x0 + x1 >> 1) - s.length() * 2, ay0 + i * 6, 4, 6);
+					print(s, color & 31 | OVERLAY, (x0 + x1 >> 2) - s.length(), ay0 + i * 3, 2, 3);
 				}
 			}
-		} else print(text, color, tx, ty, 4, 6);
+		} else print(text, color, tx, ty, 2, 3);
 		if (gui.hovered() == this)
-			addSel(x0, y0, w, h, color);
+			addSel(x0 >> 1, y0 >> 1, w >> 1, h >> 1, color);
 	}
 
 	@Override
@@ -130,7 +138,8 @@ public class TextField extends HoverRectangle implements Drawable, InputHandler 
 	@Override
 	public boolean onMouseMove(int mx, int my) {
 		if (!super.onMouseMove(mx, my)) return false;
-		curH = (mx - (x0 + x1 >> 1) >> 1) - model.tx() + 1;
+		curH = mx - (x0 + x1 >> 1) - (model == null ? 0 : model.tx() * 2) + 2;
+		if (y1 - y0 >= 8) curH >>= 1;
 		if (mouseSel) {
 			int l = text.length();
 			if (cur1 != (cur1 = max(min(curH + l >> 1, l), 0)))

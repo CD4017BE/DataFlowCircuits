@@ -18,7 +18,7 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 	/**-1: trace, 0..outs-1: output, outs..: input */
 	public final int pin;
 	private short x, y;
-	private CircuitBoard cb;
+	private CircuitEditor ce;
 
 	public Trace() {
 		this.block = null;
@@ -75,13 +75,13 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 
 	@Override
 	public Trace place() {
-		for (Block block : cb.blocks)
+		for (Block block : ce.blocks)
 			for (int i = 0; i < block.outs(); i++) {
 				Trace tr = block.io[i];
 				if (tr.x == x && tr.y == y && tr != this)
 					return merge(tr);
 			}
-		for (Trace tr : cb.traces)
+		for (Trace tr : ce.traces)
 			if (tr.x == x && tr.y == y && tr != this)
 				return merge(tr);
 		return this;
@@ -153,22 +153,22 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		else block.connectIn(i, null, -1);
 		Vertex v = block.ins[i];
 		if (v != null && v.scope() != null)
-			cb.reRunTypecheck = true;
+			ce.reRunTypecheck = true;
 	}
 
 	@Override
-	public void add(CircuitBoard cb) {
-		this.cb = cb;
+	public void add(CircuitEditor cb) {
+		this.ce = cb;
 		if (!isOut()) cb.traces.add(this);
 	}
 
 	@Override
 	public void remove() {
-		cb.traces.remove(this);
+		ce.traces.remove(this);
 		pickup();
 		while(to != null) to.connect(from);
 		connect(null);
-		this.cb = null;
+		this.ce = null;
 	}
 
 	@Override
@@ -178,13 +178,13 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		Trace from = this.from;
 		if (from == null) from = this;
 		try (MemoryStack ms = MemoryStack.stackPush()) {
-			cb.traceVAO.set(idx * 4, drawTrace(
+			ce.traceVAO.set(idx * 4, drawTrace(
 				ms.malloc(TRACE_PRIMLEN),
 				from.x, from.y, x, y,
 				src == null ? 1 : src.block.colors[src.pin]
 			).flip());
 		}
-		cb.gui.markDirty();
+		ce.markDirty();
 	}
 
 	@Override

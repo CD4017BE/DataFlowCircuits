@@ -18,9 +18,9 @@ public class Label implements Drawable {
 	}
 
 	public Label pos(int x, int y, int h) {
-		this.x = x * 4;
-		this.y = y * 4;
-		this.w = h * 2;
+		this.x = x;
+		this.y = y;
+		this.w = h >> 2;
 		gui.markDirty();
 		return this;
 	}
@@ -40,8 +40,8 @@ public class Label implements Drawable {
 	@Override
 	public void redraw() {
 		if (text == null) return;
-		int tw = w & -4;
-		print(text, color, x, y + (w >> 2) + (w & 3), tw, tw * 3 >> 1);
+		int tw = w & -2;
+		print(text, color, x >> 1, y + (w >> 1) + (w & 1) >> 1, tw, tw * 3 >> 1);
 	}
 
 }
