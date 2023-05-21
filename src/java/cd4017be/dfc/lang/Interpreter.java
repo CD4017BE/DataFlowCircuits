@@ -54,6 +54,11 @@ public class Interpreter extends Thread {
 		}
 	}
 
+	public Task task() {
+		//TODO do better
+		return scheduled.get();
+	}
+
 	public boolean active() {
 		return scheduled.get() != null;
 	}
@@ -76,7 +81,7 @@ public class Interpreter extends Thread {
 
 	public void eval(Instruction[] code, Value[] vars, int id) throws SignalError {
 		if ((counter -= code.length) < 0)
-			throw new SignalError(id, "computation took too long");
+			throw new SignalError(~id, "computation took too long");
 		for (Instruction ins : code) ins.eval(this, vars);
 	}
 
@@ -139,11 +144,13 @@ public class Interpreter extends Thread {
 		private final Consumer<Task> onComplete;
 		public final Value[] vars;
 		public final Instruction[] code;
+		public final BlockDef root;
 		public final long limit;
 		public long time, ticks;
 		public SignalError error;
 
-		public Task(Instruction[] code, Value[] vars, long limit, Consumer<Task> onComplete) {
+		public Task(BlockDef root, Instruction[] code, Value[] vars, long limit, Consumer<Task> onComplete) {
+			this.root = root;
 			this.code = code;
 			this.vars = vars;
 			this.limit = limit;
@@ -151,8 +158,8 @@ public class Interpreter extends Thread {
 			schedule(this);
 		}
 
-		public Task(SignalError error, Consumer<Task> onComplete) {
-			this(null, null, 0, onComplete);
+		public Task(BlockDef root, SignalError error, Consumer<Task> onComplete) {
+			this(root, null, null, 0, onComplete);
 			this.error = error;
 			onComplete.accept(this);
 		}

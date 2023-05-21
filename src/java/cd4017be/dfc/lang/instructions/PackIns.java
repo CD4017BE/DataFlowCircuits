@@ -5,7 +5,7 @@ import cd4017be.dfc.lang.Interpreter;
 import cd4017be.dfc.lang.Node;
 import cd4017be.dfc.lang.SignalError;
 import cd4017be.dfc.lang.Value;
-import cd4017be.dfc.modules.core.Intrinsics;
+import modules.loader.Intrinsics;
 
 /**
  * @author cd4017be */
@@ -25,7 +25,7 @@ public class PackIns extends Instruction {
 		Value[] elem = l <= 0 ? Value.NO_ELEM : new Value[l];
 		for (int i = 0; i < l; i++)
 			elem[i] = vars[io[i + 2]];
-		vars[io[0]] = new Value(Intrinsics.VOID, elem, Value.NO_DATA, 0);
+		vars[io[0]] = Value.of(elem, Intrinsics.VOID);
 	}
 
 	public static Node node(int idx, Node... ins) {

@@ -1,9 +1,10 @@
 package cd4017be.dfc.modules.collection;
 
 import static cd4017be.dfc.lang.Value.NO_ELEM;
-import static cd4017be.dfc.modules.core.Intrinsics.NULL;
 import static cd4017be.dfc.modules.core.Intrinsics.dataRead8;
 import static cd4017be.dfc.modules.core.Intrinsics.elemNew;
+import static modules.loader.Intrinsics.NULL;
+
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.ConcurrentModificationException;

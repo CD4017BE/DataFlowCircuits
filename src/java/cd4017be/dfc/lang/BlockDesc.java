@@ -75,7 +75,7 @@ public class BlockDesc extends IndexedSet.Element {
 	public void makeArgNode(Instruction instr, NodeContext context, int idx) throws SignalError {
 		String[] args = context.args(this);
 		Node node = new Node(instr, Node.INSTR, ins.length + args.length, idx);
-		for (int i = 0; i < args.length; i++)
+		for (int i = 0; i < args.length; i++)//TODO change to parsers
 			node.in[i].connect(new Node(new ConstantIns(Intrinsics.parse(args[i], context, idx, def.args[min(i, def.args.length - 1)])), Node.INSTR, 0, idx));
 		for (int i = 0, j = args.length; i < ins.length; i++, j++)
 			ins[i] = node.in[j];
@@ -133,11 +133,18 @@ public class BlockDesc extends IndexedSet.Element {
 		inLinks[i] = pin;
 	}
 
+	public Node inNode(int i) {
+		BlockDesc in = inBlocks[i];
+		return in == null ? null : in.outs[inLinks[i]];
+	}
+
 	public void connect() {
-		for (int i = 0; i < inBlocks.length; i++) {
-			BlockDesc in = inBlocks[i];
-			ins[i].connect(in == null ? null : in.outs[inLinks[i]]);
-		}
+		for (int i = 0; i < inBlocks.length; i++)
+			ins[i].connect(inNode(i));
+	}
+
+	public Value signal(int pin) {
+		return null;
 	}
 
 }

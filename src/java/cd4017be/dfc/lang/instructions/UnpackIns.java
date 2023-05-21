@@ -29,7 +29,7 @@ public class UnpackIns extends Instruction {
 	public void eval(Interpreter ip, Value[] vars) throws SignalError {
 		Value v = vars[in];
 		if (idx >= v.elements.length)
-			throw new SignalError(out, "value has too few elements");
+			throw new SignalError(~out, "value has too few elements");
 		vars[out] = v.elements[idx];
 	}
 

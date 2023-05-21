@@ -5,6 +5,8 @@ import static cd4017be.dfc.lang.Value.NO_ELEM;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardOpenOption.*;
+import static modules.loader.Intrinsics.NULL;
+import static modules.loader.Intrinsics.VOID;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -17,6 +19,8 @@ import java.util.*;
 
 import cd4017be.dfc.lang.*;
 import cd4017be.dfc.lang.Module;
+import cd4017be.dfc.lang.builders.*;
+import cd4017be.dfc.lang.instructions.*;
 import cd4017be.dfc.lang.instructions.IntrinsicLoader.Impl;
 import cd4017be.dfc.lang.instructions.IntrinsicLoader.Init;
 
@@ -24,17 +28,90 @@ import cd4017be.dfc.lang.instructions.IntrinsicLoader.Init;
  * @author cd4017be */
 public class Intrinsics {
 
-	public static Type VOID, INT, FLOAT, STRING, FILE;
-	public static Value NULL;
+	public static Type INT, FLOAT, STRING, FILE;
+
+	public static final NodeAssembler PACK = (block, context, idx) -> {
+		if (block.outs() != 1)
+			throw new SignalError(idx, "wrong IO count");
+		block.makeNode(new PackIns(), idx);
+	};
+	public static final NodeAssembler DEPEND = (block, context, idx) -> {
+		if (block.ins() == 0) throw new SignalError(idx, "wrong IO count");
+		Node node = new Node(null, Node.PASS, block.ins(), idx);
+		block.setIns(node);
+		block.makeOuts(node, idx);
+	};
+	public static final NodeAssembler LOOP = (block, context, idx) -> {
+		if (block.def.ins.length != 2 && block.def.outs.length != 2)
+			throw new SignalError(idx, "wrong IO count");
+		Node state = new Node(null, Node.BEGIN, 0, idx);
+		Node loop = new Node(null, Node.END, 3, idx);
+		loop.in[0].connect(state);
+		block.setIn(0, loop.in[2], idx);
+		block.setIn(1, loop.in[1], idx);
+		block.setOut(0, loop, idx);
+		block.setOut(1, state, idx);
+	};
+	public static final NodeAssembler VIRTUAL = new NodeAssembler() {
+		@Override
+		public void assemble(BlockDesc block, NodeContext context, int idx)
+		throws SignalError {
+			Node node = new Node(makeVirtual(block.def), Node.INSTR, block.def.ins.length, idx);
+			for (int i = 0; i < node.in.length; i++)
+				block.setIn(i, node.in[i], idx);
+			block.makeOuts(node, idx);
+		}
+		@Override
+		public Instruction makeVirtual(BlockDef def) {
+			String[] names = new String[def.ins.length];
+			if (names.length == 1) names[0] = def.id;
+			else for (int i = 0; i < names.length; i++)
+				names[i] = def.id + "@" + i;
+			return new VirtualCallIns(names);
+		}
+	};
+	public static final ArgumentParser STRING_ARG = (arg, block, argidx, context, idx) -> {
+		Value v = new Value(STRING, Value.NO_ELEM, arg.isEmpty() ? Value.NO_DATA : arg.getBytes(UTF_8), 0);
+		return new Node(new ConstantIns(v), Node.INSTR, 0, idx);
+	};
+	public static final ArgumentParser VALUE_ARG = new ArgumentParser() {
+		@Override
+		public Node parse(String arg, BlockDesc block, int argidx, NodeContext context, int idx)
+		throws SignalError {
+			return new Node(new ConstantIns(Intrinsics.parse(arg, context, idx, "value")), Node.INSTR, 0, idx);
+		}
+		@Override
+		public void getAutoCompletions(BlockDesc block, int arg, ArrayList<String> list, NodeContext context) {
+			//TODO re-implement module signals
+//			for (SignalProvider sp : context.def.module.signals) {
+//				ConstList cl = sp.signals();
+//				if (cl != null)
+//					cl.getAutoCompletions(block, arg, list, context);
+//			}
+		}
+	};
+	
+
+	public static boolean preInit(Module m) {
+		m.assemblers.put("macro", Macro::new);
+		m.assemblers.put("func", Function::new);
+		m.assemblers.put("const", ConstList::new);
+		m.assemblers.put("swt", SwitchBuilder::new);
+		m.assemblers.put("dep", def -> DEPEND);
+		m.assemblers.put("pack", def -> PACK);
+		m.assemblers.put("loop", def -> LOOP);
+		m.assemblers.put("vc", def -> VIRTUAL);
+		m.parsers.put("str", STRING_ARG);
+		m.parsers.put("val", VALUE_ARG);
+		return false;
+	}
 
 	@Init
 	public static void init(Module m) {
-		VOID = m.types.get("void");
 		INT = m.types.get("int");
 		FLOAT = m.types.get("float");
 		STRING = m.types.get("string");
 		FILE = m.types.get("file");
-		NULL = new Value(VOID, NO_ELEM, NO_DATA, 0);
 	}
 
 	//File operations:
@@ -453,7 +530,7 @@ public class Intrinsics {
 				values.add(parse(s, module));
 			}
 			skipWhiteSpace(s);
-			return values.isEmpty() ? NULL : new Value(VOID, values.toArray(Value[]::new), NO_DATA, 0);
+			return values.isEmpty() ? NULL : Value.of(values.toArray(Value[]::new), VOID);
 		} else if (Character.isJavaIdentifierStart(c)) {
 			s.mark();
 			while(s.hasRemaining())
@@ -464,7 +541,8 @@ public class Intrinsics {
 			int l = s.limit();
 			String key = s.limit(s.position()).reset().toString();
 			skipWhiteSpace(s.position(s.limit()).limit(l));
-			return module.signal(key);
+			//TODO re-implement module signals
+			return NULL;
 		} else throw new IllegalArgumentException("unexpected symbols " + s.toString());
 	}
 

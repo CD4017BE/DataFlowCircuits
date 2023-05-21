@@ -4,7 +4,7 @@ import cd4017be.dfc.lang.Instruction;
 import cd4017be.dfc.lang.Interpreter;
 import cd4017be.dfc.lang.SignalError;
 import cd4017be.dfc.lang.Value;
-import cd4017be.dfc.modules.core.Intrinsics;
+import modules.loader.Intrinsics;
 
 /**
  * @author cd4017be */
@@ -44,7 +44,7 @@ public class VirtualCallIns extends Instruction {
 		for (int i = 1; i < names.length; i++)
 			sb.append(", ").append(names[i]);
 		sb.append(')');
-		return new SignalError(io[0], sb.toString());
+		return new SignalError(~io[0], sb.toString());
 	}
 
 }

@@ -46,7 +46,7 @@ public class Function implements NodeAssembler {
 			try (ExtInputStream is = CircuitFile.readBlock(def)) {
 				cont.build(CircuitFile.readCircuit(is, def.module), true);
 			} catch(IOException e) {
-				throw new SignalError(0, "can't load circuit", e);
+				throw new SignalError(-1, "can't load circuit", e);
 			}
 			Node out = new Node();
 			String[] outs = cont.collectOutputs(out);
@@ -69,7 +69,9 @@ public class Function implements NodeAssembler {
 			int m = def.ins.length;
 			for (int i = 0, j = args.length; i < m; i++, j++)
 				block.setIn(i, node.in[j], idx);
-			block.makeOuts(node, idx);
+			if (def.outs.length == 0 && block.args.length != 0)
+				context.getIO(block.args[0]).in[0].connect(node);
+			else block.makeOuts(node, idx);
 		}
 
 		@Override

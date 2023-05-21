@@ -26,17 +26,17 @@ public class FunctionIns extends Instruction {
 
 	@Override
 	public void eval(Interpreter ip, Value[] vars) throws SignalError {
-		if (func.vars == null) func.load();
-		Value[] vars1 = new Value[func.vars.length];
-		for (int i = 1; i < io.length; i++)
-			vars1[i - 1] = vars[io[i]];
 		try {
-			ip.eval(func.code, vars1, io[0]);
+			if (func.vars == null) func.load();
+			Value[] vars1 = new Value[func.vars.length];
+			for (int i = 1; i < io.length; i++)
+				vars1[i - 1] = vars[io[i]];
+			ip.eval(func.code, vars1, 0);
+			vars[io[0]] = vars1[func.ret];
 		} catch (SignalError e) {
-			e.pos = io[0];
+			e.pos = ~io[0];
 			throw e;
 		}
-		vars[io[0]] = vars1[func.ret];
 	}
 
 }

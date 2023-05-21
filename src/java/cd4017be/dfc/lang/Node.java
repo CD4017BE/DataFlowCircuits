@@ -18,11 +18,6 @@ public class Node {
 	Node next;
 	boolean visited;
 
-	public Node(Node out) {
-		this();
-		in[0].connect(out);
-	}
-
 	public Node() {
 		this(null, OUT, 1, Integer.MAX_VALUE);
 	}
@@ -56,6 +51,7 @@ public class Node {
 	public int computeScope(int nextAddr) throws SignalError {
 		if (mode == OUT) {
 			in[0].scope = new ScopeBranch(null, this, 0).addr(0);
+			addr = 0;
 			return nextAddr;
 		}
 		int l = 0;
@@ -168,22 +164,27 @@ public class Node {
 			this.toIdx = idx;
 		}
 
+		public Vertex disconnect() {
+			if (from == null) return this;
+			Vertex v = from.out;
+			if (v == this) from.out = next;
+			else for (Vertex u; v != null; v = u)
+				if ((u = v.next) == this) {
+					v.next = next;
+					break;
+				}
+			if (scope == null) from.wait--;
+			next = null;
+			from = null;
+			return this;
+		}
+
 		public void connect(Node node) {
-			if (from != null) {
-				Vertex v = from.out;
-				if (v == this) from.out = next;
-				else for (Vertex u; v != null; v = u)
-					if ((u = v.next) == this) {
-						v.next = next;
-						break;
-					}
-				if (scope == null) from.wait--;
-			}
-			if (node != null) {
-				next = node.out;
-				node.out = this;
-				if (scope == null) node.wait++;
-			} else next = null;
+			if (from != null) throw new SignalConflict();
+			if (node == null) return;
+			next = node.out;
+			node.out = this;
+			if (scope == null) node.wait++;
 			from = node;
 		}
 
@@ -199,6 +200,10 @@ public class Node {
 			return from;
 		}
 
+	}
+
+	public static class SignalConflict extends RuntimeException {
+		private static final long serialVersionUID = 1L;
 	}
 
 }

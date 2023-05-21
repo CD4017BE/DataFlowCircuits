@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import cd4017be.dfc.lang.*;
 import cd4017be.dfc.lang.instructions.ConstantIns;
-import cd4017be.dfc.modules.core.Intrinsics;
 import cd4017be.util.Profiler;
 
 /**
@@ -13,20 +12,21 @@ import cd4017be.util.Profiler;
 public class ConstList implements NodeAssembler, ArgumentParser {
 
 	final BlockDef def;
-	HashMap<String, Value> signals;
+	private HashMap<String, Value> signals;
 
 	public ConstList(BlockDef def) {
 		this.def = def;
 	}
 
-	private void ensureLoaded() {
-		if (signals != null) return;
+	public HashMap<String, Value> signals() {
+		if (signals != null) return signals;
 		synchronized(this) {
 			if (signals == null) try {
 				CircuitFile.readSignals(def, signals = new HashMap<>());
 			} catch (IOException e) {
-				e.printStackTrace();
+				System.err.printf("can't load data structure of %s\n because %s\n", def, e);
 			}
+			return signals;
 		}
 	}
 
@@ -36,7 +36,7 @@ public class ConstList implements NodeAssembler, ArgumentParser {
 		if (args.length == 0) args = def.outs;
 		if (block.ins() != 0 || block.outs() != args.length)
 			throw new SignalError(idx, "wrong IO count");
-		ensureLoaded();
+		signals();
 		for (int i = 0; i < args.length; i++)
 			block.outs[i] = parse(args[i], block, i, context, idx);
 	}
@@ -44,24 +44,21 @@ public class ConstList implements NodeAssembler, ArgumentParser {
 	@Override
 	public void
 	getAutoCompletions(BlockDesc desc, int arg, ArrayList<String> list, NodeContext context) {
-		ensureLoaded();
-		list.addAll(signals.keySet());
+		list.addAll(signals().keySet());
 	}
 
 	@Override
 	public Instruction makeVirtual(BlockDef def) {
 		if (def.args.length != 0 || def.ins.length != 0 || def.outs.length != 1) return null;
-		ensureLoaded();
-		Value val = signals.get(def.outs[0]);
+		Value val = signals().get(def.outs[0]);
 		return val == null ? null : new ConstantIns(val);
 	}
 
 	public Value getValue(String name) {
-		ensureLoaded();
-		return signals.get(name);
+		return signals().get(name);
 	}
 
-	public void compile(Interpreter ip) throws SignalError {
+	public void compile(Interpreter ip, Value scope) throws SignalError {
 		Profiler p = new Profiler(System.out);
 		Function f = new Function(def);
 		String[] keys;
@@ -70,8 +67,8 @@ public class ConstList implements NodeAssembler, ArgumentParser {
 		}
 		p.end("built");
 		Value[] state = new Value[f.vars.length];
-		state[0] = Intrinsics.NULL;
-		ip.new Task(f.code, state, 1000000, t -> {
+		state[0] = scope;
+		ip.new Task(def, f.code, state, 1000000, t -> {
 			t.log();
 			if (t.error != null) {
 				t.error.printStackTrace();

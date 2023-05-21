@@ -205,8 +205,8 @@ public class Trace extends IndexedSet.Element implements CircuitObject {
 		return x < x1 && y < y1 && x > x0 && y > y0;
 	}
 
-	public Value value(Value[] state) {
-		return src == null ? null : src.block.value(src.pin, state);
+	public Value value() {
+		return src == null ? null : src.block.signal(src.pin);
 	}
 
 	public static void forEachUser(ArrayList<Trace> stack, Consumer<Trace> op) {

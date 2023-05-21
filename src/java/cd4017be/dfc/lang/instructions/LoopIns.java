@@ -23,7 +23,7 @@ public class LoopIns extends Instruction {
 
 	@Override
 	public Instruction setIO(int[] io) throws SignalError {
-		throw new SignalError(io[0], "can't dynamically call loop");
+		throw new SignalError(~io[0], "can't dynamically call loop");
 	}
 
 	@Override

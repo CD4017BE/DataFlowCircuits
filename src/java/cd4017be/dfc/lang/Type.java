@@ -17,6 +17,7 @@ public class Type extends HashMap<String, BlockDef> {
 		this.id = id;
 		this.color0 = color0;
 		this.color1 = color1;
+		module.types.put(id, this);
 	}
 
 	public Instruction lookup(String name) {

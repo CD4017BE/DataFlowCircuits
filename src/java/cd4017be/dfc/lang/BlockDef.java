@@ -1,9 +1,13 @@
 package cd4017be.dfc.lang;
 
-import java.net.MalformedURLException;
-import java.net.URL;
+import static cd4017be.dfc.lang.LoadingCache.LOADER;
+
+import java.nio.file.Path;
+import java.util.function.Function;
+
 import cd4017be.dfc.editor.Main;
 import cd4017be.dfc.graphics.SpriteModel;
+import cd4017be.dfc.lang.builders.ConstList;
 
 /**
  * 
@@ -14,7 +18,8 @@ public class BlockDef {
 	static final int VAR_OUT = 1, VAR_IN = 2, VAR_ARG = 4;
 
 	public final Module module;
-	public final String id, modelId;
+	public final String id;
+	public final Path modelPath;
 	public final String[] ins, outs, args;
 	public final ArgumentParser[] parsers;
 	public final NodeAssembler assembler;
@@ -23,29 +28,39 @@ public class BlockDef {
 	public String name;
 	public Instruction impl;
 
+	public BlockDef(Module module) {
+		this(
+			module, "", ConstList::new,
+			EMPTY_IO, EMPTY_IO, EMPTY_IO, new ArgumentParser[0],
+			LOADER.icon("module"), "Module Definition"
+		);
+	}
+
 	public BlockDef(
-		Module module, String id, String type, String model,
-		String[] ins, String[] outs, String[] args, String[] argtypes
+		Module module, String id, Function<BlockDef, NodeAssembler> assembler,
+		String[] ins, String[] outs, String[] args, ArgumentParser[] parsers,
+		Path model, String name
 	) {
 		this.module = module;
 		this.id = id;
-		this.assembler = module.assemblers.get(type).apply(this);
 		this.ins = ins;
 		this.outs = outs;
 		this.args = args;
-		int l = args.length;
-		if (l != argtypes.length) throw new IllegalArgumentException();
-		this.parsers = new ArgumentParser[l];
-		for (int i = 0; i < l; i++)
-			parsers[i] = module.parsers.get(argtypes[i]);
-		this.modelId = model;
+		this.parsers = parsers;
+		this.modelPath = model;
+		this.name = name;
 		this.vaSize = isVar(ins) & VAR_IN | isVar(outs) & VAR_OUT | isVar(args) & VAR_ARG;
+		this.assembler = assembler.apply(this);
 		module.blocks.put(id, this);
 	}
 
 	private static int isVar(String[] io) {
 		int l = io.length - 1;
 		return l >= 0 && io[l].indexOf('#') >= 0 ? -1 : 0;
+	}
+
+	public boolean isModule() {
+		return id.isEmpty();
 	}
 
 	public int ins(int size) {
@@ -69,27 +84,12 @@ public class BlockDef {
 
 	@Override
 	public String toString() {
-		return module + ":" + id;
+		return isModule() ? module.toString() : module + "/" + id;
 	}
 
 	public SpriteModel loadModel() {
 		if (model != null) return model;
-		String s = modelId;
-		int i = s.indexOf(':');
-		Module m = module;
-		if (i >= 0) {
-			if ((m = module.imports.get(s.substring(0, i))) == null) {
-				System.out.println("module for block model not defined: " + s);
-				return model = Main.ICONS.missing();
-			}
-			s = s.substring(i + 1);
-		}
-		if (!s.isEmpty()) try {
-			return model = Main.ICONS.get(new URL(m.source, "icons/" + s + ".tga"));
-		} catch(MalformedURLException e) {
-			e.printStackTrace();
-		}
-		return model = Main.ICONS.missing();
+		return model = modelPath != null ? Main.ICONS.get(modelPath) : Main.ICONS.missing();
 	}
 
 }

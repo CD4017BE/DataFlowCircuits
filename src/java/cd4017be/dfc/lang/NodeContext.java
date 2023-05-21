@@ -3,6 +3,7 @@ package cd4017be.dfc.lang;
 import java.util.HashMap;
 import java.util.function.Consumer;
 import cd4017be.dfc.lang.Interpreter.Task;
+import cd4017be.dfc.lang.Node.SignalConflict;
 import cd4017be.dfc.lang.builders.ConstList;
 import cd4017be.dfc.lang.builders.Function;
 import cd4017be.dfc.lang.instructions.PackIns;
@@ -36,10 +37,18 @@ public class NodeContext {
 		links.clear();
 		for (int i = 0; i < blocks.size(); i++) {
 			BlockDesc block = blocks.get(i);
-			block.def.assembler.assemble(block, this, i);
+			try {
+				block.def.assembler.assemble(block, this, i);
+			} catch (SignalConflict e) {
+				throw new SignalError(i, "signal conflict");
+			}
 		}
-		for (BlockDesc block : blocks)
-			block.connect();
+		for (int i = 0; i < blocks.size(); i++)
+			try {
+				blocks.get(i).connect();
+			} catch (SignalConflict e) {
+				throw new SignalError(i, "signal conflict");
+			}
 		if (addIns) {
 			int i = 0;
 			for (String arg : def.args) {
@@ -82,9 +91,9 @@ public class NodeContext {
 			Value[] state = new Value[f.vars.length];
 			for (int i = 0; i <= f.par; i++)
 				state[i] = env[i];
-			ip.new Task(f.code, state, 1000000, after);
+			ip.new Task(def, f.code, state, 1000000, after);
 		} catch (SignalError e) {
-			ip.new Task(e, after);
+			ip.new Task(def, e, after);
 		}
 	}
 

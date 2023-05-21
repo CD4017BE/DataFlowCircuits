@@ -17,20 +17,18 @@ import java.lang.invoke.MethodHandles.Lookup;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.HashMap;
-import java.util.function.Function;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
-import cd4017be.dfc.lang.ArgumentParser;
 import cd4017be.dfc.lang.BlockDef;
 import cd4017be.dfc.lang.Instruction;
 import cd4017be.dfc.lang.Interpreter;
 import cd4017be.dfc.lang.Module;
-import cd4017be.dfc.lang.NodeAssembler;
 import cd4017be.dfc.lang.SignalError;
 import cd4017be.dfc.lang.Type;
 import cd4017be.dfc.lang.Value;
+import cd4017be.dfc.lang.builders.ConstList;
+import cd4017be.dfc.lang.builders.Function;
 
 /**
  * @author cd4017be */
@@ -295,20 +293,27 @@ public class IntrinsicLoader {
 		mv.visitLineNumber(i, l);
 	}
 
-	public static void defineHandlers(
-		HashMap<String, Function<BlockDef, NodeAssembler>> assemblers,
-		HashMap<String, ArgumentParser> parsers, Class<?> impl
-	) {
-		try {
-			Method m = impl.getDeclaredMethod("getHandlers", HashMap.class, HashMap.class);
-			m.invoke(null, assemblers, parsers);
+	/**@param module the module to init
+	 * @param impl module Intrinsics class
+	 * @return whether module is already fully loaded (skip regular loading) */
+	public static boolean preInit(Module module, Class<?> impl) {
+		module.assemblers.put("const", ConstList::new);
+		module.assemblers.put("func", Function::new);
+		if (impl != null) try {
+			Method m = impl.getDeclaredMethod("preInit", Module.class);
+			if ((boolean)m.invoke(null, module)) {
+				linkAll(module, impl);
+				return true;
+			}
 		} catch(NoSuchMethodException e) {
 		} catch(SecurityException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 			e.printStackTrace();
 		}
+		return false;
 	}
 
 	public static void linkAll(Module mod, Class<?> impl) {
+		if (impl == null) return;
 		Method init = null;
 		for (Method m : impl.getDeclaredMethods()) {
 			Impl an = m.getAnnotation(Impl.class);

@@ -7,14 +7,15 @@ import static org.lwjgl.opengl.GL20C.*;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
-import java.net.URL;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 
-import cd4017be.dfc.lang.CircuitFile;
+import cd4017be.dfc.editor.Main;
 import cd4017be.util.AtlasSprite;
 import cd4017be.util.GLUtils;
 
@@ -22,7 +23,7 @@ import cd4017be.util.GLUtils;
  * @author cd4017be */
 public class IconAtlas {
 
-	private final HashMap<URL, WeakReference<SpriteModel>> loaded = new HashMap<>();
+	private final HashMap<Path, WeakReference<SpriteModel>> loaded = new HashMap<>();
 	private final SpriteModel missing;
 	private final BitSet usedIds = new BitSet();
 	private AtlasSprite atlas;
@@ -44,7 +45,7 @@ public class IconAtlas {
 		glBindTexture(GL_TEXTURE_1D, 0);
 		glBindTexture(GL_TEXTURE_2D, 0);
 		checkGLErrors();
-		this.missing = load(IconAtlas.class.getResource("/textures/missing.tga"));
+		this.missing = get("/textures/missing.tga");
 	}
 
 	private void genIndexTexture(int n) {
@@ -112,19 +113,19 @@ public class IconAtlas {
 	}
 
 	public SpriteModel get(String internalPath) {
-		return get(IconAtlas.class.getResource(internalPath));
+		return get(Main.resourcePath(internalPath));
 	}
 
-	public SpriteModel get(URL path) {
+	public SpriteModel get(Path path) {
 		if (path == null) return missing;
 		WeakReference<SpriteModel> r = loaded.get(path);
 		SpriteModel m = r == null ? null : r.get();
 		return m != null ? m : load(path);
 	}
 
-	private SpriteModel load(URL path) {
+	private SpriteModel load(Path path) {
 		try (MemoryStack ms = MemoryStack.stackPush()){
-			byte[] data = CircuitFile.loadResource(path, 65536);
+			byte[] data = Files.readAllBytes(path);
 			SpriteModel m = new SpriteModel();
 			m.readFromImageMetadata(data);
 			load(GLUtils.readTGA(new ByteArrayInputStream(data), ms), m);
@@ -132,7 +133,7 @@ public class IconAtlas {
 			System.out.println("loaded icon " + path);
 			return m;
 		} catch(IOException e) {
-			e.printStackTrace();
+			System.err.printf("can't load icon %s\n because %s\n", path, e);
 			return missing;
 		}
 	}

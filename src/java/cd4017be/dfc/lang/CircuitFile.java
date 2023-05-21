@@ -1,7 +1,11 @@
 package cd4017be.dfc.lang;
 
+import static java.nio.file.Files.*;
+
 import java.io.*;
 import java.net.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import cd4017be.dfc.editor.circuit.Block;
 import cd4017be.dfc.editor.circuit.Trace;
@@ -14,7 +18,7 @@ public class CircuitFile {
 	private static final int
 	GRAPH_MAGIC = 'd' | 'f' << 8 | 'c' << 16 | 'G' << 24,
 	SIGNAL_MAGIC= 'd' | 'f' << 8 | 'c' << 16 | 'S' << 24,
-	CIRCUIT_VERSION = 1, LAYOUT_VERSION = 0, SIGNAL_VERSION = 0;
+	CIRCUIT_VERSION = 2, LAYOUT_VERSION = 0, SIGNAL_VERSION = 0;
 
 	private static void checkMagic(ExtInputStream eis, int magic) throws IOException {
 		if (eis.readI32() != magic) throw new IOException("wrong file format");
@@ -40,13 +44,15 @@ public class CircuitFile {
 		}
 	}
 
-	public static URL path(BlockDef def) throws MalformedURLException {
-		return new URL(def.module.source, "blocks/" + def.id + ".dfc");
+	public static Path path(BlockDef def) {
+		return def.module.path.resolve(
+			def.id.isEmpty() ? "module.dfc" : "blocks/" + def.id + ".dfc"
+		);
 	}
 
 	public static ExtInputStream readBlock(BlockDef def) throws IOException {
 		assert(Thread.holdsLock(def));
-		return new ExtInputStream(path(def).openStream());
+		return new ExtInputStream(newInputStream(path(def)));
 	}
 
 	public static record Layout(Block[] blocks, Trace[] traces) {}
@@ -78,12 +84,12 @@ public class CircuitFile {
 
 	public static IndexedSet<BlockDesc> readCircuit(ExtInputStream is, Module m) throws IOException {
 		checkMagic(is, GRAPH_MAGIC);
-		is.readU8(CIRCUIT_VERSION);
-		Module[] modules = new Module[is.readVarInt() + 1];
-		modules[0] = m;
-		for (int i = 1; i < modules.length; i++) {
-			String name = is.readL8UTF8();
-			Module mod = modules[i] = m.imports.get(name);
+		boolean mref = is.readU8(CIRCUIT_VERSION) < CIRCUIT_VERSION;
+		Module[] modules = new Module[is.readVarInt() + (mref ? 1 : 0)];
+		if (mref) modules[0] = m;
+		for (int i = mref ? 1 : 0; i < modules.length; i++) {
+			String name = mref ? is.readL8UTF8() : is.readUTF8();
+			Module mod = modules[i] = mref ? m.imports.get(name) : LoadingCache.getModule(name);
 			if (mod != null) mod.ensureLoaded();
 			else System.out.printf("missing module '%s'\n", name);
 		}
@@ -91,7 +97,7 @@ public class CircuitFile {
 		for (int i = 0; i < defs.length; i++) {
 			Module mod = modules[is.readInt(modules.length - 1)];
 			int out = is.readU8(), in = is.readU8(), arg = is.readU8();
-			String name = is.readL8UTF8();
+			String name = mref ? is.readL8UTF8() : is.readUTF8();
 			BlockDef def = null;
 			if (mod != null && (def = mod.blocks.get(name)) == null)
 				System.out.printf("missing block '%s' in module '%s'\n", name, mod);
@@ -99,7 +105,7 @@ public class CircuitFile {
 		}
 		String[] args = new String[is.readVarInt()];
 		for (int i = 0; i < args.length; i++)
-			args[i] = is.readL16UTF8();
+			args[i] = mref ? is.readL16UTF8() : is.readUTF8();
 		int n = is.readVarInt();
 		IndexedSet<BlockDesc> blocks = new IndexedSet<>(new BlockDesc[n]);
 		for (int i = 0; i < n; i++) {
@@ -130,9 +136,9 @@ public class CircuitFile {
 	public static void writeLayout(BlockDef def, List<Block> blocks, IndexedSet<Trace> traces)
 	throws IOException {
 		assert(Thread.holdsLock(def));
-		URL path = path(def);
-		//createDirectories(path.getParent());
-		try(ExtOutputStream os = new ExtOutputStream(path.openConnection().getOutputStream())) {
+		Path path = path(def);
+		createDirectories(path.getParent());
+		try(ExtOutputStream os = new ExtOutputStream(newOutputStream(path))) {
 			BitSet visited = new BitSet(traces.size());
 			int no = 0, ni = 0;
 			for (int i = 0; i < blocks.size(); i++) {
@@ -198,25 +204,25 @@ public class CircuitFile {
 		int i = 0;
 		for (BlockDesc def : defs.keySet()) {
 			Module mod = def.def.module;
-			defIds[i++] = mod == null || mod == m ? 0 : index(modules, mod) + 1;
+			defIds[i++] = index(modules, mod);
 		}
 		os.write32(GRAPH_MAGIC);
 		os.write8(CIRCUIT_VERSION);
 		os.writeVarInt(modules.size());
 		for (Module mod : modules.keySet())
-			os.writeL8UTF8(m.name(mod));
+			os.writeUTF8(mod.name);
 		os.writeVarInt(defIds.length);
 		i = 0;
 		for (BlockDesc def : defs.keySet()) {
-			os.writeInt(defIds[i++], modules.size());
+			os.writeInt(defIds[i++], modules.size() - 1);
 			os.write8(def.outs.length);
 			os.write8(def.ins.length);
 			os.write8(def.args.length);
-			os.writeL8UTF8(def.def.id);
+			os.writeUTF8(def.def.id);
 		}
 		os.writeVarInt(args.size());
 		for (String s : args.keySet())
-			os.writeL16UTF8(s);
+			os.writeUTF8(s);
 		os.writeVarInt(l);
 		for (i = 0; i < l; i++) {
 			int[] ids = blockIds[i];
@@ -237,13 +243,17 @@ public class CircuitFile {
 		}
 	}
 
-	private static URL constPath(BlockDef def) throws MalformedURLException {
-		return new URL(def.module.source, "out/" + def.id + ".dfc");
+	private static Path constPath(BlockDef def) {
+		return def.module.path.resolve(
+			def.id.isEmpty() ? "module.ds" : "out/" + def.id + ".ds"
+		);
 	}
 
 	public static void writeSignals(BlockDef def, String[] keys, Value[] signals) throws IOException {
 		if (signals.length != keys.length)
 			throw new IllegalArgumentException("keys & signals must have same length");
+		Path path = constPath(def);
+		Files.createDirectories(path.getParent());
 		//build all object indexes
 		LinkedHashMap<Module, Integer> modules = new LinkedHashMap<>();
 		LinkedHashMap<Type, Integer> types = new LinkedHashMap<>();
@@ -263,8 +273,7 @@ public class CircuitFile {
 					stack.add(val.elements);
 			}
 		//write file
-		URL path = constPath(def);
-		try (ExtOutputStream os = new ExtOutputStream(path.openConnection().getOutputStream())) {
+		try (ExtOutputStream os = new ExtOutputStream(newOutputStream(path))) {
 			//write header
 			os.write32(SIGNAL_MAGIC);
 			os.write8(SIGNAL_VERSION);
@@ -305,8 +314,8 @@ public class CircuitFile {
 	}
 
 	public static void readSignals(BlockDef def, HashMap<String, Value> signals) throws IOException {
-		URL path = constPath(def);
-		try(ExtInputStream is = new ExtInputStream(path.openStream())) {
+		Path path = constPath(def);
+		try(ExtInputStream is = new ExtInputStream(newInputStream(path))) {
 			//read header
 			checkMagic(is, SIGNAL_MAGIC);
 			if (is.readU8() != SIGNAL_VERSION)

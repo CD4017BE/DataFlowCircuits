@@ -4,6 +4,8 @@ import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
 
+import java.net.URISyntaxException;
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GLCapabilities;
@@ -79,9 +81,9 @@ public class Main {
 	MAIN_CURSOR, VRESIZE_CURSOR, MOVE_CURSOR, TEXT_CURSOR, SEL_CURSOR;
 
 	static void init(long window) {
+		LoadingCache.addRootPath(Path.of("src/dfc/"));
 		new CircuitEditor(GUI).open(
-			LoadingCache.getModule("test")
-			.getBlock("test2")
+			LoadingCache.getModule("test").getBlock("")
 		);
 		int[] w = new int[1], h = new int[1];
 		glfwGetFramebufferSize(window, w, h);
@@ -128,6 +130,14 @@ public class Main {
 					: "unknown OpenGL Error code: %X @ %s\n",
 				err, msg, Thread.currentThread().getStackTrace()[depth + 2]
 			);
+		}
+	}
+
+	public static Path resourcePath(String path) {
+		try {
+			return Path.of(Main.class.getResource(path).toURI());
+		} catch(URISyntaxException e) {
+			throw new IllegalArgumentException(e);
 		}
 	}
 

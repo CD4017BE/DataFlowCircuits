@@ -1,5 +1,7 @@
 package cd4017be.dfc.lang;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 /**
  * @author cd4017be */
 public class Value {
@@ -65,6 +67,10 @@ public class Value {
 		return sb.toString();
 	}
 
+	public String dataAsString() {
+		return new String(data, UTF_8);
+	}
+
 	public static Value of(Type type) {
 		return new Value(type, NO_ELEM, NO_DATA, 0);
 	}
@@ -79,6 +85,10 @@ public class Value {
 
 	public static Value of(long value, Type type) {
 		return new Value(type, NO_ELEM, NO_DATA, value);
+	}
+
+	public static Value of(String data, Type type) {
+		return of(data == null || data.isEmpty() ? NO_DATA : data.getBytes(UTF_8), type);
 	}
 
 }

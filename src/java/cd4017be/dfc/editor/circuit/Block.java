@@ -10,6 +10,7 @@ import java.util.Arrays;
 import org.lwjgl.system.MemoryStack;
 import cd4017be.dfc.graphics.SpriteModel;
 import cd4017be.dfc.lang.*;
+import modules.loader.Intrinsics;
 
 /**Represents an operand block.
  * @author CD4017BE */
@@ -203,10 +204,10 @@ public class Block extends BlockDesc implements CircuitObject {
 		return x < x1 && y < y1 && x + w > x0 && y + h > y0;
 	}
 
-	public void updateColors(Value[] state) {
+	public void updateColors() {
 		ArrayList<Trace> stack = new ArrayList<>();
 		for (int i = 0; i < colors.length; i++) {
-			Value s = value(i, state);
+			Value s = signal(i);
 			short c = s == null ? Trace.VOID_COLOR : (short)s.type.color(s);
 			if (c != colors[i]) {
 				colors[i] = (short)c;
@@ -216,9 +217,14 @@ public class Block extends BlockDesc implements CircuitObject {
 		}
 	}
 
-	public Value value(int pin, Value[] state) {
+	@Override
+	public Value signal(int pin) {
+		Value[] state = ce.result.vars;
 		if (state == null) return null;
-		Node node = outs[pin];
+		Node node;
+		if (pin < outs()) node = outs[pin];
+		else if ((node = inNode(pin - outs())) == null)
+			return Intrinsics.NULL;
 		int addr = node == null ? 0 : node.addr(0);
 		return addr <= 0 || addr >= state.length ? null : state[addr];
 	}

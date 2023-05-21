@@ -10,7 +10,7 @@ public abstract class Instruction {
 
 	protected static void checkIO(int[] io, int expLen) throws SignalError {
 		if (io.length != expLen)
-			throw new SignalError(io[0], "wrong IO count");
+			throw new SignalError(~io[0], "wrong IO count");
 	}
 
 }

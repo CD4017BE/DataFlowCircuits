@@ -10,15 +10,17 @@ import cd4017be.dfc.lang.*;
 import cd4017be.dfc.lang.CircuitFile.Layout;
 import cd4017be.dfc.lang.Interpreter.Task;
 import cd4017be.dfc.lang.Node.Vertex;
-import cd4017be.dfc.lang.builders.BasicConstructs;
 import cd4017be.dfc.lang.builders.ConstList;
 import cd4017be.dfc.lang.builders.Function;
 import cd4017be.dfc.lang.builders.Macro;
 import cd4017be.dfc.lang.instructions.*;
 import cd4017be.util.*;
+import modules.loader.Intrinsics;
+
 import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
 import static cd4017be.dfc.lang.LoadingCache.*;
+import static cd4017be.dfc.modules.core.Intrinsics.VIRTUAL;
 import static java.lang.Math.*;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL20C.*;
@@ -75,9 +77,9 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 
 	public void open(BlockDef def) {
 		clear();
-		palette.setModule(def.module);
+		palette.setModule(def.isModule() ? LOADER : def.module);
 		ip.cancel();
-		result = ip.new Task(null, task -> {});
+		result = ip.new Task(def, null, task -> {});
 		context = new NodeContext(def, true);
 		reRunTypecheck = true;
 		synchronized(def) {
@@ -88,33 +90,38 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 				for (Block block : layout.blocks())
 					block.add(this);
 			} catch(IOException e) {
-				e.printStackTrace();
+				System.err.printf("can't load circuit of %s\n because %s\n", def, e);
 			}
 		}
-		if (blocks.isEmpty() && !def.type.equals("const")) {
-			int i = 0;
-			for (String s : def.outs) {
-				Block block = new Block(OUT_BLOCK, 1);
-				block.args[0] = s;
-				block.updateSize();
-				block.pos(2, i * 4).add(this);
-				i++;
-			}
-			i = 0;
-			for (String s : def.ins) {
-				Block block = new Block(IN_BLOCK, 1);
-				block.args[0] = s;
-				block.updateSize();
-				block.pos(-2 - block.w, i * 4).add(this);
-				i++;
-			}
-			for (String s : def.args) {
-				Block block = new Block(IN_BLOCK, 1);
-				block.args[0] = s;
-				block.updateSize();
-				block.pos(-2 - block.w, i * 4).add(this);
-				i++;
-			}
+		if (blocks.isEmpty() && !(def.assembler instanceof ConstList))
+			buildInitialIO(def);
+	}
+
+	private void buildInitialIO(BlockDef def) {
+		int i = 0;
+		BlockDef io = LOADER.getBlock("out");
+		for (String s : def.outs) {
+			Block block = new Block(io, 1);
+			block.args[0] = s;
+			block.updateSize();
+			block.pos(2, i * 4).add(this);
+			i++;
+		}
+		i = 0;
+		io = LOADER.getBlock("in");
+		for (String s : def.ins) {
+			Block block = new Block(io, 1);
+			block.args[0] = s;
+			block.updateSize();
+			block.pos(-2 - block.w, i * 4).add(this);
+			i++;
+		}
+		for (String s : def.args) {
+			Block block = new Block(io, 1);
+			block.args[0] = s;
+			block.updateSize();
+			block.pos(-2 - block.w, i * 4).add(this);
+			i++;
 		}
 	}
 
@@ -202,7 +209,7 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 		}
 		if (task.vars != null)
 			for (Block block : blocks)
-				block.updateColors(task.vars);
+				block.updateColors();
 	}
 
 	private void setText(TextField tf, boolean finish) {
@@ -277,7 +284,7 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 				if (context.def.assembler instanceof Macro)
 					for (String s : context.def.args)
 						autoComplete.add(s);
-				block.def.parser(row).getAutoCompletions(block, row, autoComplete, context);
+				block.parser(row).getAutoCompletions(block, row, autoComplete, context);
 				Collections.sort(autoComplete);
 			}
 			text.text(block.args[row]).cursor(col);
@@ -543,7 +550,7 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 				msg = "saved!";
 				if (def.assembler instanceof Function m) m.reset();
 				else if (def.assembler instanceof ConstList cl)
-					cl.compile(ip);
+					cl.compile(ip, Intrinsics.NULL);
 			} catch(IOException e) {
 				e.printStackTrace();
 				msg = e.toString();
@@ -572,7 +579,7 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 					Vertex v = node.in[i];
 					ins[i] = state[v == null ? 0 : v.addr(0)];
 				}
-			resolve: while (def.assembler == BasicConstructs.VIRTUAL) {
+			resolve: while (def.assembler == VIRTUAL) {
 				if (ins.length == 1) {
 					if (ins[0] == null) break;
 					BlockDef def1 = ins[0].type.get(def.id);
@@ -615,7 +622,7 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 			sb.append(i < 0 ? "?" : names[i]).append(": ");
 		}
 		if (t != null) {
-			Value v = t.value(result.vars);
+			Value v = t.value();
 			if (v != null) sb.append(v.toString());
 			else sb.append("[not evaluated]");
 		}
@@ -631,10 +638,12 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 		selBlock = new Block(type, 1);
 		selBlock.pos((mx >> 1) + 1 - selBlock.w >> 1, (my >> 1) + 1 - selBlock.h >> 1);
 		selBlock.add(this);
-		Trace t = selBlock.io[0];
-		if (selTr != null && t.isOut())
-			(selTr.pin >= 0 ? selTr : selTr.to).connect(t);
-		selTrace(t);
+		if (selBlock.outs() > 0) {
+			Trace t = selBlock.io[0];
+			if (selTr != null && t.isOut())
+				(selTr.pin >= 0 ? selTr : selTr.to).connect(t);
+			selTrace(t);
+		}
 		mode = M_BLOCK_SEL;
 	}
 
