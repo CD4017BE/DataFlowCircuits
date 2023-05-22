@@ -44,4 +44,9 @@ public class SwitchBuilder implements NodeAssembler {
 		selFunc.setIntrinsic(impl);
 	}
 
+	@Override
+	public boolean hasCircuit() {
+		return selFunc.hasCircuit();
+	}
+
 }

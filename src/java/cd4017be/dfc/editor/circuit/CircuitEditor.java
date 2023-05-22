@@ -9,18 +9,15 @@ import cd4017be.dfc.editor.gui.*;
 import cd4017be.dfc.lang.*;
 import cd4017be.dfc.lang.CircuitFile.Layout;
 import cd4017be.dfc.lang.Interpreter.Task;
-import cd4017be.dfc.lang.Node.Vertex;
 import cd4017be.dfc.lang.builders.ConstList;
 import cd4017be.dfc.lang.builders.Function;
 import cd4017be.dfc.lang.builders.Macro;
-import cd4017be.dfc.lang.instructions.*;
 import cd4017be.util.*;
 import modules.loader.Intrinsics;
 
 import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
 import static cd4017be.dfc.lang.LoadingCache.*;
-import static cd4017be.dfc.modules.core.Intrinsics.VIRTUAL;
 import static java.lang.Math.*;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL20C.*;
@@ -172,7 +169,7 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 			addSel(block.x * 2, block.y * 2, block.w * 2, block.h * 2, FG_RED);
 			if (block == selBlock) {
 				String msg = lastError.getMessage();
-				print(msg, BG_BLACK_T | FG_RED, block.x * 2 + block.w - msg.length(), block.y * 2 - 4, 2, 3);
+				print(msg, BG_BLACK_T | FG_RED | OVERLAY, block.x * 2 + block.w - msg.length(), block.y * 2 - 4, 2, 3);
 			}
 		}
 		if (mode == M_MULTI_SEL || mode == M_MULTI_MOVE)
@@ -570,37 +567,10 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 		case GLFW_KEY_O:
 			if (!(ctrl && selBlock != null)) break;
 			BlockDef def = selBlock.def;
-			Node node = selBlock.outs() > 0 ? selBlock.outs[0] : null;
-			while (node != null && node.op instanceof UnpackIns) node = node.in[0].from();
-			Value[] ins = new Value[node == null ? 0 : node.in.length];
-			Value[] state = result.vars;
-			if (state != null)
-				for (int i = 0; i < ins.length; i++) {
-					Vertex v = node.in[i];
-					ins[i] = state[v == null ? 0 : v.addr(0)];
-				}
-			resolve: while (def.assembler == VIRTUAL) {
-				if (ins.length == 1) {
-					if (ins[0] == null) break;
-					BlockDef def1 = ins[0].type.get(def.id);
-					if (def1 != null) {
-						def = def1;
-						continue resolve;
-					}
-				} else for (int i = 0; i < ins.length; i++) {
-					if (ins[i] == null) continue;
-					BlockDef def1 = ins[i].type.get(def.id + "@" + i);
-					if (def1 != null) {
-						def = def1;
-						continue resolve;
-					}
-				}
-				break;
-			}
-			if (def.assembler instanceof Function f) {
-				open(f.def);
-				System.arraycopy(ins, 0, context.env, 0, ins.length);
-			}
+			def = def.assembler.openCircuit(selBlock, context);
+			if (def != null && def.assembler.hasCircuit())
+				open(def);
+			else panel.statusMsg("no circuit associated with " + selBlock.def);
 			break;
 		case GLFW_KEY_HOME:
 			ofsX = ofsY = 0;

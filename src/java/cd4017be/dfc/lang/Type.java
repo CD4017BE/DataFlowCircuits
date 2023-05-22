@@ -1,12 +1,8 @@
 package cd4017be.dfc.lang;
 
-import java.util.HashMap;
-
 /**
  * @author cd4017be */
-public class Type extends HashMap<String, BlockDef> {
-
-	private static final long serialVersionUID = 1L;
+public class Type {
 
 	public final String id;
 	public final Module module;
@@ -20,9 +16,10 @@ public class Type extends HashMap<String, BlockDef> {
 		module.types.put(id, this);
 	}
 
+	@Deprecated
 	public Instruction lookup(String name) {
-		BlockDef def = super.get(name);
-		return def == null ? null : def.impl;
+		//TODO reimplement
+		return null;
 	}
 
 	public int color(Value val) {

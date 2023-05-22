@@ -85,6 +85,7 @@ public class ConstList implements NodeAssembler, ArgumentParser {
 				signals = new HashMap<>();
 				for (int i = 0; i < keys.length; i++)
 					signals.put(keys[i], elem[i]);
+				if (def.isModule()) def.module.reload();
 			}
 		});
 	}
@@ -96,6 +97,11 @@ public class ConstList implements NodeAssembler, ArgumentParser {
 		Value val = signals.get(arg);
 		if (val == null) throw new SignalError(idx, "invalid name " + arg);
 		return ConstantIns.node(val, idx);
+	}
+
+	@Override
+	public boolean hasCircuit() {
+		return true;
 	}
 
 }

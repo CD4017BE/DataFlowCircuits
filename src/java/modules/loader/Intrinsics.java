@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Map.Entry;
 import java.util.function.Function;
 
@@ -20,7 +21,12 @@ public class Intrinsics {
 	public static Type VOID, STRING, BLOCKTYPE, ARGTYPE, TYPE, MODULE, BLOCK, MODEL, PINS;
 	public static Value NULL;
 
-	public static final NodeAssembler ERROR = (block, context, idx) -> {
+	public static final ArgumentParser ERROR_ARG =
+	(arg, block, argidx, context, idx) -> {
+		throw new SignalError(idx, "Invalid Argument");
+	};
+	public static final Function<BlockDef, NodeAssembler> ERROR = 
+	def -> (block, context, idx) -> {
 		throw new SignalError(idx, "Invalid Block");
 	};
 	public static final NodeAssembler OUTPUT = (block, context, idx) -> {
@@ -41,22 +47,42 @@ public class Intrinsics {
 		for (int i = 0; i < args.length; i++)
 			block.outs[i] = block.parser(i).parse(args[i], block, i, context, idx);
 	};
+	private static final Function<BlockDef, NodeAssembler> IMPORT =
+	def -> new NodeAssembler() {
+		@Override
+		public void assemble(BlockDesc block, NodeContext context, int idx) throws SignalError {
+			INPUT.assemble(block, context, idx);
+		}
+		@Override
+		public BlockDef openCircuit(BlockDesc block, NodeContext context) {
+			if (block.args.length == 0) return null;
+			Module m = LoadingCache.getModule(block.args[0]);
+			return m.getBlock("");
+		}
+	};
+	private static final Function<BlockDef, NodeAssembler> BLOCKDEF =
+	def -> new cd4017be.dfc.lang.builders.Function(def) {
+		@Override
+		public BlockDef openCircuit(BlockDesc block, NodeContext context) {
+			if (context == null || block.args.length == 0) return null;
+			return context.def.module.getBlock(block.args[0]);
+		}
+	};
 
 	/**Create all content for the loader module.
 	 * @param m loader module
 	 * @return true (completely loaded) */
 	public static boolean preInit(Module m) {
 		//NodeAssemblers
-		Function<BlockDef, NodeAssembler> error, in, out, func;
-		m.assemblers.put("error", error = def -> ERROR);
+		Function<BlockDef, NodeAssembler> in, out, func;
+		m.assemblers.put("error", ERROR);
 		m.assemblers.put("in", in = def -> INPUT);
 		m.assemblers.put("out", out = def -> OUTPUT);
 		m.assemblers.put("func", func = cd4017be.dfc.lang.builders.Function::new);
+		m.assemblers.put("const", ConstList::new);
 		//ArgumentParsers
 		ArgumentParser io, str, num, bt, at, module, model;
-		m.parsers.put("error", (arg, block, argidx, context, idx) -> {
-			throw new SignalError(idx, "Invalid Argument");
-		});
+		m.parsers.put("error", ERROR_ARG);
 		m.parsers.put("io", io = new ArgumentParser() {
 			@Override
 			public Node parse(String arg, BlockDesc block, int argidx, NodeContext context, int idx) throws SignalError {
@@ -82,8 +108,6 @@ public class Intrinsics {
 			public Node parse(
 				String arg, BlockDesc block, int argidx, NodeContext context, int idx
 			) throws SignalError {
-				if (!context.def.module.assemblers.containsKey(arg))
-					throw new SignalError(idx, "invalid block type");
 				return ConstantIns.node(Value.of(arg, BLOCKTYPE), idx);
 			}
 			@Override
@@ -99,8 +123,6 @@ public class Intrinsics {
 			public Node parse(
 				String arg, BlockDesc block, int argidx, NodeContext context, int idx
 			) throws SignalError {
-				if (!context.def.module.parsers.containsKey(arg))
-					throw new SignalError(idx, "invalid argument type");
 				return ConstantIns.node(Value.of(arg, ARGTYPE), idx);
 			}
 			@Override
@@ -149,7 +171,7 @@ public class Intrinsics {
 			}
 		});
 		//Blocks
-		new BlockDef(m, "missing", error,
+		new BlockDef(m, "missing", ERROR,
 			BlockDef.EMPTY_IO,
 			BlockDef.EMPTY_IO,
 			BlockDef.EMPTY_IO,
@@ -180,7 +202,7 @@ public class Intrinsics {
 			m.icon("str"),
 			"string constant"
 		);
-		new BlockDef(m, "import", in,
+		new BlockDef(m, "import", IMPORT,
 			BlockDef.EMPTY_IO,
 			new String[] {"module#"},
 			new String[] {"path#"},
@@ -220,7 +242,7 @@ public class Intrinsics {
 			m.icon("pins"),
 			"I/O name list"
 		);
-		new BlockDef(m, "defblock", func,
+		new BlockDef(m, "defblock", BLOCKDEF,
 			new String[] {"blocktype", "inlist", "outlist", "arglist", "model", "displayname"},
 			BlockDef.EMPTY_IO,
 			new String[] {"name"},
@@ -284,11 +306,12 @@ public class Intrinsics {
 
 	private static ArgumentParser[] parsers(Value v, Module m) {
 		int l = v.type == PINS ? (int)v.value : 0;
-		if (l * 2 > v.elements.length) return null;
 		ArgumentParser[] parsers = new ArgumentParser[l];
-		for (int i = 0; i < l; i++)
+		if (l * 2 > v.elements.length)
+			Arrays.fill(parsers, ERROR_ARG);
+		else for (int i = 0; i < l; i++)
 			if ((parsers[i] = argtype(v.elements[l + i], m)) == null)
-				return null;
+				parsers[i] = ERROR_ARG;
 		return parsers;
 	}
 
@@ -301,20 +324,25 @@ public class Intrinsics {
 	/**Load the contents for the given module from its data structure file.
 	 * @param m module to load */
 	public static void loadModule(Module m) {
-		var content = ((ConstList)new BlockDef(m).assembler).signals();
+		BlockDef mdef = m.blocks.get("");
+		m.imports.clear();
+		m.blocks.clear();
+		m.types.clear();
+		if (mdef == null) mdef = new BlockDef(m);
+		else m.blocks.put(mdef.id, mdef);
+		if (!(mdef.assembler instanceof ConstList cl)) return;
+		var content = cl.signals();
 		for (Entry<String, Value> e : content.entrySet()) {
 			String k = e.getKey();
 			Value v = e.getValue();
 			if (v.type == MODULE) {
-				Module mod = LoadingCache.getModule(v.dataAsString());
-				m.imports.put(k, mod);
-				m.modNames.put(mod, k);
+				m.imports.put(k, LoadingCache.getModule(v.dataAsString()));
 			} else if (v.type == BLOCK) {
 				if (!k.equals(v.dataAsString())) continue;
 				if (v.elements.length < 6) continue;
 				var type = blocktype(v.elements[0], m);
+				if (type == null) type = ERROR;
 				var parsers = parsers(v.elements[3], m);
-				if (type == null || parsers != null) continue;
 				var ins = pins(v.elements[1]);
 				var outs = pins(v.elements[2]);
 				var args = pins(v.elements[3]);

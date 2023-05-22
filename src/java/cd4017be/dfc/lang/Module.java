@@ -21,7 +21,6 @@ public class Module {
 	public final String name;
 	public final Path path;
 	public final LinkedHashMap<String, Module> imports = new LinkedHashMap<>();
-	public final HashMap<Module, String> modNames = new HashMap<>();
 	public final HashMap<String, BlockDef> blocks = new LinkedHashMap<>();
 	public final HashMap<String, Type> types = new HashMap<>();
 	public final HashMap<String, Function<BlockDef, NodeAssembler>> assemblers = new HashMap<>();
@@ -61,6 +60,10 @@ public class Module {
 		}
 	}
 
+	public synchronized void reload() {
+		loaded = false;
+	}
+
 	public Module ensureLoaded() {
 		//checking loaded twice may seem redundant but
 		//it avoids unnecessarily entering the synchronized block
@@ -89,11 +92,6 @@ public class Module {
 	public BlockDef getBlock(String name) {
 		ensureLoaded();
 		return blocks.get(name);
-	}
-
-	public String name(Module mod) {
-		//TODO add missing
-		return modNames.get(mod);
 	}
 
 	public Path icon(String name) {

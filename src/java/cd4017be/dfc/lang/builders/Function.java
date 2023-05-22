@@ -89,4 +89,9 @@ public class Function implements NodeAssembler {
 			intrinsic = impl;
 		}
 
+		@Override
+		public boolean hasCircuit() {
+			return intrinsic == null;
+		}
+
 	}

@@ -22,4 +22,13 @@ public interface NodeAssembler {
 		throw new UnsupportedOperationException();
 	}
 
+	/**Called when the user tries to open the circuit definition of a block.
+	 * @param block the block to open
+	 * @param context in which it is assembled or null if not part of an assembly
+	 * @return block definition for given block or null if not available. */
+	default BlockDef openCircuit(BlockDesc block, NodeContext context) {return block.def;}
+
+	/**@return whether this assembler uses a circuit file (dfc) */
+	default boolean hasCircuit() {return false;}
+
 }

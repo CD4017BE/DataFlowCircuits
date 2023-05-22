@@ -27,8 +27,6 @@ import cd4017be.dfc.lang.Module;
 import cd4017be.dfc.lang.SignalError;
 import cd4017be.dfc.lang.Type;
 import cd4017be.dfc.lang.Value;
-import cd4017be.dfc.lang.builders.ConstList;
-import cd4017be.dfc.lang.builders.Function;
 
 /**
  * @author cd4017be */
@@ -297,8 +295,6 @@ public class IntrinsicLoader {
 	 * @param impl module Intrinsics class
 	 * @return whether module is already fully loaded (skip regular loading) */
 	public static boolean preInit(Module module, Class<?> impl) {
-		module.assemblers.put("const", ConstList::new);
-		module.assemblers.put("func", Function::new);
 		if (impl != null) try {
 			Method m = impl.getDeclaredMethod("preInit", Module.class);
 			if ((boolean)m.invoke(null, module)) {

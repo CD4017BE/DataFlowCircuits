@@ -304,9 +304,9 @@ public class CircuitFile {
 			for (Value[] elements : elementss.keySet())
 				for (Value e : elements) {
 					os.writeInt(types    .get(e.type    ), types    .size() - 1);
-					os.writeInt(values   .get(e.value   ), values   .size() - 1);
-					os.writeInt(datas    .get(e.data    ), datas    .size() - 1);
 					os.writeInt(elementss.get(e.elements), elementss.size() - 1);
+					os.writeInt(datas    .get(e.data    ), datas    .size() - 1);
+					os.writeInt(values   .get(e.value   ), values   .size() - 1);
 				}
 			//write keys
 			for (String k : keys) os.writeUTF8(k);
@@ -338,13 +338,18 @@ public class CircuitFile {
 				values[i] = is.readI64();
 			//read data descriptions
 			byte[][] datas = new byte[is.readVarInt()][];
-			for (int i = 1; i < datas.length; i++)
-				is.readAll(datas[i] = new byte[is.readVarInt()]);
+			for (int i = 0; i < datas.length; i++) {
+				int l = is.readVarInt();
+				if (l == 0) datas[i] = Value.NO_DATA;
+				else is.readAll(datas[i] = new byte[l]);
+			}
 			//read elements descriptions
 			Value[][] elementss = new Value[is.readVarInt()][];
 			if (elementss.length == 0) throw new IOException("missing signals");
-			for (int i = 0; i < elementss.length; i++)
-				elementss[i] = new Value[is.readVarInt()];
+			for (int i = 0; i < elementss.length; i++) {
+				int l = is.readVarInt();
+				elementss[i] = l == 0 ? Value.NO_ELEM : new Value[l];
+			}
 			for (Value[] elements : elementss)
 				for (int i = 0; i < elements.length; i++) {
 					elements[i] = new Value(

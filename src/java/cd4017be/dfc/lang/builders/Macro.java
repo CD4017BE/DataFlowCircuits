@@ -168,4 +168,9 @@ public class Macro extends NodeContext implements NodeAssembler, ArgumentParser 
 		return null;
 	}
 
+	@Override
+	public boolean hasCircuit() {
+		return true;
+	}
+
 }
