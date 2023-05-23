@@ -4,7 +4,7 @@ import java.lang.invoke.MethodHandle;
 
 import cd4017be.dfc.lang.*;
 import cd4017be.dfc.lang.instructions.ConstantIns;
-import cd4017be.dfc.modules.core.Intrinsics;
+import modules.core.Intrinsics;
 
 /**
  * @author cd4017be */

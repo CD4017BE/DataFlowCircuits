@@ -12,7 +12,7 @@ public class Intrinsics {
 
 	public static Type INT, FLOAT, STRING;
 
-	@Init
+	@Init(phase = Init.POST)
 	public static void init(Module m) {
 		INT = m.findType("int");
 		FLOAT = m.findType("float");

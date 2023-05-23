@@ -217,6 +217,10 @@ public class IconAtlas {
 					continue;
 				}
 				AtlasSprite ns = atlas.place(icon.w, icon.h);
+				if (ns == null) {
+					System.err.println("Error: failed to rearrange, ran out of space!\nTODO: This error is not handled properly yet.");
+					continue;
+				}
 				for (
 					int i = 0, di = icon.w << levels + 2, i1 = di * (icon.h << levels),
 					j = (icon.y << levels) * s + (icon.x << levels + 2) + 2;

@@ -1,12 +1,10 @@
 package cd4017be.dfc.lang;
 
-import static java.lang.Math.min;
 import cd4017be.dfc.lang.Node.Vertex;
-import cd4017be.dfc.lang.instructions.ConstantIns;
 import cd4017be.dfc.lang.instructions.PackIns;
 import cd4017be.dfc.lang.instructions.UnpackIns;
-import cd4017be.dfc.modules.core.Intrinsics;
 import cd4017be.util.IndexedSet;
+import modules.loader.Intrinsics;
 
 /**
  * 
@@ -72,16 +70,6 @@ public class BlockDesc extends IndexedSet.Element {
 		makeOuts(node, idx);
 	}
 
-	public void makeArgNode(Instruction instr, NodeContext context, int idx) throws SignalError {
-		String[] args = context.args(this);
-		Node node = new Node(instr, Node.INSTR, ins.length + args.length, idx);
-		for (int i = 0; i < args.length; i++)//TODO change to parsers
-			node.in[i].connect(new Node(new ConstantIns(Intrinsics.parse(args[i], context, idx, def.args[min(i, def.args.length - 1)])), Node.INSTR, 0, idx));
-		for (int i = 0, j = args.length; i < ins.length; i++, j++)
-			ins[i] = node.in[j];
-		makeOuts(node, idx);
-	}
-
 	public void setIn(int i, Vertex v, int idx) throws SignalError {
 		if ((def.vaSize & BlockDef.VAR_IN) != 0 && i == def.ins.length - 1) {
 			int l = ins.length - def.ins.length + 1;
@@ -125,7 +113,8 @@ public class BlockDesc extends IndexedSet.Element {
 
 	public ArgumentParser parser(int argidx) {
 		ArgumentParser[] parsers = def.parsers;
-		return parsers[argidx < parsers.length ? argidx : parsers.length - 1];
+		int l = parsers.length;
+		return l == 0 ? Intrinsics.ERROR_ARG : parsers[argidx < l ? argidx : l - 1];
 	}
 
 	public void connectIn(int i, BlockDesc src, int pin) {

@@ -11,7 +11,8 @@ import org.lwjgl.system.MemoryStack;
 
 import cd4017be.dfc.editor.gui.*;
 import cd4017be.dfc.lang.BlockDef;
-import cd4017be.dfc.lang.Module;
+import cd4017be.dfc.lang.LoadingCache;
+import cd4017be.dfc.lang.Module.PaletteGroup;
 import cd4017be.util.AtlasSprite;
 
 
@@ -101,13 +102,16 @@ public class BlockList extends HoverRectangle implements Drawable {
 		this.y1 = y + positions[positions.length - 1] * 4;
 	}
 
-	public void selModule(Module m) {
-		blocks = m.blocks.values().toArray(BlockDef[]::new);
+	public void selModule(PaletteGroup pal) {
+		int l = pal == null ? 0 : pal.blocks.length;
+		blocks = new BlockDef[l];
 		final int rw = Palette.WIDTH >> 2;
 		int nr = 1, nc = 0, w = 0;
-		int l = blocks.length;
 		//pass 1: count rows and init icons
-		for (BlockDef def : blocks) {
+		for (int i = 0; i < l; i++) {
+			BlockDef def = pal.block(i);
+			if (def == null) def = LoadingCache.MISSING_BLOCK;
+			blocks[i] = def;
 			AtlasSprite icon = def.loadModel().icon;
 			if ((++nc) * (w = max(w, icon.w)) > rw) {
 				nr++;

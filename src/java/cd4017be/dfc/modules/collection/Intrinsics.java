@@ -1,8 +1,8 @@
 package cd4017be.dfc.modules.collection;
 
 import static cd4017be.dfc.lang.Value.NO_ELEM;
-import static cd4017be.dfc.modules.core.Intrinsics.dataRead8;
-import static cd4017be.dfc.modules.core.Intrinsics.elemNew;
+import static modules.core.Intrinsics.dataRead8;
+import static modules.core.Intrinsics.elemNew;
 import static modules.loader.Intrinsics.NULL;
 
 import java.nio.ByteBuffer;
@@ -20,7 +20,7 @@ public class Intrinsics {
 
 	public static Type VOID, INT, MAP, LIST;
 
-	@Init
+	@Init(phase = Init.POST)
 	public static void init(Module m) {
 		VOID = m.findType("void");
 		INT = m.findType("int");

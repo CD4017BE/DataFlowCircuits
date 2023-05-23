@@ -7,9 +7,9 @@ import cd4017be.dfc.lang.Node.SignalConflict;
 import cd4017be.dfc.lang.builders.ConstList;
 import cd4017be.dfc.lang.builders.Function;
 import cd4017be.dfc.lang.instructions.PackIns;
-import cd4017be.dfc.modules.core.Intrinsics;
 import cd4017be.util.IndexedSet;
 import cd4017be.util.Profiler;
+import modules.core.Intrinsics;
 
 /**
  * 

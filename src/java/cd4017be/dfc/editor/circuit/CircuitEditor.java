@@ -219,6 +219,7 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 			return;
 		}
 		Block editing = this.editing;
+		if (editing == null) return;
 		editing.args[editArg] = tf.text;
 		int dw = -editing.w;
 		editing.updateSize();

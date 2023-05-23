@@ -59,9 +59,21 @@ public class IntrinsicLoader {
 		String outType() default "";
 	}
 
+	/**Annotation for public static methods that perform initialization tasks for a module.
+	 * The method should have a single parameter which is the {@link Module} to initialize and return void.
+	 * @author cd4017be */
 	@Retention(RUNTIME)
 	@Target(METHOD)
-	public @interface Init {}
+	public @interface Init {
+		/** run and then skip module content loading */
+		int OVERRIDE = 0;
+		/** run before module content loading */
+		int PRE = 1;
+		/** run after module content loading */
+		int POST = 2;
+		/**@return when the method should be called (one of {@link #OVERRIDE}, {@link #PRE} or {@link #POST}) */
+		int phase();
+	}
 
 	private static final String
 	T_IMPL = getInternalName(IntrinsicLoader.class) + "$IMPL",
@@ -295,15 +307,18 @@ public class IntrinsicLoader {
 	 * @param impl module Intrinsics class
 	 * @return whether module is already fully loaded (skip regular loading) */
 	public static boolean preInit(Module module, Class<?> impl) {
-		if (impl != null) try {
-			Method m = impl.getDeclaredMethod("preInit", Module.class);
-			if ((boolean)m.invoke(null, module)) {
-				linkAll(module, impl);
-				return true;
+		if (impl == null) return false;
+		for (Method m : impl.getDeclaredMethods()) {
+			Init an = m.getAnnotation(Init.class);
+			if (an == null || an.phase() >= Init.POST) continue;
+			try {
+				m.invoke(null, module);
+			} catch(IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+				e.printStackTrace();
 			}
-		} catch(NoSuchMethodException e) {
-		} catch(SecurityException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-			e.printStackTrace();
+			if (an.phase() != Init.OVERRIDE) return false;
+			linkAll(module, impl);
+			return true;
 		}
 		return false;
 	}
@@ -314,7 +329,8 @@ public class IntrinsicLoader {
 		for (Method m : impl.getDeclaredMethods()) {
 			Impl an = m.getAnnotation(Impl.class);
 			if (an == null) {
-				if (m.isAnnotationPresent(Init.class)) init = m;
+				Init in = m.getAnnotation(Init.class);
+				if (in != null && in.phase() == Init.POST) init = m;
 				continue;
 			}
 			BlockDef def = mod.blocks.get(m.getName());

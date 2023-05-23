@@ -3,11 +3,11 @@ package cd4017be.dfc.editor.circuit;
 import static cd4017be.dfc.editor.Shaders.*;
 import static org.lwjgl.glfw.GLFW.*;
 
-import java.util.Map.Entry;
-
+import java.util.ArrayList;
 import cd4017be.dfc.editor.circuit.BlockList.BlockConsumer;
 import cd4017be.dfc.editor.gui.*;
 import cd4017be.dfc.lang.Module;
+import cd4017be.dfc.lang.Module.PaletteGroup;
 
 /**
  * @author CD4017BE */
@@ -18,7 +18,7 @@ public class Palette extends GuiGroup {
 	private final Label modsL, blocksL, blockName;
 	private final BlockList blocks;
 	private final int lastIH, lastD;
-	private Module[] modules;
+	private final ArrayList<PaletteGroup> palettes = new ArrayList<>();
 	private int msel;
 
 	public Palette(GuiGroup parent, BlockConsumer action) {
@@ -33,21 +33,23 @@ public class Palette extends GuiGroup {
 	}
 
 	public Palette setModule(Module m) {
-		if (modules != null && modules[0] == m) return this;
-		this.modules = new Module[m.imports.size() + 1];
+		if (palettes.size() != 0 && palettes.get(0).module == m) return this;
+		palettes.clear();
+		palettes.addAll(m.palettes.values());
+		for (Module mod : m.imports.values())
+			palettes.addAll(mod.ensureLoaded().palettes.values());
 		msel = 0;
 		chop(lastD, lastIH);
 		modsL.pos(0, 0, 12);
 		int i = 0, y = 0;
-		moduleButton(i, y += 12, "---");
-		modules[i++] = m;
-		for (Entry<String, Module> e : m.imports.entrySet()) {
-			moduleButton(i, y += 12, e.getKey());
-			modules[i++] = e.getValue();
-		}
+		for (PaletteGroup pg : palettes)
+			moduleButton(i++, y += 12, pg.name);
 		blocksL.pos(0, y += 12, 12);
 		blockName.pos(0, y += 12, 12);
-		selModule(0);
+		if (palettes.isEmpty()) {
+			blocks.selModule(null);
+			blockName.text("No palettes available");
+		} else selModule(0);
 		blocks.pos(0, y += 12, WIDTH);
 		return this;
 	}
@@ -60,7 +62,7 @@ public class Palette extends GuiGroup {
 
 	private void selModule(int i) {
 		((Button)inputHandlers.get(lastIH + msel)).color(FG_GRAY_L);
-		blocks.selModule(modules[msel = i].ensureLoaded());
+		blocks.selModule(palettes.get(msel = i));
 		((Button)inputHandlers.get(lastIH + msel)).color(FG_YELLOW_L);
 	}
 

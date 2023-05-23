@@ -23,6 +23,7 @@ public class Module {
 	public final LinkedHashMap<String, Module> imports = new LinkedHashMap<>();
 	public final HashMap<String, BlockDef> blocks = new LinkedHashMap<>();
 	public final HashMap<String, Type> types = new HashMap<>();
+	public final HashMap<String, PaletteGroup> palettes = new HashMap<>();
 	public final HashMap<String, Function<BlockDef, NodeAssembler>> assemblers = new HashMap<>();
 	public final HashMap<String, ArgumentParser> parsers = new HashMap<>();
 	private final Class<?> moduleImpl;
@@ -101,6 +102,30 @@ public class Module {
 	@Override
 	public String toString() {
 		return name;
+	}
+
+	public static class PaletteGroup {
+		public final Module module;
+		public final String name;
+		public final String[] blocks;
+
+		public PaletteGroup(Module module, String name, String[] blocks) {
+			this.module = module;
+			this.name = name;
+			this.blocks = blocks;
+			module.palettes.put(name, this);
+		}
+
+		public BlockDef block(int i) {
+			String block = blocks[i];
+			int p = block.indexOf('\0');
+			Module m = module;
+			if (p >= 0) {
+				m = LoadingCache.getModule(block.substring(0, p));
+				block = block.substring(p + 1);
+			}
+			return m.getBlock(block);
+		}
 	}
 
 }
