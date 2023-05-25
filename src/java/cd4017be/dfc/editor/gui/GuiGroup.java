@@ -27,8 +27,8 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 	public final ArrayList<Drawable> drawables = new ArrayList<>();
 	public final ArrayList<HoverInfo> infos = new ArrayList<>();
 	public final VertexArray sprites;
-	/** number of frames to redraw (2: both buffers, 1: front buffer, 0: up to date) */
-	protected byte redraw;
+	/** whether this part of the GUI needs to redraw its content */
+	protected boolean redraw;
 	/** scale < 0: pre hub, scale == 0: post hub, scale > 0: grid scale factor (active) */
 	protected int scale;
 	protected int mx, my;
@@ -175,17 +175,17 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 	@Override
 	public void redraw() {
 		if (scale <= 0) {
-			if (parent == null && CLEAR > 0) {
-				CLEAR--;
+			if (parent == null && CLEAR) {
+				CLEAR = false;
 				glDisable(GL_SCISSOR_TEST);
 				glClear(GL_COLOR_BUFFER_BIT);
 				glEnable(GL_SCISSOR_TEST);
 			}
-			redraw = 0;
+			redraw = false;
 			for (Drawable d : drawables)
 				d.redraw();
-		} else if (redraw > 0) {
-			redraw--;
+		} else if (redraw) {
+			redraw = false;
 			int w = x1 - x0, h = y1 - y0, y = parent.y1 - y1;
 			glViewport(x0, y, w, h);
 			glScissor(x0, y, w, h);
@@ -207,12 +207,13 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 	}
 
 	public void markDirty() {
-		redraw = 2;
+		if (redraw) return;
+		redraw = true;
 		if (parent != null) parent.markDirty();
 	}
 
 	public boolean isDirty() {
-		return redraw > 0;
+		return redraw;
 	}
 
 	private void onKeyInput(long window, int key, int scancode, int action, int mods) {
@@ -248,7 +249,7 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 				g.onResize(window, w, h);
 		if (parent == null) {
 			x1 = w; y1 = h;
-			CLEAR = 2;
+			CLEAR = true;
 		}
 	}
 
@@ -257,7 +258,7 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 		else for (Drawable d : drawables)
 			if (d instanceof GuiGroup g)
 				g.refresh(window);
-		if (parent == null) CLEAR = 2;
+		if (parent == null) CLEAR = true;
 	}
 
 	public void close(long window) {
@@ -300,7 +301,7 @@ public class GuiGroup extends HoverRectangle implements Drawable {
 		return false;
 	}
 
-	private static byte CLEAR;
+	private static boolean CLEAR;
 	private static AtomicLong LAST_MOVE = new AtomicLong();
 
 	public void move(boolean cancel) {

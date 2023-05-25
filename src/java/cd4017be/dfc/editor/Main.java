@@ -28,6 +28,7 @@ public class Main {
 		if(!glfwInit()) throw new RuntimeException("can't init GLFW");
 		//create window and GL context
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+		glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_FALSE);
 		long window = glfwCreateWindow(1024, 768, TITLE, NULL, NULL);
 		try {
 			if(window == NULL) throw new RuntimeException("can't create window");
@@ -50,7 +51,6 @@ public class Main {
 			if (!caps.OpenGL20)
 				throw new RuntimeException("OpenGL drivers are outdated! (version 2.0 or above required)");
 			//init rendering
-			glfwSwapInterval(1);
 			WINDOW = window;
 			ICONS = new IconAtlas(Shaders.blockP, 2, 16, 16, 256);
 			TRACES = new TraceAtlas(Shaders.traceP, 8, 256);
@@ -94,7 +94,7 @@ public class Main {
 		while(!glfwWindowShouldClose(window)) {
 			if (GUI.isDirty()) {
 				GUI.redraw();
-				glfwSwapBuffers(window);
+				glFinish();
 			}
 			checkGLErrors();
 			glfwWaitEvents();

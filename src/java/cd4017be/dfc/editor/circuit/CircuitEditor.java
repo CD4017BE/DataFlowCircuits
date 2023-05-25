@@ -137,8 +137,8 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 			reRunTypecheck = false;
 		}
 		//draw frame
-		if (redraw <= 0) return;
-		redraw--;
+		if (!redraw) return;
+		redraw = false;
 		int w = x1 - x0, h = y1 - y0, y = parent.y1 - y1;
 		glViewport(x0, y, w, h);
 		glScissor(x0, y, w, h);
