@@ -3,110 +3,20 @@ package cd4017be.dfc.modules.core;
 import static cd4017be.dfc.lang.Value.NO_DATA;
 import static cd4017be.dfc.lang.Value.NO_ELEM;
 import static cd4017be.dfc.modules.numext.Intrinsics.FLOAT;
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.nio.file.StandardOpenOption.*;
 import static modules.loader.Intrinsics.*;
 
-import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
-import java.nio.channels.*;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
 import java.util.ArrayList;
-import java.util.Set;
-
 import cd4017be.dfc.lang.*;
 import cd4017be.dfc.lang.Module;
-import cd4017be.dfc.lang.instructions.IntrinsicLoader.Impl;
 
 /**
  * 
  * @author CD4017BE */
 public class Intrinsics {
-
-	public static Type FILE;
-
-	//File operations:
-
-	@SuppressWarnings("unchecked")
-	private static final Set<OpenOption>[] FILE_MODES = new Set[] {
-		Set.of(READ),
-		Set.of(WRITE, CREATE, TRUNCATE_EXISTING),
-	};
-
-	@Impl(inputs = 2, useIp = true)
-	public static Value fileOpen(Interpreter ip, byte[] path, long mode) {
-		if (mode < 0 || mode >= FILE_MODES.length)
-			throw new IllegalArgumentException("invalid open mode");
-		try {
-			return new Value(FILE, NO_ELEM, NO_DATA, ip.addResource(
-				Files.newByteChannel(Path.of(new String(path, UTF_8)), FILE_MODES[(int)mode])
-			));
-		} catch(IOException e) {
-			return new Value(FILE, NO_ELEM, e.toString().getBytes(UTF_8), -1);
-		}
-	}
-
-	@Impl(inputs = 4, useIp = true)
-	public static Value fileRead(Interpreter ip, Value file, byte[] data, long ofs, long len) {
-		if (ip.getResource(file.value) instanceof ReadableByteChannel bc) {
-			ByteBuffer buf = ByteBuffer.wrap(data, (int)ofs, (int)len);
-			try {
-				while(buf.hasRemaining())
-					if (bc.read(buf) < 0)
-						throw new EOFException("EOF");
-			} catch(IOException e) {
-				try {
-					ip.removeResource(file.value).close();
-				} catch(IOException e1) {e1.printStackTrace();}
-				return new Value(FILE, NO_ELEM, e.getMessage().getBytes(UTF_8), -1);
-			}
-		}
-		return file;
-	}
-
-	@Impl(inputs = 4, useIp = true)
-	public static Value fileWrite(Interpreter ip, Value file, byte[] data, long ofs, long len) {
-		if (ip.getResource(file.value) instanceof WritableByteChannel bc) {
-			ByteBuffer buf = ByteBuffer.wrap(data, (int)ofs, (int)len);
-			try {
-				while(buf.hasRemaining())
-					if (bc.write(buf) < 0)
-						throw new EOFException("EOF");
-			} catch(IOException e) {
-				try {
-					ip.removeResource(file.value).close();
-				} catch(IOException e1) {e1.printStackTrace();}
-				return new Value(FILE, NO_ELEM, e.getMessage().getBytes(UTF_8), -1);
-			}
-		}
-		return file;
-	}
-
-	@Impl(inputs = 1, useIp = true, outType = "INT")
-	public static long fileLen(Interpreter ip, long file) {
-		if (ip.getResource(file) instanceof SeekableByteChannel sbc)
-			try {
-				return sbc.size() - sbc.position();
-			} catch(IOException e) {
-				return -1;
-			}
-		return 0;
-	}
-
-	@Impl(inputs = 1, useIp = true, outType = "INT")
-	public static long fileClose(Interpreter ip, long file) {
-		Closeable c = ip.removeResource(file);
-		if (c != null) try {
-			c.close();
-			return 0;
-		} catch(IOException e) {
-			e.printStackTrace();
-		}
-		return -1;
-	}
 	// helper functions
 
 	public static Value parse(String s, NodeContext context, int idx, String name) throws SignalError {

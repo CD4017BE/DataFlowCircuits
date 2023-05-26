@@ -6,6 +6,7 @@ import static org.lwjgl.glfw.GLFW.*;
 import java.util.ArrayList;
 import cd4017be.dfc.editor.circuit.BlockList.BlockConsumer;
 import cd4017be.dfc.editor.gui.*;
+import cd4017be.dfc.lang.BlockDef;
 import cd4017be.dfc.lang.Module;
 import cd4017be.dfc.lang.Module.PaletteGroup;
 
@@ -15,16 +16,24 @@ public class Palette extends GuiGroup {
 
 	public static final int WIDTH = 64;
 
-	private final Label modsL, blocksL, blockName;
+	private final Button moduleB;
+	private final Label blocksL, blockName;
 	private final BlockList blocks;
 	private final int lastIH, lastD;
 	private final ArrayList<PaletteGroup> palettes = new ArrayList<>();
+	private Module module;
 	private int msel;
 
 	public Palette(GuiGroup parent, BlockConsumer action) {
 		super(parent, 2);
 		parent.add(this);
-		this.modsL = new Label(this).text("Modules:").color(FG_WHITE);
+		this.moduleB = new Button(this).pos(0, 0, WIDTH, 12).action((b, mb) -> {
+			if (module == null) return;
+			BlockDef def = module.getBlock("");
+			if (def == null) return;
+			action.useBlock(def, GLFW_MOUSE_BUTTON_RIGHT);
+		});
+		new Label(this).pos(0, 12, 12).text("Palettes:").color(FG_WHITE);
 		this.blocksL = new Label(this).text("Blocks:").color(FG_WHITE);
 		this.blockName = new Label(this).color(FG_GREEN_XL);
 		this.blocks = new BlockList(this, blockName, action);
@@ -33,15 +42,16 @@ public class Palette extends GuiGroup {
 	}
 
 	public Palette setModule(Module m) {
-		if (palettes.size() != 0 && palettes.get(0).module == m) return this;
+		if (module == m) return this;
+		module = m;
+		moduleB.text(m.name);
 		palettes.clear();
 		palettes.addAll(m.palettes.values());
 		for (Module mod : m.imports.values())
 			palettes.addAll(mod.ensureLoaded().palettes.values());
 		msel = 0;
 		chop(lastD, lastIH);
-		modsL.pos(0, 0, 12);
-		int i = 0, y = 0;
+		int i = 0, y = 12;
 		for (PaletteGroup pg : palettes)
 			moduleButton(i++, y += 12, pg.name);
 		blocksL.pos(0, y += 12, 12);
