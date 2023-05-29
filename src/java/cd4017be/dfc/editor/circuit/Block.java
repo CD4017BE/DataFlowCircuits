@@ -10,7 +10,7 @@ import java.util.Arrays;
 import org.lwjgl.system.MemoryStack;
 import cd4017be.dfc.graphics.SpriteModel;
 import cd4017be.dfc.lang.*;
-import modules.loader.Intrinsics;
+import modules.dfc.module.Intrinsics;
 
 /**Represents an operand block.
  * @author CD4017BE */

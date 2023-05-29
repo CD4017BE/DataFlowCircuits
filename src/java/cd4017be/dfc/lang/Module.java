@@ -9,9 +9,10 @@ import java.util.function.Function;
 import org.lwjgl.system.MemoryStack;
 
 import cd4017be.dfc.editor.Main;
+import cd4017be.dfc.lang.builders.ConstList;
 import cd4017be.dfc.lang.instructions.IntrinsicLoader;
 import cd4017be.util.*;
-import modules.loader.Intrinsics;
+import modules.dfc.module.Intrinsics;
 
 /**
  * 
@@ -21,14 +22,15 @@ public class Module {
 	public final String name;
 	public final Path path;
 	public final LinkedHashMap<String, Module> imports = new LinkedHashMap<>();
-	public final HashMap<String, BlockDef> blocks = new LinkedHashMap<>();
-	public final HashMap<String, Type> types = new HashMap<>();
+	private final HashMap<String, BlockDef> blocks = new LinkedHashMap<>();
+	private final HashMap<String, Type> types = new HashMap<>();
 	public final HashMap<String, PaletteGroup> palettes = new HashMap<>();
 	public final HashMap<String, Function<BlockDef, NodeAssembler>> assemblers = new HashMap<>();
 	public final HashMap<String, ArgumentParser> parsers = new HashMap<>();
-	private final Class<?> moduleImpl;
+	final Class<?> moduleImpl;
+	private final ConstList cfg;
 	private boolean loaded;
-	int trace0 = -1;
+	int trace0 = -3;
 
 	public Module(String name, Path path, ClassLoader cl) {
 		this.name = name;
@@ -38,23 +40,24 @@ public class Module {
 			impl = cl.loadClass("modules." + name.replace('/', '.') + ".Intrinsics");
 			System.out.println("loaded intrinsics for module " + name);
 		} catch (ClassNotFoundException e) {
-		} catch(IllegalArgumentException | SecurityException | ClassCastException e) {
+		} catch (LinkageError e) {
 			e.printStackTrace();
 		}
 		this.moduleImpl = impl;
+		this.cfg = getBlock("").defineModule();
+		IntrinsicLoader.init(this, impl);
 		loadTraces();
-		this.loaded = IntrinsicLoader.preInit(this, impl);
 	}
 
 	public void loadTraces() {
-		if (Main.TRACES == null || trace0 >= 0) return;
-		trace0 = 2;
+		if (Main.TRACES == null || trace0 >= -2) return;
+		trace0 = 0;
 		Path path = this.path.resolve("traces.tga");
 		if (Files.exists(path)) try (
 			InputStream is = Files.newInputStream(path);
 			MemoryStack ms = MemoryStack.stackPush();
 		) {
-			trace0 = Main.TRACES.load(GLUtils.readTGA(is, ms), this);
+			trace0 = Main.TRACES.load(GLUtils.readTGA(is, ms), this) - 2;
 			System.out.println("loaded traces for module " + name);
 		} catch (IOException e) {
 			System.err.printf("can't load traces for module %s\n because %s\n", name, e);
@@ -65,34 +68,24 @@ public class Module {
 		loaded = false;
 	}
 
-	public Module ensureLoaded() {
-		//checking loaded twice may seem redundant but
-		//it avoids unnecessarily entering the synchronized block
-		if (!loaded) load();
+	public Module loadPalettes() {
+		if (!loaded) {
+			Intrinsics.loadModule(this);
+			loaded = true;
+		}
 		return this;
 	}
 
-	private synchronized void load() {
-		if (loaded) return;
-		Intrinsics.loadModule(this);
-		IntrinsicLoader.linkAll(this, moduleImpl);
-		System.out.println("loaded content of module " + name);
-		loaded = true;
-	}
-
-	public Type findType(String name) {
-		ensureLoaded();
-		Type vt = types.get(name);
-		if (vt != null) return vt;
-		for (Module m : imports.values())
-			if ((vt = m.ensureLoaded().types.get(name)) != null)
-				return vt;
-		return null;
+	public HashMap<String, Value> data() {
+		return cfg.signals();
 	}
 
 	public BlockDef getBlock(String name) {
-		ensureLoaded();
-		return blocks.get(name);
+		return blocks.computeIfAbsent(name, n -> new BlockDef(this, n));
+	}
+
+	public Type getType(String name) {
+		return types.computeIfAbsent(name, n -> new Type(this, n));
 	}
 
 	public Path icon(String name) {
@@ -107,25 +100,15 @@ public class Module {
 	public static class PaletteGroup {
 		public final Module module;
 		public final String name;
-		public final String[] blocks;
+		public final BlockDef[] blocks;
 
-		public PaletteGroup(Module module, String name, String[] blocks) {
+		public PaletteGroup(Module module, String name, BlockDef[] blocks) {
 			this.module = module;
 			this.name = name;
 			this.blocks = blocks;
 			module.palettes.put(name, this);
 		}
 
-		public BlockDef block(int i) {
-			String block = blocks[i];
-			int p = block.indexOf('\0');
-			Module m = module;
-			if (p >= 0) {
-				m = LoadingCache.getModule(block.substring(0, p));
-				block = block.substring(p + 1);
-			}
-			return m.getBlock(block);
-		}
 	}
 
 }

@@ -1,16 +1,17 @@
-package cd4017be.dfc.modules.collection;
+package modules.dfc.collection;
 
+import static cd4017be.dfc.lang.LoadingCache.LOADER;
 import static cd4017be.dfc.lang.Value.NO_ELEM;
-import static modules.core.Intrinsics.dataRead8;
-import static modules.core.Intrinsics.elemNew;
-import static modules.loader.Intrinsics.NULL;
+import static modules.dfc.core.Intrinsics.dataRead8;
+import static modules.dfc.core.Intrinsics.elemNew;
+import static modules.dfc.module.Intrinsics.NULL;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.ConcurrentModificationException;
+
+import cd4017be.dfc.lang.*;
 import cd4017be.dfc.lang.Module;
-import cd4017be.dfc.lang.Type;
-import cd4017be.dfc.lang.Value;
 import cd4017be.dfc.lang.instructions.IntrinsicLoader.Impl;
 import cd4017be.dfc.lang.instructions.IntrinsicLoader.Init;
 
@@ -20,12 +21,12 @@ public class Intrinsics {
 
 	public static Type VOID, INT, MAP, LIST;
 
-	@Init(phase = Init.POST)
+	@Init
 	public static void init(Module m) {
-		VOID = m.findType("void");
-		INT = m.findType("int");
-		MAP = m.findType("map");
-		LIST = m.findType("list");
+		VOID = LOADER.getType("void");
+		INT = LOADER.getType("int");
+		MAP = m.getType("map");
+		LIST = m.getType("list");
 	}
 
 	@Impl(inputs = 2, outType = "INT")

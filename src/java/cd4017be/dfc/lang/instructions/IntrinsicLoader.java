@@ -64,16 +64,7 @@ public class IntrinsicLoader {
 	 * @author cd4017be */
 	@Retention(RUNTIME)
 	@Target(METHOD)
-	public @interface Init {
-		/** run and then skip module content loading */
-		int OVERRIDE = 0;
-		/** run before module content loading */
-		int PRE = 1;
-		/** run after module content loading */
-		int POST = 2;
-		/**@return when the method should be called (one of {@link #OVERRIDE}, {@link #PRE} or {@link #POST}) */
-		int phase();
-	}
+	public @interface Init {}
 
 	private static final String
 	T_IMPL = getInternalName(IntrinsicLoader.class) + "$IMPL",
@@ -304,48 +295,35 @@ public class IntrinsicLoader {
 	}
 
 	/**@param module the module to init
-	 * @param impl module Intrinsics class
-	 * @return whether module is already fully loaded (skip regular loading) */
-	public static boolean preInit(Module module, Class<?> impl) {
-		if (impl == null) return false;
+	 * @param impl module Intrinsics class */
+	public static void init(Module module, Class<?> impl) {
+		if (impl == null) return;
 		for (Method m : impl.getDeclaredMethods()) {
-			Init an = m.getAnnotation(Init.class);
-			if (an == null || an.phase() >= Init.POST) continue;
+			if (!m.isAnnotationPresent(Init.class)) continue;
 			try {
 				m.invoke(null, module);
 			} catch(IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 				e.printStackTrace();
 			}
-			if (an.phase() != Init.OVERRIDE) return false;
-			linkAll(module, impl);
-			return true;
+			break;
 		}
-		return false;
 	}
 
-	public static void linkAll(Module mod, Class<?> impl) {
+	/**@param def block to link with its intrinsic implementation
+	 * @param impl module Intrinsics class */
+	public static void linkBlock(BlockDef def, Class<?> impl) {
 		if (impl == null) return;
-		Method init = null;
 		for (Method m : impl.getDeclaredMethods()) {
+			if (!m.getName().equals(def.id)) continue;
 			Impl an = m.getAnnotation(Impl.class);
-			if (an == null) {
-				Init in = m.getAnnotation(Init.class);
-				if (in != null && in.phase() == Init.POST) init = m;
-				continue;
-			}
-			BlockDef def = mod.blocks.get(m.getName());
-			if (def == null) continue;
+			if (an == null) continue;
 			if (DEBUG) System.out.printf("link: %s -> %s\n", def.name, m);
 			try {
 				def.assembler.setIntrinsic(linkIntrinsic(m, an));
 			} catch (RuntimeException e) {
 				System.err.printf("failed to link intrinsic for %s : %s\n", def, e);
 			}
-		}
-		if (init != null) try {
-			init.invoke(null, mod);
-		} catch(IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-			e.printStackTrace();
+			break;
 		}
 	}
 

@@ -5,7 +5,7 @@ import cd4017be.dfc.lang.Interpreter;
 import cd4017be.dfc.lang.Node;
 import cd4017be.dfc.lang.SignalError;
 import cd4017be.dfc.lang.Value;
-import modules.loader.Intrinsics;
+import modules.dfc.module.Intrinsics;
 
 /**
  * @author cd4017be */

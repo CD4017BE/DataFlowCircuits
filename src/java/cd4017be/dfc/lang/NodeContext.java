@@ -9,7 +9,7 @@ import cd4017be.dfc.lang.builders.Function;
 import cd4017be.dfc.lang.instructions.PackIns;
 import cd4017be.util.IndexedSet;
 import cd4017be.util.Profiler;
-import modules.core.Intrinsics;
+import modules.dfc.core.Intrinsics;
 
 /**
  * 
@@ -21,7 +21,7 @@ public class NodeContext {
 	public final Value[] env;
 
 	public NodeContext(BlockDef def, boolean env) {
-		this.def = def;
+		this.def = def.defined();
 		this.env = env ? Intrinsics.elemNew((def.assembler instanceof Function f ? f.par : def.ins.length) + 1) : null;
 	}
 
@@ -38,7 +38,7 @@ public class NodeContext {
 		for (int i = 0; i < blocks.size(); i++) {
 			BlockDesc block = blocks.get(i);
 			try {
-				block.def.assembler.assemble(block, this, i);
+				block.def.defined().assembler.assemble(block, this, i);
 			} catch (SignalConflict e) {
 				throw new SignalError(i, "signal conflict");
 			}

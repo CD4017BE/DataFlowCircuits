@@ -1,9 +1,11 @@
-package modules.core;
+package modules.dfc.core;
 
+import static cd4017be.dfc.lang.LoadingCache.LOADER;
 import static cd4017be.dfc.lang.Value.NO_ELEM;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static modules.loader.Intrinsics.NULL;
+import static modules.dfc.module.Intrinsics.NULL;
+
 import java.util.*;
 
 import cd4017be.dfc.lang.*;
@@ -108,8 +110,8 @@ public class Intrinsics {
 		}
 	}
 
-	@Init(phase = Init.PRE)
-	public static void preInit(Module m) {
+	@Init
+	public static void init(Module m) {
 		m.assemblers.put("macro", Macro::new);
 		m.assemblers.put("func", Function::new);
 		m.assemblers.put("const", ConstList::new);
@@ -119,13 +121,9 @@ public class Intrinsics {
 		m.assemblers.put("loop", def -> LOOP);
 		m.parsers.put("str", STRING_ARG);
 		m.parsers.put("int", INT_ARG);
-	}
-
-	@Init(phase = Init.POST)
-	public static void postInit(Module m) {
-		VOID = modules.loader.Intrinsics.VOID;
-		STRING = modules.loader.Intrinsics.STRING;
-		INT = modules.loader.Intrinsics.INT;
+		VOID = LOADER.getType("void");
+		STRING = LOADER.getType("string");
+		INT = LOADER.getType("int");
 	}
 
 	@Impl(inputs = 2, outType = "VOID")

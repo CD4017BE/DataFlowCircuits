@@ -4,7 +4,7 @@ import cd4017be.dfc.lang.Node.Vertex;
 import cd4017be.dfc.lang.instructions.PackIns;
 import cd4017be.dfc.lang.instructions.UnpackIns;
 import cd4017be.util.IndexedSet;
-import modules.loader.Intrinsics;
+import modules.dfc.module.Intrinsics;
 
 /**
  * 
@@ -40,7 +40,8 @@ public class BlockDesc extends IndexedSet.Element {
 	public boolean equals(Object obj) {
 		if (obj == this) return true;
 		return obj instanceof BlockDesc other
-		&& def == other.def && outs == other.outs
+		&& def == other.def
+		&& outs.length == other.outs.length
 		&& ins.length == other.ins.length
 		&& args.length == other.args.length;
 	}

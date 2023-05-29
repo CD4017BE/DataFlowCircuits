@@ -1,5 +1,6 @@
-package modules.io;
+package modules.dfc.io;
 
+import static cd4017be.dfc.lang.LoadingCache.LOADER;
 import static cd4017be.dfc.lang.Value.NO_DATA;
 import static cd4017be.dfc.lang.Value.NO_ELEM;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -11,15 +12,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
-import cd4017be.dfc.lang.ArgumentParser;
-import cd4017be.dfc.lang.BlockDesc;
-import cd4017be.dfc.lang.Interpreter;
+
+import cd4017be.dfc.lang.*;
 import cd4017be.dfc.lang.Module;
-import cd4017be.dfc.lang.Node;
-import cd4017be.dfc.lang.NodeContext;
-import cd4017be.dfc.lang.SignalError;
-import cd4017be.dfc.lang.Type;
-import cd4017be.dfc.lang.Value;
 import cd4017be.dfc.lang.instructions.ConstantIns;
 import cd4017be.dfc.lang.instructions.IntrinsicLoader.Impl;
 import cd4017be.dfc.lang.instructions.IntrinsicLoader.Init;
@@ -52,15 +47,11 @@ public class Intrinsics {
 		}
 	};
 
-	@Init(phase = Init.PRE)
-	public static void preInit(Module m) {
+	@Init
+	public static void init(Module m) {
 		m.parsers.put("filemode", FILE_MODE);
-	}
-
-	@Init(phase = Init.POST)
-	public static void postInit(Module m) {
-		FILE = m.types.get("file");
-		INT = modules.loader.Intrinsics.INT;
+		FILE = m.getType("file");
+		INT = LOADER.getType("int");
 	}
 
 	//File operations:

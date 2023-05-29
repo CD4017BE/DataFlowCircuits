@@ -43,12 +43,12 @@ public class Palette extends GuiGroup {
 
 	public Palette setModule(Module m) {
 		if (module == m) return this;
-		module = m;
+		module = m.loadPalettes();
 		moduleB.text(m.name);
 		palettes.clear();
 		palettes.addAll(m.palettes.values());
 		for (Module mod : m.imports.values())
-			palettes.addAll(mod.ensureLoaded().palettes.values());
+			palettes.addAll(mod.loadPalettes().palettes.values());
 		msel = 0;
 		chop(lastD, lastIH);
 		int i = 0, y = 12;

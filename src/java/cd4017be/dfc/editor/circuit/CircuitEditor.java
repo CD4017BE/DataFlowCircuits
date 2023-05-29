@@ -13,7 +13,7 @@ import cd4017be.dfc.lang.builders.ConstList;
 import cd4017be.dfc.lang.builders.Function;
 import cd4017be.dfc.lang.builders.Macro;
 import cd4017be.util.*;
-import modules.loader.Intrinsics;
+import modules.dfc.module.Intrinsics;
 
 import static cd4017be.dfc.editor.Main.*;
 import static cd4017be.dfc.editor.Shaders.*;
@@ -569,7 +569,7 @@ public class CircuitEditor extends GuiGroup implements BlockConsumer {
 			if (!(ctrl && selBlock != null)) break;
 			BlockDef def = selBlock.def;
 			def = def.assembler.openCircuit(selBlock, context);
-			if (def != null && def.assembler.hasCircuit())
+			if (def != null && def.defined().assembler.hasCircuit())
 				open(def);
 			else panel.statusMsg("no circuit associated with " + selBlock.def);
 			break;

@@ -8,6 +8,8 @@ import java.util.function.Function;
 import cd4017be.dfc.editor.Main;
 import cd4017be.dfc.graphics.SpriteModel;
 import cd4017be.dfc.lang.builders.ConstList;
+import cd4017be.dfc.lang.instructions.IntrinsicLoader;
+import modules.dfc.module.Intrinsics;
 
 /**
  * 
@@ -15,34 +17,31 @@ import cd4017be.dfc.lang.builders.ConstList;
 public class BlockDef {
 
 	public static final String[] EMPTY_IO = {};
+	public static final ArgumentParser[] EMPTY_ARG = {};
 	static final int VAR_OUT = 1, VAR_IN = 2, VAR_ARG = 4;
 
 	public final Module module;
 	public final String id;
-	public final Path modelPath;
-	public final String[] ins, outs, args;
-	public final ArgumentParser[] parsers;
-	public final NodeAssembler assembler;
-	public final int vaSize;
+	public String[] ins, outs, args;
+	public ArgumentParser[] parsers;
+	public NodeAssembler assembler;
+	public Path modelPath;
 	public SpriteModel model;
 	public String name;
 	public Instruction impl;
+	public int vaSize;
+	private boolean defined;
 
-	public BlockDef(Module module) {
-		this(
-			module, "", ConstList::new,
-			EMPTY_IO, EMPTY_IO, EMPTY_IO, new ArgumentParser[0],
-			LOADER.icon("module"), "Module Definition"
-		);
-	}
-
-	public BlockDef(
-		Module module, String id, Function<BlockDef, NodeAssembler> assembler,
-		String[] ins, String[] outs, String[] args, ArgumentParser[] parsers,
-		Path model, String name
-	) {
+	BlockDef(Module module, String id) {
 		this.module = module;
 		this.id = id;
+	}
+
+	public BlockDef define(
+		Function<BlockDef, NodeAssembler> assembler, String[] ins, String[] outs,
+		String[] args, ArgumentParser[] parsers, Path model, String name
+	) {
+		if (defined) throw new IllegalStateException("allready defined " + this);
 		this.ins = ins;
 		this.outs = outs;
 		this.args = args;
@@ -51,7 +50,23 @@ public class BlockDef {
 		this.name = name;
 		this.vaSize = isVar(ins) & VAR_IN | isVar(outs) & VAR_OUT | isVar(args) & VAR_ARG;
 		this.assembler = assembler.apply(this);
-		module.blocks.put(id, this);
+		IntrinsicLoader.linkBlock(this, module.moduleImpl);
+		this.defined = true;
+		return this;
+	}
+
+	public ConstList defineModule() {
+		return (ConstList)define(
+			ConstList::new, EMPTY_IO, EMPTY_IO, EMPTY_IO, EMPTY_ARG,
+			(LOADER == null ? module : LOADER).icon("module"), "Module Definition"
+		).assembler;
+	}
+
+	public BlockDef defined() {
+		if (defined) return this;
+		if (Intrinsics.loadBlock(this)) return this;
+		System.err.printf("missing block definition %s\n", this);
+		return define(Intrinsics.ERROR, EMPTY_IO, EMPTY_IO, EMPTY_IO, EMPTY_ARG, null, "undefined block");
 	}
 
 	private static int isVar(String[] io) {
@@ -88,6 +103,7 @@ public class BlockDef {
 	}
 
 	public SpriteModel loadModel() {
+		defined();
 		if (model != null) return model;
 		return model = modelPath != null ? Main.ICONS.get(modelPath) : Main.ICONS.missing();
 	}

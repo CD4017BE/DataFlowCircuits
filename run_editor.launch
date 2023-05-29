@@ -16,5 +16,6 @@
     <booleanAttribute key="org.eclipse.jdt.launching.ATTR_USE_CLASSPATH_ONLY_JAR" value="false"/>
     <stringAttribute key="org.eclipse.jdt.launching.MAIN_TYPE" value="cd4017be.dfc.editor.Main"/>
     <stringAttribute key="org.eclipse.jdt.launching.MODULE_NAME" value="BlockIDE"/>
+    <stringAttribute key="org.eclipse.jdt.launching.PROGRAM_ARGUMENTS" value="./dfc-workspace demo"/>
     <stringAttribute key="org.eclipse.jdt.launching.PROJECT_ATTR" value="DataFlowCircuits"/>
 </launchConfiguration>

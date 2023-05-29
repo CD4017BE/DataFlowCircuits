@@ -16,6 +16,6 @@
     <booleanAttribute key="org.eclipse.jdt.launching.ATTR_USE_CLASSPATH_ONLY_JAR" value="false"/>
     <stringAttribute key="org.eclipse.jdt.launching.MAIN_TYPE" value="cd4017be.util.SpriteModelConverter"/>
     <stringAttribute key="org.eclipse.jdt.launching.MODULE_NAME" value="DataFlowCircuits"/>
-    <stringAttribute key="org.eclipse.jdt.launching.PROGRAM_ARGUMENTS" value="src/java/modules/loader/icons src/resources/textures"/>
+    <stringAttribute key="org.eclipse.jdt.launching.PROGRAM_ARGUMENTS" value="src/resources/textures src/java/modules/dfc/core/icons src/java/modules/dfc/io/icons src/java/modules/dfc/module/icons"/>
     <stringAttribute key="org.eclipse.jdt.launching.PROJECT_ATTR" value="DataFlowCircuits"/>
 </launchConfiguration>

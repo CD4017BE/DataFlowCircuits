@@ -1,6 +1,8 @@
-package cd4017be.dfc.modules.numext;
+package modules.dfc.math;
 
+import static cd4017be.dfc.lang.LoadingCache.LOADER;
 import static java.nio.charset.StandardCharsets.US_ASCII;
+
 import cd4017be.dfc.lang.Module;
 import cd4017be.dfc.lang.Type;
 import cd4017be.dfc.lang.instructions.IntrinsicLoader.Impl;
@@ -12,11 +14,11 @@ public class Intrinsics {
 
 	public static Type INT, FLOAT, STRING;
 
-	@Init(phase = Init.POST)
+	@Init
 	public static void init(Module m) {
-		INT = m.findType("int");
-		FLOAT = m.findType("float");
-		STRING = m.findType("string");
+		INT = LOADER.getType("int");
+		STRING = LOADER.getType("string");
+		FLOAT = m.getType("float");
 	}
 
 	//unsigned int operations:

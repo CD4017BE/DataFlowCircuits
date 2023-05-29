@@ -24,6 +24,11 @@ public class Main {
 	private static final String TITLE = "Data flow circuit IDE";
 
 	public static void main(String[] args) {
+		if (args.length < 2) {
+			System.out.println("invalid arguments, expected: <root-dir> <module> <block>");
+			return;
+		}
+		
 		glfwSetErrorCallback((err, desc)-> System.out.format("GLFW Error %d: %s\n", err, MemoryUtil.memASCII(desc)));
 		if(!glfwInit()) throw new RuntimeException("can't init GLFW");
 		//create window and GL context
@@ -60,7 +65,7 @@ public class Main {
 			TEXT_CURSOR = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
 			SEL_CURSOR = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
 			GUI = new GuiGroup(window);
-			init(window);
+			init(window, args);
 			//main loop
 			run(window);
 			//cleanup
@@ -80,10 +85,10 @@ public class Main {
 	public static long WINDOW,
 	MAIN_CURSOR, VRESIZE_CURSOR, MOVE_CURSOR, TEXT_CURSOR, SEL_CURSOR;
 
-	static void init(long window) {
-		LoadingCache.addRootPath(Path.of("src/dfc/"));
+	static void init(long window, String[] args) {
+		LoadingCache.addRootPath(Path.of(args[0]));
 		new CircuitEditor(GUI).open(
-			LoadingCache.getModule("test").getBlock("")
+			LoadingCache.getModule(args[1].replace('\\', '/')).getBlock(args.length > 2 ? args[2].replace('\\', '/') : "")
 		);
 		int[] w = new int[1], h = new int[1];
 		glfwGetFramebufferSize(window, w, h);

@@ -1,4 +1,4 @@
-package modules.loader;
+package modules.dfc.module;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -20,6 +20,8 @@ import cd4017be.dfc.lang.instructions.IntrinsicLoader.Init;
  * @author cd4017be */
 public class Intrinsics {
 
+	private static final boolean BOOTSTRAP = false;
+
 	public static Type VOID, STRING, INT, BLOCKTYPE, ARGTYPE, TYPE, MODULE, BLOCK, MODEL, PINS, PALETTE;
 	public static Value NULL;
 
@@ -27,10 +29,11 @@ public class Intrinsics {
 	(arg, block, argidx, context, idx) -> {
 		throw new SignalError(idx, "Invalid Argument");
 	};
-	public static final Function<BlockDef, NodeAssembler> ERROR = 
-	def -> (block, context, idx) -> {
+	public static final NodeAssembler ERROR_ASM =
+	(block, context, idx) -> {
 		throw new SignalError(idx, "Invalid Block");
 	};
+	public static final Function<BlockDef, NodeAssembler> ERROR = def -> ERROR_ASM;
 	public static final NodeAssembler OUTPUT = (block, context, idx) -> {
 		String[] args = context.args(block);
 		if (block.outs() != 0 || args.length != block.ins())
@@ -49,8 +52,7 @@ public class Intrinsics {
 		for (int i = 0; i < args.length; i++)
 			block.outs[i] = block.parser(i).parse(args[i], block, i, context, idx);
 	};
-	private static final Function<BlockDef, NodeAssembler> IMPORT =
-	def -> new NodeAssembler() {
+	private static final NodeAssembler IMPORT = new NodeAssembler() {
 		@Override
 		public void assemble(BlockDesc block, NodeContext context, int idx) throws SignalError {
 			INPUT.assemble(block, context, idx);
@@ -71,15 +73,17 @@ public class Intrinsics {
 		}
 	};
 
-	@Init(phase = Init.OVERRIDE)
+	@Init
 	public static void init(Module m) {
 		//NodeAssemblers
-		Function<BlockDef, NodeAssembler> in, out, func;
+		Function<BlockDef, NodeAssembler> in, out, func, imp;
 		m.assemblers.put("error", ERROR);
 		m.assemblers.put("in", in = def -> INPUT);
 		m.assemblers.put("out", out = def -> OUTPUT);
 		m.assemblers.put("func", func = cd4017be.dfc.lang.builders.Function::new);
 		m.assemblers.put("const", ConstList::new);
+		m.assemblers.put("import", imp = def -> IMPORT);
+		m.assemblers.put("blockdef", BLOCKDEF);
 		//ArgumentParsers
 		ArgumentParser io, str, num, bt, at, def, module, model;
 		m.parsers.put("error", ERROR_ARG);
@@ -145,10 +149,7 @@ public class Intrinsics {
 				BlockDesc block, int arg, ArrayList<String> list, NodeContext context
 			) {
 				Module m = module(context, block, 0);
-				if (m == null) return;
-				list.addAll(m.types.keySet());
-				list.addAll(m.blocks.keySet());
-				list.addAll(m.palettes.keySet());
+				if (m != null) list.addAll(m.data().keySet());
 			}
 		});
 		m.parsers.put("module", module = new ArgumentParser() {
@@ -188,130 +189,138 @@ public class Intrinsics {
 				} catch(IOException e) {}
 			}
 		});
-		//Blocks
-		new BlockDef(m, "missing", ERROR,
-			BlockDef.EMPTY_IO,
-			BlockDef.EMPTY_IO,
-			BlockDef.EMPTY_IO,
-			new ArgumentParser[0],
-			null, "Missing Block"
-		);
-		new BlockDef(m, "in", in,
-			BlockDef.EMPTY_IO,
-			new String[] {"signal#"},
-			new String[] {"name#"},
-			new ArgumentParser[] {io},
-			m.icon("in"),
-			"use named signal"
-		);
-		new BlockDef(m, "out", out,
-			new String[] {"signal#"},
-			BlockDef.EMPTY_IO,
-			new String[] {"name#"},
-			new ArgumentParser[] {io},
-			m.icon("out"),
-			"define named signal"
-		);
-		new BlockDef(m, "newstr", in,
-			BlockDef.EMPTY_IO,
-			new String[] {"string#"},
-			new String[] {"text#"},
-			new ArgumentParser[] {str},
-			m.icon("str"),
-			"string constant"
-		);
-		new BlockDef(m, "import", IMPORT,
-			BlockDef.EMPTY_IO,
-			new String[] {"module#"},
-			new String[] {"path#"},
-			new ArgumentParser[] {module},
-			m.icon("import"),
-			"import module"
-		);
-		new BlockDef(m, "getmodel", func,
-			new String[] {"module"},
-			new String[] {"model"},
-			new String[] {"path"},
-			new ArgumentParser[] {model},
-			m.icon("model"),
-			"block icon"
-		);
-		new BlockDef(m, "getblocktype", func,
-			new String[] {"module"},
-			new String[] {"blocktype"},
-			new String[] {"name"},
-			new ArgumentParser[] {bt},
-			m.icon("blocktype"),
-			"block type"
-		);
-		new BlockDef(m, "getargtype", func,
-			new String[] {"module"},
-			new String[] {"argtype"},
-			new String[] {"name"},
-			new ArgumentParser[] {at},
-			m.icon("argtype"),
-			"argument type"
-		);
-		new BlockDef(m, "getdef", func,
-			new String[] {"module"},
-			new String[] {"object"},
-			new String[] {"name"},
-			new ArgumentParser[] {def},
-			m.icon("getdef"),
-			"get module element"
-		);
-		new BlockDef(m, "newpins", func,
-			new String[] {"argtype#"},
-			new String[] {"iolist"},
-			new String[] {"name#"},
-			new ArgumentParser[] {str},
-			m.icon("pins"),
-			"I/O name list"
-		);
-		new BlockDef(m, "defblock", BLOCKDEF,
-			new String[] {"blocktype", "inlist", "outlist", "arglist", "model", "displayname"},
-			BlockDef.EMPTY_IO,
-			new String[] {"name"},
-			new ArgumentParser[] {str},
-			m.icon("block"),
-			"define block"
-		);
-		new BlockDef(m, "deftype", func,
-			BlockDef.EMPTY_IO,
-			BlockDef.EMPTY_IO,
-			new String[] {"name", "offcolor", "oncolor"},
-			new ArgumentParser[] {str, num, num},
-			m.icon("type"),
-			"define signal type"
-		);
-		new BlockDef(m, "defpalette", func,
-			new String[] {"block#"},
-			BlockDef.EMPTY_IO,
-			new String[] {"name"},
-			new ArgumentParser[] {str},
-			m.icon("palette"),
-			"define block palette"
-		);
-		//Palettes
-		new PaletteGroup(m, "module creation", new String[] {
-			"loader\0in", "loader\0out", "loader\0newstr", "loader\0import",
-			"loader\0getmodel", "loader\0getblocktype", "loader\0getargtype", "loader\0getdef",
-			"loader\0newpins", "loader\0defblock", "loader\0deftype", "loader\0defpalette"
-		});
 		//Types
-		VOID = new Type(m, "void", 1, 0);
-		STRING = new Type(m, "string", 2, 2);
-		INT = new Type(m, "int", 3, 3);
-		MODULE = new Type(m, "module", 4, 4);
-		MODEL = new Type(m, "model", 5, 5);
-		BLOCK = new Type(m, "block", 6, 6);
-		TYPE = new Type(m, "type", 7, 7);
-		PINS = new Type(m, "pins", 8, 8);
-		BLOCKTYPE = new Type(m, "blocktype", 9, 9);
-		ARGTYPE = new Type(m, "argtype", 10, 10);
-		PALETTE = new Type(m, "palette", 11, 11);
+		VOID = m.getType("void");
+		STRING = m.getType("string");
+		INT = m.getType("int");
+		MODULE = m.getType("module");
+		MODEL = m.getType("model");
+		BLOCK = m.getType("block");
+		TYPE = m.getType("type");
+		PINS = m.getType("pins");
+		BLOCKTYPE = m.getType("blocktype");
+		ARGTYPE = m.getType("argtype");
+		PALETTE = m.getType("palette");
 		//Values
 		NULL = new Value(VOID, Value.NO_ELEM, Value.NO_DATA, 0);
+		
+		/* The following model content is usually defined through a circuit.
+		 * But in order to create that circuit in the first place,
+		 * the circuit editor needs these to be already defined.
+		 * The solution to this chicken-egg-problem is hard-coding. */
+		if (!BOOTSTRAP) return;
+		VOID.define(1, 0);
+		STRING.define(2, 2);
+		INT.define(3, 3);
+		MODULE.define(4, 4);
+		MODEL.define(5, 5);
+		BLOCK.define(6, 6);
+		TYPE.define(7, 7);
+		PINS.define(8, 8);
+		BLOCKTYPE.define(9, 9);
+		ARGTYPE.define(10, 10);
+		PALETTE.define(11, 11);
+		//Blocks
+		BlockDef[] pal = {
+			m.getBlock("in").define(in,
+				BlockDef.EMPTY_IO,
+				new String[] {"signal#"},
+				new String[] {"name#"},
+				new ArgumentParser[] {io},
+				m.icon("in"),
+				"use named signal"
+			),
+			m.getBlock("out").define(out,
+				new String[] {"signal#"},
+				BlockDef.EMPTY_IO,
+				new String[] {"name#"},
+				new ArgumentParser[] {io},
+				m.icon("out"),
+				"define named signal"
+			),
+			m.getBlock("newstr").define(in,
+				BlockDef.EMPTY_IO,
+				new String[] {"string#"},
+				new String[] {"text#"},
+				new ArgumentParser[] {str},
+				m.icon("str"),
+				"string constant"
+			),
+			m.getBlock("import").define(imp,
+				BlockDef.EMPTY_IO,
+				new String[] {"module#"},
+				new String[] {"path#"},
+				new ArgumentParser[] {module},
+				m.icon("import"),
+				"import module"
+			),
+			m.getBlock("getmodel").define(func,
+				new String[] {"module"},
+				new String[] {"model"},
+				new String[] {"path"},
+				new ArgumentParser[] {model},
+				m.icon("model"),
+				"block icon"
+			),
+			m.getBlock("getblocktype").define(func,
+				new String[] {"module"},
+				new String[] {"blocktype"},
+				new String[] {"name"},
+				new ArgumentParser[] {bt},
+				m.icon("blocktype"),
+				"block type"
+			),
+			m.getBlock("getargtype").define(func,
+				new String[] {"module"},
+				new String[] {"argtype"},
+				new String[] {"name"},
+				new ArgumentParser[] {at},
+				m.icon("argtype"),
+				"argument type"
+			),
+			m.getBlock("getdef").define(func,
+				new String[] {"module"},
+				new String[] {"object"},
+				new String[] {"name"},
+				new ArgumentParser[] {def},
+				m.icon("getdef"),
+				"get module element"
+			),
+			m.getBlock("newpins").define(func,
+				new String[] {"argtype#"},
+				new String[] {"iolist"},
+				new String[] {"name#"},
+				new ArgumentParser[] {str},
+				m.icon("pins"),
+				"I/O name list"
+			),
+			m.getBlock("defblock").define(BLOCKDEF,
+				new String[] {"blocktype", "inlist", "outlist", "arglist", "model", "displayname"},
+				BlockDef.EMPTY_IO,
+				new String[] {"name"},
+				new ArgumentParser[] {str},
+				m.icon("block"),
+				"define block"
+			),
+			m.getBlock("deftype").define(func,
+				BlockDef.EMPTY_IO,
+				BlockDef.EMPTY_IO,
+				new String[] {"name", "offcolor", "oncolor"},
+				new ArgumentParser[] {str, num, num},
+				m.icon("type"),
+				"define signal type"
+			),
+			m.getBlock("defpalette").define(func,
+				new String[] {"block#"},
+				BlockDef.EMPTY_IO,
+				new String[] {"name"},
+				new ArgumentParser[] {str},
+				m.icon("palette"),
+				"define block palette"
+			)
+		};
+		//Palettes
+		new PaletteGroup(m, "module creation", pal);
 	}
 
 	private static Module module(NodeContext context, BlockDesc block, int in) {
@@ -365,54 +374,55 @@ public class Intrinsics {
 	/**Load the contents for the given module from its data structure file.
 	 * @param m module to load */
 	public static void loadModule(Module m) {
-		BlockDef mdef = m.blocks.get("");
-		m.imports.clear();
-		m.blocks.clear();
-		m.types.clear();
-		m.palettes.clear();
-		if (mdef == null) mdef = new BlockDef(m);
-		else m.blocks.put(mdef.id, mdef);
-		if (!(mdef.assembler instanceof ConstList cl)) return;
-		var content = cl.signals();
+		var content = m.data();
 		for (Entry<String, Value> e : content.entrySet()) {
 			String k = e.getKey();
 			Value v = e.getValue();
 			if (v.type == MODULE) {
 				m.imports.put(k, LoadingCache.getModule(v.dataAsString()));
-			} else if (v.type == BLOCK) {
-				if (!k.equals(v.dataAsString())) continue;
-				if (v.elements.length < 6) continue;
-				var type = blocktype(v.elements[0], m);
-				if (type == null) type = ERROR;
-				var parsers = parsers(v.elements[3], m);
-				var ins = pins(v.elements[1]);
-				var outs = pins(v.elements[2]);
-				var args = pins(v.elements[3]);
-				var model = model(v.elements[4], m);
-				var name = v.elements[5].dataAsString();
-				new BlockDef(m, k, type, ins, outs, args, parsers, model, name);
-			} else if (v.type == TYPE) {
-				if (!k.equals(v.dataAsString())) continue;
-				new Type(m, k, (int)v.value, (int)(v.value >> 32));
 			} else if (v.type == PALETTE) {
-				String[] pal;
+				BlockDef[] pal;
 				if (v.elements.length > 0 && v.elements[0].type == MODULE) {
 					Module module = LoadingCache.getModule(v.elements[0].dataAsString());
-					PaletteGroup pg = module.ensureLoaded().palettes.get(v.dataAsString());
+					PaletteGroup pg = module.loadPalettes().palettes.get(v.dataAsString());
 					if (pg == null) continue;
 					pal = pg.blocks;
 				} else if (k.equals(v.dataAsString())) {
-					pal = new String[v.elements.length];
+					pal = new BlockDef[v.elements.length];
 					for (int i = 0; i < pal.length; i++) {
 						Value el = v.elements[i];
-						pal[i] = (el.elements.length > 0 && el.elements[0].type == MODULE
-							? el.elements[0].dataAsString() : m.name)
-							+ '\0' + el.dataAsString();
+						Module mod = el.elements.length > 0 && el.elements[0].type == MODULE
+							? LoadingCache.getModule(el.elements[0].dataAsString()) : m;
+						pal[i] = mod.getBlock(el.dataAsString());
 					}
 				} else continue;
 				new PaletteGroup(m, k, pal);
 			}
 		}
+	}
+
+	public static boolean loadBlock(BlockDef def) {
+		Value v = def.module.data().get(def.id);
+		if (v == null || v.type != BLOCK || v.elements.length < 6 || !def.id.equals(v.dataAsString()))
+			return false;
+		var type = blocktype(v.elements[0], def.module);
+		if (type == null) type = ERROR;
+		var parsers = parsers(v.elements[3], def.module);
+		var ins = pins(v.elements[1]);
+		var outs = pins(v.elements[2]);
+		var args = pins(v.elements[3]);
+		var model = model(v.elements[4], def.module);
+		var name = v.elements[5].dataAsString();
+		def.define(type, ins, outs, args, parsers, model, name);
+		return true;
+	}
+
+	public static boolean loadType(Type type) {
+		Value v = type.module.data().get(type.id);
+		if (v == null || v.type != TYPE || !type.id.equals(v.dataAsString()))
+			return false;
+		type.define((int)(v.value >> 32), (int)v.value);
+		return true;
 	}
 
 	private static Value packWithModule(Value v, Value module) {
@@ -487,8 +497,8 @@ public class Intrinsics {
 	}
 
 	@Impl(inputs = 3)
-	public static Value deftype(byte[] name, long offcolor, long oncolor) {
-		return new Value(TYPE, Value.NO_ELEM, name, offcolor & 0xffffffffL | oncolor << 32);
+	public static Value deftype(byte[] name, long oncolor, long offcolor) {
+		return new Value(TYPE, Value.NO_ELEM, name, oncolor & 0xffffffffL | offcolor << 32);
 	}
 
 	@Impl(inputs = 2)
@@ -503,14 +513,11 @@ public class Intrinsics {
 	public static Value getdef(Value name, Value module) {
 		if (module.type != MODULE)
 			throw new IllegalArgumentException("invalid module");
-		String s = name.dataAsString();
-		Module m = LoadingCache.getModule(module.dataAsString()).ensureLoaded();
-		Type type;
-		if (m.blocks.containsKey(s)) type = BLOCK;
-		else if (m.types.containsKey(s)) type = TYPE;
-		else if (m.palettes.containsKey(s)) type = PALETTE;
-		else throw new IllegalArgumentException("element not found");
-		return new Value(type, new Value[] {module}, name.data, 0);
+		Value v = LoadingCache.getModule(module.dataAsString()).data().get(name.dataAsString());
+		if (v == null) throw new IllegalArgumentException("element not found");
+		if (v.type == MODULE || v.elements.length == 1 && v.elements[0].type == MODULE)
+			return v;
+		return new Value(v.type, new Value[] {module}, v.data, 0);
 	}
 
 }

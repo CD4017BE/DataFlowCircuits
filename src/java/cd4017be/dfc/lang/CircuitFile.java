@@ -89,19 +89,19 @@ public class CircuitFile {
 		if (mref) modules[0] = m;
 		for (int i = mref ? 1 : 0; i < modules.length; i++) {
 			String name = mref ? is.readL8UTF8() : is.readUTF8();
-			Module mod = modules[i] = mref ? m.imports.get(name) : LoadingCache.getModule(name);
-			if (mod != null) mod.ensureLoaded();
-			else System.out.printf("missing module '%s'\n", name);
+			Module mod = mref ? m.imports.get(name) : LoadingCache.getModule(name);
+			if (mod == null) {
+				System.out.printf("missing module '%s'\n", name);
+				mod = LoadingCache.LOADER;
+			}
+			modules[i] = mod;
 		}
 		BlockDesc[] defs = new BlockDesc[is.readVarInt()];
 		for (int i = 0; i < defs.length; i++) {
 			Module mod = modules[is.readInt(modules.length - 1)];
 			int out = is.readU8(), in = is.readU8(), arg = is.readU8();
 			String name = mref ? is.readL8UTF8() : is.readUTF8();
-			BlockDef def = null;
-			if (mod != null && (def = mod.blocks.get(name)) == null)
-				System.out.printf("missing block '%s' in module '%s'\n", name, mod);
-			defs[i] = new BlockDesc(def != null ? def : LoadingCache.MISSING_BLOCK, out, in, arg);
+			defs[i] = new BlockDesc(mod.getBlock(name), out, in, arg);
 		}
 		String[] args = new String[is.readVarInt()];
 		for (int i = 0; i < args.length; i++)
@@ -323,14 +323,12 @@ public class CircuitFile {
 			//read module descriptions
 			Module[] modules = new Module[is.readVarInt()];
 			for (int i = 0; i < modules.length; i++)
-				modules[i] = LoadingCache.getModule(is.readUTF8()).ensureLoaded();
+				modules[i] = LoadingCache.getModule(is.readUTF8());
 			//read type descriptions
 			Type[] types = new Type[is.readVarInt()];
 			for (int i = 0; i < types.length; i++) {
 				Module m = modules[is.readInt(modules.length - 1)];
-				String name = is.readUTF8();
-				if ((types[i] = m.types.get(name)) == null)
-					throw new IOException("missing type " + name + " in module " + m);
+				types[i] = m.getType(is.readUTF8());
 			}
 			//read value descriptions
 			long[] values = new long[is.readVarInt()];

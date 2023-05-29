@@ -1,5 +1,7 @@
 package cd4017be.dfc.lang;
 
+import static java.io.File.separatorChar;
+
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.net.URISyntaxException;
@@ -15,7 +17,6 @@ public class LoadingCache {
 	private static final Path BUILTIN_ROOT;
 	private static final HashMap<String, WeakReference<Module>> MODULES = new HashMap<>();
 	public static final Module LOADER;
-	public static final BlockDef MISSING_BLOCK;
 	static {
 		try {
 			BUILTIN_ROOT = Path.of(LoadingCache.class.getResource("/modules/").toURI());
@@ -23,8 +24,7 @@ public class LoadingCache {
 			throw new RuntimeException(e);
 		}
 		ROOTS.add(new ModuleRoot(BUILTIN_ROOT, LoadingCache.class.getClassLoader()));
-		LOADER = getModule("loader");
-		MISSING_BLOCK = LOADER.getBlock("missing");
+		LOADER = getModule("dfc/module");
 	}
 
 	public static void addRootPath(Path path) {
@@ -65,7 +65,8 @@ public class LoadingCache {
 						}
 						String name = path.getFileName().toString();
 						if (name.startsWith("module.") || name.startsWith("Intrinsics.")) {
-							list.add(root.path.relativize(dir).toString());
+							name = root.path.relativize(dir).normalize().toString();
+							list.add(name.replace(separatorChar, '/'));
 							dirs.subList(p, dirs.size()).clear();
 							break;
 						}
