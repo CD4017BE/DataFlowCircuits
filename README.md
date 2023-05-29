@@ -3,51 +3,49 @@
 As part of my Minecraft mod RedstoneControl, I had previously implemented a runtime compiler that would translate a data flow graph into JVM byte code in order to efficiently emulate player build logic circuits.
 Now I decided to turn that concept into a complete programming language for writing regular programs that run on computers in the real world.
 
-The language is strongly statically typed and quite low level in its core with pointers and manual memory management.
-But most of the time types are automatically derived from input signals through compile-time polymorphic operators. And higher level abstractions will be possible via macro blocks (not implemented yet). 
+The language is real-time interpreted, meaning it runs immediately as you program it and lets you see the intermediate computation results by hovering over wires in the editor. It has only one data type called "signal" which is effectively a struct passed by value that consists of a type token, a reference to an array of signals, a reference to an array of bytes and a 64-bit integer. Thereby signals serve as universal building blocks for any data structure.
+
+The main purpose of this language is to serve as preprocessor / type checker / generator for other programming languages or data formats but it can also be used directly to explore data structures, test algorithms or perform small quick tasks. The syntax can be extended via macros and java plug-ins if necessary.
 
 ![](example.png)
+*The above example parses a TGA-image file and turns it into a formatted grid of ARGB-hex codes that is output into a text file.*
 
-The editor is using OpenGL-3.2 and GLFW from [LWJGL-3.2.1](https://www.lwjgl.org/) for rendering and inputs.
-The compiler is currently outputting LLVM-IR that can be executed or further processed with [LLVM](https://llvm.org/).
+The editor is using OpenGL-2.0 and GLFW from [LWJGL-3.2.1](https://www.lwjgl.org/) for rendering and inputs.
 
 ## Features (implemented and planned):
-**Compiler:**
-- [x] LLVM-IR target (allows optimization and compiling to many other systems)
-- [ ] JVM-bytecode target
-- [ ] GLSL shader target
 
 **Language:**
-- [x] type system based on compile time constants
-- [x] arithmetic, logic and comparison with integers and booleans
-- [x] floating point arithmetic and comparison
+- [x] arithmetic, logic and comparison with integers
+- [ ] floating point arithmetic
+- [x] signal and byte array operations for creating arbitrary data structures
+- [ ] hash maps and array lists (in standard library)
 - [x] conditional switches
 - [x] loops
-- [x] struct data types bundling values together to feed through switches and other structures.
-- [x] memory access
-- [x] typed pointers
 - [x] functions
-- [x] declaration of external functions
-- [x] name tags for structure, function parameter and bundle elements
-- [ ] dynamic memory allocation
-- [ ] type casting operators
-- [ ] macro blocks
-- [ ] built in multi-threading
+- [x] macro blocks
+- [ ] polymorphic function calls based on type tokens
+- [x] basic file I/O
+- [ ] advanced file I/O (interaction with directory structures)
+- [x] Java Plugin API (but subject to changes)
 
 **Editor:**
-- [x] primitive data flow graph editor
-- [x] load / save source graph files (currently single hard-coded file path)
-- [x] type-checking in editor
-- [ ] real time type checking in editor
+- [x] data flow graph editor
 - [x] panning and zooming
+- [x] load / save source graph files
+- [x] real time evaluation in editor
 - [x] multi-selection for movement and deletion
-- [x] menu for multiple source files
 - [x] improved block palette
+- [x] project organization into modules
+- [ ] menu for project overview (module list)
 - [ ] improved signal type inspection (as tree)
+- [x] text auto-completion for block arguments
+- [ ] copy & paste
+- [ ] undo
 - [ ] routing assistance
+- [ ] customizable key-binds
+- [ ] multiple open circuit tabs
 
 ## Editor Controls
-The editor is started by running the class `cd4017be/dfc/editor/Main.java`:
 
 Scroll on the board to zoom the view.  
 Right-click-drag on the board to move it around.  
@@ -63,32 +61,34 @@ Left-click ...
 - drag from an empty position to select multiple blocks and traces to be moved after release. Then click again to finish movement.
 
 Key-bindings:
-- `CTRL`+`O`: open a circuit schematic file.
-- `CTRL`+`S`: save circuit schematic to current file.
-- `CTRL`+`SHIFT`+`S`: save circuit schematic to a different file.
-- `CTRL`+`T`: run the type checker to show traces colored depending on data type. If the type check fails, an error message is displayed at the bottom of the screen and the problematic circuit block is selected.
-- `CTRL`+`H`: reload external declarations specified in a `.c` file with the same name as the current circuit schematic.
-- `CTRL`+`SHIFT`+`H`: reload external declarations without preprocessing the `.c` file through cpp.
-- `CTRL`+`M`: run the compiler, creating a LLVM_IR assembly file in same place as the circuit schematic with `.dfc` replaced by `.ll`.
-- `CTRL`+`SHIFT`+`M`: compile with explicit variable assignments and labels included.
+- `CTRL`+`W`: close application
+- `CTRL`+`O`: open the circuit schematic for the hovered block. Blocks can also be opened via right-click in the block palette. Note: save your current circuit schematic before opening another one!
+- `CTRL`+`S`: save currently open circuit schematic (will also recompute signal table for `const` blocks).
 - `CTRL`+`D`: remove all orphaned traces.
 - `DELETE`: delete the selected circuit block.
+- `HOME`: center view on (0, 0) origin of the circuit board.
 
 In text editing:
-- `<-`, `->`: move cursor left / right
-- `HOME`, `END`: move cursor to start / end
-- `SHIFT` + (`<-`, `->`, `HOME`, `END`): select text
+- `LEFT_ARROW`, `RIGHT_ARROW`: move cursor left / right
+- `SHIFT` + (`LEFT_ARROW`, `RIGHT_ARROW`) or drag mouse cursor: select text
 - `CTRL`+`A`: select all
 - `CTRL`+`C`: copy selected text to clip-board
 - `CTRL`+`V`: insert clip-board at cursor
 - `CTRL`+`X`: cut selected text and store it in clip-board
 - `BACKSPACE`, `DELETE`: delete selected text or character left/right to cursor.
+- `UP_ARROW`, `DOWN_ARROW`: change selected auto-completion to next up/down in list.
+- `TAB`: apply selected auto-completion.
+- `ENTER`, `NP_ENTER` or click outside text-field: finish editing (changes will take effect).
+- `PAGE_UP`, `PAGE_DOWN`: move cursor to next argument up/down in current block.
 
-Note: Editing a block's text may change its size but the I/O pins will stay at their old position unless you move the block afterwards.
+Note: Editing a block's text may change its size and move it around but it will not automatically connect I/O pins this way.
 
-## Compiled Programs
-The compiled program can be executed from command line using the LLVM interpreter like so `lli test.ll ...`, with optional arguments passed to the program.
+## Running the Application
 
-This will call the program's main function that outputs the integer number of command-line arguments followed by a pointer to array of pointer to array of byte containing the arguments as null-terminated strings.
+The editor is started by running its main class `cd4017be.dfc.editor.Main.java` or the compiled jar archive with:
 
-For more info about the language see the [documentation](doc/signals.md)
+`java -jar DataFlowCircuits.jar <project-root-dir> <module-name> <block-name>`
+
+Replace `<project-root-dir>` with the root directory that contains all your modules as sub directories.
+Replace `<module-name>` with the name of the module to open (modules are saved in `<project-root-dir>/<module-name>/module.dfc`).
+And replace `<block-name>` with the name of the block to open within that module (blocks are saved in `<project-root-dir>/<module-name>/blocks/<block-name>.dfc`). The `<block-name>` argument can be omitted to open the module definition instead.
