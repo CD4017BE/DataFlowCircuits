@@ -3,15 +3,11 @@ package cd4017be.util;
 import static java.lang.Math.min;
 import static org.lwjgl.opengl.GL20C.*;
 
-import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
-import javax.imageio.ImageIO;
-
-import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL20C;
 import org.lwjgl.system.MemoryStack;
 
@@ -63,32 +59,6 @@ public class GLUtils {
 			throw new ShaderCompileException(info);
 		}
 		return id;
-	}
-
-	/**Loads a 2D texture.
-	 * @param target
-	 * @param path resource to load from
-	 * @param fmt internal format for GL texture
-	 * @see GL11C#glTexImage2D glTexImage2D(target, 0, fmt, ...) */
-	public static void loadTexture2D(int target, String path, int fmt) throws IOException {
-		InputStream is = GLUtils.class.getResourceAsStream(path);
-		if (is == null) throw new FileNotFoundException(path);
-		loadTexture2D(target, is, fmt);
-		is.close();
-	}
-
-	/**Loads a 2D texture.
-	 * @param target
-	 * @param is source to load from
-	 * @param fmt internal format for GL texture
-	 * @throws IOException
-	 * @see GL11C#glTexImage2D glTexImage2D(target, 0, fmt, ...) */
-	public static void loadTexture2D(int target, InputStream is, int fmt) throws IOException {
-		BufferedImage bi = ImageIO.read(is);
-		int w = bi.getWidth(), h = bi.getHeight();
-		int[] pixels = new int[w * h];
-		bi.getRGB(0, 0, w, h, pixels, 0, w);
-		glTexImage2D(target, 0, fmt, w, h, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pixels);
 	}
 
 	/**Setup and enable a vertex attribute.

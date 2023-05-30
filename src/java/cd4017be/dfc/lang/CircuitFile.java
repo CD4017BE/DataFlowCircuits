@@ -1,11 +1,9 @@
 package cd4017be.dfc.lang;
 
-import static java.nio.file.Files.*;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.*;
 import java.net.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
 import cd4017be.dfc.editor.circuit.Block;
 import cd4017be.dfc.editor.circuit.Trace;
@@ -44,15 +42,9 @@ public class CircuitFile {
 		}
 	}
 
-	public static Path path(BlockDef def) {
-		return def.module.path.resolve(
-			def.id.isEmpty() ? "module.dfc" : "blocks/" + def.id + ".dfc"
-		);
-	}
-
 	public static ExtInputStream readBlock(BlockDef def) throws IOException {
 		assert(Thread.holdsLock(def));
-		return new ExtInputStream(newInputStream(path(def)));
+		return new ExtInputStream(def.circuitURL().openStream());
 	}
 
 	public static record Layout(Block[] blocks, Trace[] traces) {}
@@ -127,6 +119,16 @@ public class CircuitFile {
 		return blocks;
 	}
 
+	public static OutputStream output(URL url) throws IOException {
+		try {
+			File file = new File(url.toURI());
+			file.getParentFile().mkdirs();
+			return new FileOutputStream(file);
+		} catch(URISyntaxException | IllegalArgumentException e) {
+			throw new IOException("resource is read only: " + e.getMessage());
+		}
+	}
+
 	private static <T> int index(LinkedHashMap<T, Integer> map, T elem) {
 		int l = map.size();
 		Integer i = map.putIfAbsent(elem, l);
@@ -136,9 +138,7 @@ public class CircuitFile {
 	public static void writeLayout(BlockDef def, List<Block> blocks, IndexedSet<Trace> traces)
 	throws IOException {
 		assert(Thread.holdsLock(def));
-		Path path = path(def);
-		createDirectories(path.getParent());
-		try(ExtOutputStream os = new ExtOutputStream(newOutputStream(path))) {
+		try(ExtOutputStream os = new ExtOutputStream(output(def.circuitURL()))) {
 			BitSet visited = new BitSet(traces.size());
 			int no = 0, ni = 0;
 			for (int i = 0; i < blocks.size(); i++) {
@@ -243,37 +243,28 @@ public class CircuitFile {
 		}
 	}
 
-	private static Path constPath(BlockDef def) {
-		return def.module.path.resolve(
-			def.id.isEmpty() ? "module.ds" : "out/" + def.id + ".ds"
-		);
-	}
-
 	public static void writeSignals(BlockDef def, String[] keys, Value[] signals) throws IOException {
 		if (signals.length != keys.length)
 			throw new IllegalArgumentException("keys & signals must have same length");
-		Path path = constPath(def);
-		Files.createDirectories(path.getParent());
-		//build all object indexes
-		LinkedHashMap<Module, Integer> modules = new LinkedHashMap<>();
-		LinkedHashMap<Type, Integer> types = new LinkedHashMap<>();
-		LinkedHashMap<Long, Integer> values = new LinkedHashMap<>();
-		LinkedHashMap<byte[], Integer> datas = new LinkedHashMap<>();
-		LinkedHashMap<Value[], Integer> elementss = new LinkedHashMap<>();
-		ArrayList<Value[]> stack = new ArrayList<>();
-		elementss.put(signals, 0);
-		stack.add(signals);
-		while(!stack.isEmpty())
-			for (Value val : stack.remove(stack.size() - 1)) {
-				if (types.putIfAbsent(val.type, types.size()) == null)
-					modules.putIfAbsent(val.type.module, modules.size());
-				values.putIfAbsent(val.value, values.size());
-				datas.putIfAbsent(val.data, datas.size());
-				if (elementss.putIfAbsent(val.elements, elementss.size()) == null)
-					stack.add(val.elements);
-			}
-		//write file
-		try (ExtOutputStream os = new ExtOutputStream(newOutputStream(path))) {
+		try (ExtOutputStream os = new ExtOutputStream(output(def.dataURL()))) {
+			//build all object indexes
+			LinkedHashMap<Module, Integer> modules = new LinkedHashMap<>();
+			LinkedHashMap<Type, Integer> types = new LinkedHashMap<>();
+			LinkedHashMap<Long, Integer> values = new LinkedHashMap<>();
+			LinkedHashMap<byte[], Integer> datas = new LinkedHashMap<>();
+			LinkedHashMap<Value[], Integer> elementss = new LinkedHashMap<>();
+			ArrayList<Value[]> stack = new ArrayList<>();
+			elementss.put(signals, 0);
+			stack.add(signals);
+			while(!stack.isEmpty())
+				for (Value val : stack.remove(stack.size() - 1)) {
+					if (types.putIfAbsent(val.type, types.size()) == null)
+						modules.putIfAbsent(val.type.module, modules.size());
+					values.putIfAbsent(val.value, values.size());
+					datas.putIfAbsent(val.data, datas.size());
+					if (elementss.putIfAbsent(val.elements, elementss.size()) == null)
+						stack.add(val.elements);
+				}
 			//write header
 			os.write32(SIGNAL_MAGIC);
 			os.write8(SIGNAL_VERSION);
@@ -314,8 +305,7 @@ public class CircuitFile {
 	}
 
 	public static void readSignals(BlockDef def, HashMap<String, Value> signals) throws IOException {
-		Path path = constPath(def);
-		try(ExtInputStream is = new ExtInputStream(newInputStream(path))) {
+		try(ExtInputStream is = new ExtInputStream(def.dataURL().openStream())) {
 			//read header
 			checkMagic(is, SIGNAL_MAGIC);
 			if (is.readU8() != SIGNAL_VERSION)
@@ -361,6 +351,62 @@ public class CircuitFile {
 			for (Value val : elementss[0])
 				signals.put(is.readUTF8(), val);
 		}
+	}
+
+	public static String[] getIndex(URL root, Indexer idx, boolean indexfile) {
+		if (indexfile)
+			try (InputStream is = new URL(root, ".index").openStream()) {
+				byte[] data = is.readAllBytes();
+				int l = 0;
+				for (byte b : data) if (b == 10) l++;
+				String[] dirs = new String[l];
+				for (int i0 = 0, i = i0, j = 0; i < data.length; i++)
+					if (data[i] == 10) {
+						dirs[j++] = new String(data, i0, i - i0, UTF_8);
+						i0 = i + 1;
+					}
+				Arrays.sort(dirs);
+				return dirs;
+			} catch(IOException e) {}
+		File rootf;
+		try {
+			rootf = new File(root.toURI());
+		} catch (URISyntaxException | IllegalArgumentException e) {
+			System.err.printf("can't index %s\n", root);
+			return new String[0];
+		}
+		int l = rootf.getPath().length() + 1;
+		ArrayList<String> index = new ArrayList<>();
+		ArrayList<File> stack = new ArrayList<>();
+		stack.add(rootf);
+		for (int p; (p = stack.size() - 1) >= 0;) {
+			File dir = stack.remove(p);
+			File[] files = dir.listFiles();
+			if (files == null) continue;
+			for (File file : files)
+				if (file.isDirectory())
+					stack.add(file);
+				else if (idx.visit(file, l, index)) {
+					stack.subList(p, stack.size()).clear();
+					break;
+				}
+		}
+		String[] dirs = index.toArray(String[]::new);
+		Arrays.sort(dirs);
+		if (indexfile)
+			try (FileOutputStream os = new FileOutputStream(new File(rootf, ".index"))) {
+				for (String s : dirs) {
+					os.write(s.getBytes(UTF_8));
+					os.write(10);
+				}
+				System.out.printf("indexed %s\n", root);
+			} catch(IOException e) {}
+		return dirs;
+	}
+
+	@FunctionalInterface
+	public interface Indexer {
+		boolean visit(File file, int rootLen, ArrayList<String> index);
 	}
 
 }

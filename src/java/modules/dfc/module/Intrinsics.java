@@ -1,8 +1,6 @@
 package modules.dfc.module;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map.Entry;
@@ -178,15 +176,7 @@ public class Intrinsics {
 				BlockDesc block, int arg, ArrayList<String> list, NodeContext context
 			) {
 				Module m = module(context, block, 0);
-				if (m == null) return;
-				Path root = m.path.resolve("icons");
-				try {
-					Files.walk(root).forEach(path -> {
-						String name = root.relativize(path).toString();
-						if (name.endsWith(".tga"))
-							list.add(name.substring(0, name.length() - 4));
-					});
-				} catch(IOException e) {}
+				if (m != null) m.listIcons(list);
 			}
 		});
 		//Types
@@ -365,7 +355,7 @@ public class Intrinsics {
 		return parsers;
 	}
 
-	private static Path model(Value v, Module m) {
+	private static URL model(Value v, Module m) {
 		if (v.type != MODEL) return null;
 		Module m1 = v.elements.length > 0 ? module(v.elements[0]) : null;
 		return (m1 != null ? m1 : m).icon(v.dataAsString());

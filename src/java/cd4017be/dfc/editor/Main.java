@@ -4,8 +4,8 @@ import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
 
-import java.net.URISyntaxException;
-import java.nio.file.Path;
+import java.io.File;
+import java.net.*;
 import java.util.ArrayDeque;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GLCapabilities;
@@ -86,9 +86,14 @@ public class Main {
 	MAIN_CURSOR, VRESIZE_CURSOR, MOVE_CURSOR, TEXT_CURSOR, SEL_CURSOR;
 
 	static void init(long window, String[] args) {
-		LoadingCache.addRootPath(Path.of(args[0]));
+		try {
+			LoadingCache.addRootPath(new File(args[0]).toURI().toURL(), false);
+		} catch(MalformedURLException e) {
+			throw new RuntimeException(e);
+		}
 		new CircuitEditor(GUI).open(
-			LoadingCache.getModule(args[1].replace('\\', '/')).getBlock(args.length > 2 ? args[2].replace('\\', '/') : "")
+			LoadingCache.getModule(args[1].replace('\\', '/'))
+			.getBlock(args.length > 2 ? args[2].replace('\\', '/') : "")
 		);
 		int[] w = new int[1], h = new int[1];
 		glfwGetFramebufferSize(window, w, h);
@@ -135,14 +140,6 @@ public class Main {
 					: "unknown OpenGL Error code: %X @ %s\n",
 				err, msg, Thread.currentThread().getStackTrace()[depth + 2]
 			);
-		}
-	}
-
-	public static Path resourcePath(String path) {
-		try {
-			return Path.of(Main.class.getResource(path).toURI());
-		} catch(URISyntaxException e) {
-			throw new IllegalArgumentException(e);
 		}
 	}
 

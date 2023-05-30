@@ -4,12 +4,10 @@ import static cd4017be.dfc.editor.Main.checkGLErrors;
 import static java.lang.Math.*;
 import static org.lwjgl.opengl.GL20C.*;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.lang.ref.WeakReference;
+import java.net.URL;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
 
 import org.lwjgl.system.MemoryStack;
@@ -23,7 +21,7 @@ import cd4017be.util.GLUtils;
  * @author cd4017be */
 public class IconAtlas {
 
-	private final HashMap<Path, WeakReference<SpriteModel>> loaded = new HashMap<>();
+	private final HashMap<URL, WeakReference<SpriteModel>> loaded = new HashMap<>();
 	private final SpriteModel missing;
 	private final BitSet usedIds = new BitSet();
 	private AtlasSprite atlas;
@@ -113,19 +111,22 @@ public class IconAtlas {
 	}
 
 	public SpriteModel get(String internalPath) {
-		return get(Main.resourcePath(internalPath));
+		return get(Main.class.getResource(internalPath));
 	}
 
-	public SpriteModel get(Path path) {
+	public SpriteModel get(URL path) {
 		if (path == null) return missing;
 		WeakReference<SpriteModel> r = loaded.get(path);
 		SpriteModel m = r == null ? null : r.get();
 		return m != null ? m : load(path);
 	}
 
-	private SpriteModel load(Path path) {
-		try (MemoryStack ms = MemoryStack.stackPush()){
-			byte[] data = Files.readAllBytes(path);
+	private SpriteModel load(URL path) {
+		try (
+			InputStream is = path.openStream();
+			MemoryStack ms = MemoryStack.stackPush()
+		) {
+			byte[] data = is.readAllBytes();
 			SpriteModel m = new SpriteModel();
 			m.readFromImageMetadata(data);
 			load(GLUtils.readTGA(new ByteArrayInputStream(data), ms), m);

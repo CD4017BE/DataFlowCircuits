@@ -1,27 +1,28 @@
 package cd4017be.dfc.lang;
 
-import static java.nio.file.Files.readAllBytes;
-
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.nio.file.Path;
 
 /**
  * 
  * @author CD4017BE */
 public class PluginClassLoader extends ClassLoader {
 
-	private final Path path;
+	private final URL path;
 
-	public PluginClassLoader(Path path) {
+	public PluginClassLoader(URL path) {
 		this.path = path;
 	}
 
 	@Override
 	protected URL findResource(String name) {
+		if (name.startsWith("/modules/")) name = name.substring(9);
+		else if (name.startsWith("modules/")) name = name.substring(8);
+		else return null;
 		try {
-			return path.resolve(name).toUri().toURL();
+			return new URL(path, name);
 		} catch(MalformedURLException e) {
 			return null;
 		}
@@ -29,8 +30,10 @@ public class PluginClassLoader extends ClassLoader {
 
 	@Override
 	protected Class<?> findClass(String name) throws ClassNotFoundException {
-		try {
-			byte[] data = readAllBytes(path.resolve(name + ".class"));
+		URL url = findResource(name + ".class");
+		if (url == null) throw new ClassNotFoundException("resource not found");
+		try (InputStream is = url.openStream()) {
+			byte[] data = is.readAllBytes();
 			return defineClass(name, data, 0, data.length);
 		} catch (IOException e) {
 			throw new ClassNotFoundException(null, e);

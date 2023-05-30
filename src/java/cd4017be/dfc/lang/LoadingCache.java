@@ -1,12 +1,11 @@
 package cd4017be.dfc.lang;
 
-import static java.io.File.separatorChar;
-
-import java.io.IOException;
+import java.io.*;
 import java.lang.ref.WeakReference;
-import java.net.URISyntaxException;
-import java.nio.file.*;
+import java.net.*;
 import java.util.*;
+
+import cd4017be.dfc.lang.CircuitFile.Indexer;
 
 /**
  * 
@@ -14,68 +13,66 @@ import java.util.*;
 public class LoadingCache {
 
 	private static final ArrayList<ModuleRoot> ROOTS = new ArrayList<>();
-	private static final Path BUILTIN_ROOT;
+	private static final URL BUILTIN_ROOT;
 	private static final HashMap<String, WeakReference<Module>> MODULES = new HashMap<>();
 	public static final Module LOADER;
 	static {
-		try {
-			BUILTIN_ROOT = Path.of(LoadingCache.class.getResource("/modules/").toURI());
-		} catch(URISyntaxException e) {
-			throw new RuntimeException(e);
-		}
-		ROOTS.add(new ModuleRoot(BUILTIN_ROOT, LoadingCache.class.getClassLoader()));
+		BUILTIN_ROOT = LoadingCache.class.getResource("/modules/");
+		ROOTS.add(new ModuleRoot(BUILTIN_ROOT, LoadingCache.class.getClassLoader(), true));
 		LOADER = getModule("dfc/module");
 	}
 
-	public static void addRootPath(Path path) {
-		ROOTS.add(new ModuleRoot(path, new PluginClassLoader(path)));
+	public static void addRootPath(URL path, boolean index) {
+		ROOTS.add(new ModuleRoot(path, new PluginClassLoader(path), index));
 	}
 
 	public static synchronized Module getModule(String name) {
 		var ref = MODULES.get(name);
 		Module m = ref == null ? null : ref.get();
 		if (m == null) {
-			Path path = null;
-			ClassLoader cl = null;
-			for (ModuleRoot root : ROOTS) {
-				path = root.path.resolve(name);
-				if (Files.exists(path)) {
-					cl = root.cl;
+			if (ROOTS.isEmpty()) throw new IllegalStateException("no roots");
+			ModuleRoot root = null;
+			for (int i = 0; i < ROOTS.size(); i++)
+				if ((root = ROOTS.get(i)).contains(name))
 					break;
-				}
-			}
-			m = new Module(name, path, cl);
+			m = new Module(name, root);
 			MODULES.put(name, new WeakReference<>(m));
 		}
 		return m;
 	}
 
 	public static void listAllModules(ArrayList<String> list) {
-		ArrayList<Path> dirs = new ArrayList<>();
-		for (ModuleRoot root : ROOTS) {
-			dirs.add(root.path);
-			for (int p; (p = dirs.size() - 1) >= 0;) {
-				Path dir = dirs.remove(p);
-				try {
-					for (Iterator<Path> it = Files.list(dir).iterator(); it.hasNext();) {
-						Path path = it.next();
-						if (Files.isDirectory(path)) {
-							dirs.add(path);
-							continue;
-						}
-						String name = path.getFileName().toString();
-						if (name.startsWith("module.") || name.startsWith("Intrinsics.")) {
-							name = root.path.relativize(dir).normalize().toString();
-							list.add(name.replace(separatorChar, '/'));
-							dirs.subList(p, dirs.size()).clear();
-							break;
-						}
-					}
-				} catch(IOException e) {}
+		for (ModuleRoot root : ROOTS)
+			for (String name : root.index)
+				list.add(name);
+	}
+
+	public static class ModuleRoot implements Indexer {
+		public final URL path;
+		public final ClassLoader cl;
+		public final boolean doIndex;
+		public String[] index;
+
+		public ModuleRoot(URL path, ClassLoader cl, boolean index) {
+			this.path = path;
+			this.cl = cl;
+			this.doIndex = index;
+			this.index = CircuitFile.getIndex(path, this, index);
+		}
+
+		public boolean contains(String name) {
+			return Arrays.binarySearch(index, name) >= 0;
+		}
+
+		@Override
+		public boolean visit(File file, int rootLen, ArrayList<String> index) {
+			switch(file.getName()) {
+			default: return false;
+			case "module.dfc", "module.ds", "Intrinsics.class", "Intrinsics.java":
+				index.add(file.getParent().substring(rootLen).replace(File.separatorChar, '/'));
+				return true;
 			}
 		}
 	}
-
-	public static record ModuleRoot(Path path, ClassLoader cl) {}
 
 }

@@ -2,7 +2,8 @@ package cd4017be.dfc.lang;
 
 import static cd4017be.dfc.lang.LoadingCache.LOADER;
 
-import java.nio.file.Path;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.function.Function;
 
 import cd4017be.dfc.editor.Main;
@@ -25,7 +26,7 @@ public class BlockDef {
 	public String[] ins, outs, args;
 	public ArgumentParser[] parsers;
 	public NodeAssembler assembler;
-	public Path modelPath;
+	public URL modelPath;
 	public SpriteModel model;
 	public String name;
 	public Instruction impl;
@@ -39,7 +40,7 @@ public class BlockDef {
 
 	public BlockDef define(
 		Function<BlockDef, NodeAssembler> assembler, String[] ins, String[] outs,
-		String[] args, ArgumentParser[] parsers, Path model, String name
+		String[] args, ArgumentParser[] parsers, URL model, String name
 	) {
 		if (defined) throw new IllegalStateException("allready defined " + this);
 		this.ins = ins;
@@ -100,6 +101,14 @@ public class BlockDef {
 	@Override
 	public String toString() {
 		return isModule() ? module.toString() : module + "/" + id;
+	}
+
+	public URL circuitURL() throws MalformedURLException {
+		return module.url(id.isEmpty() ? "module.dfc" : "blocks/" + id + ".dfc");
+	}
+
+	public URL dataURL() throws MalformedURLException {
+		return module.url(id.isEmpty() ? "module.ds" : "out/" + id + ".ds");
 	}
 
 	public SpriteModel loadModel() {
